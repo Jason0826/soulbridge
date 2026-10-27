@@ -1,4 +1,4 @@
-# ADR 0003：默认 SQLite，人格状态自研，内容记忆可外接
+﻿# ADR 0003：默认 SQLite，人格状态自研，内容记忆可外接
 
 - 状态：Accepted
 - 日期：2026-10-27
@@ -31,7 +31,7 @@ SoulKernel 的经验：把全部状态放进 PostgreSQL 带来了 RLS、角色�
 
 **正面**
 
-- `npx soulkit init` 即可用，数据落在一个文件里，备份=复制；
+- `npx soulbridge init` 即可用，数据落在一个文件里，备份=复制；
 - 人格层不被外部服务的数据模型绑架；
 - 未来接 Postgres / 外部记忆服务只需要一个 adapter。
 

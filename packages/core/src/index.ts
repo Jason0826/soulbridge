@@ -1,5 +1,5 @@
-/**
- * soulkit core — the personality layer.
+﻿/**
+ * soulbridge core — the personality layer.
  *
  * Public surface is deliberately tiny: a facade (`Soul`) over four verbs.
  * Anything a host needs beyond this belongs in an adapter.

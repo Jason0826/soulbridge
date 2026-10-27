@@ -1,0 +1,35 @@
+soulbridge
+Copyright 2026 soulbridge contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+--------------------------------------------------------------------------------
+Third-party notices
+--------------------------------------------------------------------------------
+
+Source code bundled in this repository: none.
+
+The repository contains only original code and documentation. Runtime behavior
+relies on Node.js built-in modules (notably `node:sqlite`), which are distributed
+under the Node.js license and are not covered by this repository's license.
+
+Design references (ideas, not code)
+-----------------------------------
+- The four-verb protocol shape (context / observe / recall / reflect) is an
+  original design informed by common agent lifecycle conventions, including the
+  Model Context Protocol's tool conventions.
+- The emotion taxonomy *structure* used by the future affect layer (7 categories,
+  intensity 1–9, polarity) follows the publicly documented structure of the
+  Dalian University of Technology affective lexicon (DUTIR).
+
+  No word list from DUTIR — or from any third-party lexicon — is bundled here.
+  Any lexicon a user supplies remains subject to that user's own licensing
+  obligations. See docs/adr/0006-licensing.md.
+
+--------------------------------------------------------------------------------
+Trademarks
+--------------------------------------------------------------------------------
+
+"Claude", "Cursor", "Codex", "Pi" and other product names are trademarks of their
+respective owners. References to them describe interoperability targets only and
+imply no affiliation or endorsement.

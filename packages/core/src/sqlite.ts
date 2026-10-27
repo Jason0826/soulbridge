@@ -1,6 +1,6 @@
-/**
+﻿/**
  * SQLite implementation of SoulStore, using Node's built-in `node:sqlite`.
- * Zero npm dependencies on purpose: `npx soulkit` must work offline.
+ * Zero npm dependencies on purpose: `npx soulbridge` must work offline.
  */
 import { DatabaseSync } from 'node:sqlite';
 import { DEFAULT_EMOTION } from './types.ts';

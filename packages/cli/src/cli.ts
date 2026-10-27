@@ -1,14 +1,14 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 /**
  * Minimal CLI. No framework, no dependencies.
  *
- *   soulkit init
- *   soulkit remember "以后提交前先跑 make check" --type strategy --importance 8
- *   soulkit context --query "提交前要做什么"
- *   soulkit recall "测试"
- *   soulkit reflect --text "..."      (or --file transcript.txt)
- *   soulkit stats
- *   soulkit demo
+ *   soulbridge init
+ *   soulbridge remember "以后提交前先跑 make check" --type strategy --importance 8
+ *   soulbridge context --query "提交前要做什么"
+ *   soulbridge recall "测试"
+ *   soulbridge reflect --text "..."      (or --file transcript.txt)
+ *   soulbridge stats
+ *   soulbridge demo
  */
 import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -57,7 +57,7 @@ function parse(argv: string[]): Parsed {
 }
 
 function dbFile(): string {
-  const file = process.env.SOULKIT_DB ?? resolve(process.cwd(), '.soulkit', 'soul.db');
+  const file = process.env.SOULBRIDGE_DB ?? resolve(process.cwd(), '.soulbridge', 'soul.db');
   mkdirSync(dirname(file), { recursive: true });
   return file;
 }
@@ -67,9 +67,9 @@ function open(file?: string, createdAt?: number): { soul: SoulType; file: string
   const store = openSqlite(target);
   const soul = new Soul({
     store,
-    soulId: process.env.SOULKIT_SOUL ?? 'xiaoling',
-    userId: process.env.SOULKIT_USER ?? 'local',
-    name: process.env.SOULKIT_NAME ?? '小灵',
+    soulId: process.env.SOULBRIDGE_SOUL ?? 'xiaoling',
+    userId: process.env.SOULBRIDGE_USER ?? 'local',
+    name: process.env.SOULBRIDGE_NAME ?? '小灵',
     createdAt,
   });
   return { soul, file: target };
@@ -80,7 +80,7 @@ function out(value: unknown): void {
 }
 
 async function demo(): Promise<void> {
-  const dir = resolve(process.cwd(), '.soulkit');
+  const dir = resolve(process.cwd(), '.soulbridge');
   mkdirSync(dir, { recursive: true });
   const file = resolve(dir, 'demo.db');
   for (const suffix of ['', '-wal', '-shm']) rmSync(`${file}${suffix}`, { force: true });
@@ -127,7 +127,7 @@ async function main(): Promise<void> {
 
     case 'remember': {
       const content = positional.join(' ').trim();
-      if (!content) throw new Error('usage: soulkit remember "内容" [--type T] [--importance N]');
+      if (!content) throw new Error('usage: soulbridge remember "内容" [--type T] [--importance N]');
       const { soul } = open();
       const id = soul.remember(content, {
         type: (flags.type as MemoryType | undefined) ?? 'fact',
@@ -149,7 +149,7 @@ async function main(): Promise<void> {
 
     case 'recall': {
       const query = positional.join(' ').trim();
-      if (!query) throw new Error('usage: soulkit recall "查询" [--limit N]');
+      if (!query) throw new Error('usage: soulbridge recall "查询" [--limit N]');
       const { soul } = open();
       const hits = soul.recall(query, flags.limit ? Number(flags.limit) : 5);
       out(hits.map((h) => ({ id: h.memory.id, type: h.memory.type, content: h.memory.content, score: Number(h.score.toFixed(3)) })));
@@ -158,7 +158,7 @@ async function main(): Promise<void> {
 
     case 'observe': {
       const content = positional.join(' ').trim();
-      if (!content) throw new Error('usage: soulkit observe "一句话"');
+      if (!content) throw new Error('usage: soulbridge observe "一句话"');
       const { soul } = open();
       out(soul.observe({ role: 'user', content }));
       return;
@@ -166,7 +166,7 @@ async function main(): Promise<void> {
 
     case 'reflect': {
       const text = flags.file ? readFileSync(flags.file, 'utf8') : (flags.text ?? '');
-      if (!text.trim()) throw new Error('usage: soulkit reflect --text "..." | --file transcript.txt');
+      if (!text.trim()) throw new Error('usage: soulbridge reflect --text "..." | --file transcript.txt');
       const turns: Turn[] = text
         .split(/\r?\n/)
         .map((line) => line.trim())
@@ -195,7 +195,7 @@ async function main(): Promise<void> {
     default:
       process.stdout.write(
         [
-          'soulkit — 给任何 agent 装上一个人格层',
+          'soulbridge — 给任何 agent 装上一个人格层',
           '',
           'commands:',
           '  init                            初始化数据库',
@@ -207,7 +207,7 @@ async function main(): Promise<void> {
           '  stats                           看状态',
           '  demo                            端到端演示（无需模型）',
           '',
-          'env: SOULKIT_DB, SOULKIT_SOUL, SOULKIT_USER, SOULKIT_NAME',
+          'env: SOULBRIDGE_DB, SOULBRIDGE_SOUL, SOULBRIDGE_USER, SOULBRIDGE_NAME',
           '',
         ].join('\n'),
       );
@@ -215,6 +215,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  process.stderr.write(`soulkit: ${error instanceof Error ? error.message : String(error)}\n`);
+  process.stderr.write(`soulbridge: ${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
 });

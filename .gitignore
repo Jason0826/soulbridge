@@ -1,7 +1,7 @@
-node_modules/
+﻿node_modules/
 *.db
 *.db-journal
-.soulkit/
-.soulkit-demo/
+.soulbridge/
+.soulbridge-demo/
 dist/
 .DS_Store

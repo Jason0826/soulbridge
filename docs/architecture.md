@@ -1,4 +1,4 @@
-# 架构
+﻿# 架构
 
 > 本文与 [ADR 0001–0011](rfcs/README.md) 同步；两者冲突时**以 ADR 为准**。架构级变更必须先有 RFC 或 ADR。
 
@@ -107,7 +107,7 @@ interface SoulStore {
 
 ## 七、隐私与数据
 
-- 默认落盘 `~/.soulkit/soul.db`，默认零遥测
+- 默认落盘 `~/.soulbridge/soul.db`，默认零遥测
 - 所有记忆可 `export` / `delete` / 迁移到另一台机器
 - 注入文本默认不落日志（debug 模式除外，且需显式开启）
 - transcript 只读 `user` 消息与 assistant 最终回复，跳过工具输出与推理段（ADR 0008）

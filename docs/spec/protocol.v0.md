@@ -1,4 +1,4 @@
-# protocol.v0 — 四个动词的契约
+﻿# protocol.v0 — 四个动词的契约
 
 - 版本：`0.1`
 - 状态：Accepted（2026-10-27）
@@ -16,7 +16,7 @@ v0 没有网络协议。同一份契约有三种落地方式，语义必须一�
 
 | 形态 | 调用方式 |
 |---|---|
-| CLI | `soulkit context --query "..."` 等子命令，stdout 输出 JSON |
+| CLI | `soulbridge context --query "..."` 等子命令，stdout 输出 JSON |
 | 进程内 | `Soul.context()` / `.observe()` / `.recall()` / `.reflect()` |
 | 未来 MCP | 工具名 `soul_context` / `soul_observe` / `soul_recall` / `soul_reflect` |
 

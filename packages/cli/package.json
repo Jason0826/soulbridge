@@ -1,11 +1,11 @@
 {
-  "name": "soulkit-cli",
+  "name": "soulbridge",
   "version": "0.0.1",
-  "description": "CLI for soulkit: init / remember / context / recall / reflect / stats / demo.",
+  "description": "CLI for soulbridge: init / remember / context / recall / reflect / stats / demo.",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
-    "soulkit": "src/cli.ts"
+    "soulbridge": "src/cli.ts"
   },
   "engines": {
     "node": ">=22.6"

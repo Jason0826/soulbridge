@@ -60,9 +60,9 @@
 宿主（DSH / Claude Code / Pi / Cursor / Codex）
    │  T0: 指令 + CLI   T1: transcript 摄取   T2: hooks   T3: MCP
    ▼
-soulkit（本地进程）
+soulbridge（本地进程）
    ├── core：人格状态 · 打分 · 注入 · 反思   （零依赖，纯函数优先）
-   └── SQLite：~/.soulkit/soul.db
+   └── SQLite：~/.soulbridge/soul.db
 ```
 
 ## 7. 四个动词
@@ -85,10 +85,11 @@ v0.1 只做 T0 + T1，验证宿主是 DSH，发布宿主是 Claude Code。见 AD
 
 | 问题 | 影响 | 计划 |
 |---|---|---|
-| 命名（`soulkit` 是工作名） | 发布前必须确定 | P1 前 |
-| 完整 LICENSE 文本 | 没有它不算开源 | 发布前 P0 |
+| ~~命名~~ | **已定：`soulbridge`**（npm 上 `soulkit` 已被 2022 年的包占用；`soulbridge` 可用） | 已解决 |
+| ~~完整 LICENSE 文本~~ | **已补齐**：Apache-2.0 全文 + NOTICE | 已解决 |
 | 中文分词质量（无依赖，最大正向匹配） | 影响召回 | v0.1 用评测验证 |
 | 多用户/多人共享一个 soul | 决定 schema 是否要 `user_id` | 已有字段，v0 只做单用户验证 |
+| GitHub 组织名 `soulbridge` 已被占用 | 仓库只能挂在个人账号下 | 发布时确认 |
 | 宿主原生提供跨工具记忆 | 项目可能失去位置 | 写进放弃条件 |
 
 ## 10. 放弃条件

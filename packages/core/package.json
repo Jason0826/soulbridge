@@ -1,5 +1,5 @@
-{
-  "name": "@soulkit/core",
+﻿{
+  "name": "@soulbridge/core",
   "version": "0.0.1",
   "description": "Personality state, scoring, context injection and reflection. Zero dependencies.",
   "license": "Apache-2.0",

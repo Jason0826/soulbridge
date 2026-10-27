@@ -1,4 +1,4 @@
-# soulkit
+# soulbridge
 
 > **给任何 agent 装上一个人格层。**
 > A personality layer for any agent — continuity, forgetting, and growth across tools.
@@ -12,7 +12,7 @@
 Claude Code 记得你在 Claude Code 里说过的话，Cursor 不记得，Pi 不记得。
 你的偏好、你的判断、你被纠正过的错——换一个工具，全部归零。
 
-soulkit 是它们之间那层**不属于任何一家**的记忆与人格：
+soulbridge 是它们之间那层**不属于任何一家**的记忆与人格：
 
 > 一个 soul，多个宿主；一个人格，持续成长。
 
@@ -88,10 +88,12 @@ SQLite（默认） / Postgres（可选）
 
 ## 隐私
 
-- 默认 SQLite，落在 `~/.soulkit/soul.db`
+- 默认 SQLite，落在 `~/.soulbridge/soul.db`
 - 零遥测、零上报
 - 记忆可导出、可删除、可迁移
 
 ## License
 
-Apache-2.0（`LICENSE` 待补，发布前必须完成）
+[Apache-2.0](LICENSE) —— 含明确专利授权，便于企业采用。第三方声明见 [NOTICE](NOTICE)。
+
+本项目不捆绑任何第三方源码。未来若引入词库等外部资产，必须单独核查许可（[ADR 0006](docs/adr/0006-licensing.md)）。
