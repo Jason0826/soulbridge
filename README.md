@@ -40,16 +40,23 @@ soulbridge 是它们之间那层**不属于任何一家**的记忆与人格：
 
 ## 30 秒跑起来
 
-零依赖，只需要 Node ≥ 22（原生跑 TypeScript + `node:sqlite`）：
+需要 Node ≥ 22.18（用到内置 `node:sqlite`）：
 
 ```bash
-node packages/cli/src/cli.ts init
-node packages/cli/src/cli.ts remember --type strategy "提交前先跑 make check，能省一轮 CI"
-node packages/cli/src/cli.ts context --query "要不要先跑测试"
-node packages/cli/src/cli.ts demo          # 起一个 soul，跑完整 context→observe→reflect→context
+npx soulbridge init
+npx soulbridge remember --type strategy "提交前先跑 make check，能省一轮 CI"
+npx soulbridge context --query "要不要先跑测试"
+npx soulbridge demo          # 起一个 soul，跑完整 context→observe→reflect→context
 ```
 
 不需要模型、不需要网络、不需要数据库服务。
+
+从源码开发时：
+
+```bash
+npm install && npm run build
+node packages/cli/src/cli.ts demo   # 直接跑 TypeScript（Node 22.18+ 原生支持）
+```
 
 ## 架构
 

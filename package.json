@@ -1,15 +1,14 @@
 {
   "name": "soulbridge",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A personality layer for any agent: continuity, forgetting, and growth across tools.",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
-    "soulbridge": "packages/cli/src/cli.ts"
+    "soulbridge": "dist/packages/cli/src/cli.js"
   },
   "files": [
-    "packages/core/src",
-    "packages/cli/src",
+    "dist",
     "README.md",
     "LICENSE",
     "NOTICE"
@@ -37,9 +36,14 @@
     "claude-code"
   ],
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "test": "node --test \"packages/core/test/*.test.ts\"",
     "demo": "node packages/cli/src/cli.ts demo",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
   }
 }

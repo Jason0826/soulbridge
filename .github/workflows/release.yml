@@ -32,8 +32,21 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
       - name: Test
         run: npm test
+
+      - name: Smoke-test the published shape
+        run: |
+          mkdir -p /tmp/smoke && cd /tmp/smoke
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund "$GITHUB_WORKSPACE"
+          npx --no-install soulbridge stats
 
       - name: Verify the tarball contents
         run: npm pack --dry-run
