@@ -1,0 +1,5 @@
+# Keep line endings consistent across Windows/macOS/Linux contributors.
+* text=auto eol=lf
+
+*.db binary
+*.png binary

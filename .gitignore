@@ -1,0 +1,7 @@
+node_modules/
+*.db
+*.db-journal
+.soulkit/
+.soulkit-demo/
+dist/
+.DS_Store

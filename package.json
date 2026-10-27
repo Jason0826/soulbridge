@@ -1,0 +1,17 @@
+{
+  "name": "soulkit",
+  "version": "0.0.1",
+  "private": true,
+  "description": "A personality layer for any agent: continuity, forgetting, and growth across tools.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "test": "node --test \"packages/core/test/*.test.ts\"",
+    "demo": "node packages/cli/src/cli.ts demo",
+    "typecheck": "tsc --noEmit"
+  }
+}

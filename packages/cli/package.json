@@ -1,0 +1,13 @@
+{
+  "name": "soulkit-cli",
+  "version": "0.0.1",
+  "description": "CLI for soulkit: init / remember / context / recall / reflect / stats / demo.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "soulkit": "src/cli.ts"
+  },
+  "engines": {
+    "node": ">=22.6"
+  }
+}

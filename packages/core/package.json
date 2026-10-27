@@ -1,0 +1,14 @@
+{
+  "name": "@soulkit/core",
+  "version": "0.0.1",
+  "description": "Personality state, scoring, context injection and reflection. Zero dependencies.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "engines": {
+    "node": ">=22.6"
+  }
+}
