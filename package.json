@@ -1,17 +1,45 @@
 {
-  "name": "soulbridge-workspace",
+  "name": "soulbridge",
   "version": "0.0.1",
-  "private": true,
   "description": "A personality layer for any agent: continuity, forgetting, and growth across tools.",
   "license": "Apache-2.0",
   "type": "module",
-  "workspaces": ["packages/*"],
-  "engines": {
-    "node": ">=22.6"
+  "bin": {
+    "soulbridge": "packages/cli/src/cli.ts"
   },
+  "files": [
+    "packages/core/src",
+    "packages/cli/src",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jason0826/soulbridge.git"
+  },
+  "homepage": "https://github.com/Jason0826/soulbridge#readme",
+  "bugs": {
+    "url": "https://github.com/Jason0826/soulbridge/issues"
+  },
+  "keywords": [
+    "ai-agent",
+    "memory",
+    "personality",
+    "continuity",
+    "mcp",
+    "claude-code"
+  ],
   "scripts": {
     "test": "node --test \"packages/core/test/*.test.ts\"",
     "demo": "node packages/cli/src/cli.ts demo",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm test"
   }
 }

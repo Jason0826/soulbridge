@@ -1,6 +1,7 @@
-﻿{
+{
   "name": "@soulbridge/core",
   "version": "0.0.1",
+  "private": true,
   "description": "Personality state, scoring, context injection and reflection. Zero dependencies.",
   "license": "Apache-2.0",
   "type": "module",
@@ -9,6 +10,6 @@
     ".": "./src/index.ts"
   },
   "engines": {
-    "node": ">=22.6"
+    "node": ">=22.18"
   }
 }

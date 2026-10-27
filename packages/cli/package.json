@@ -1,13 +1,11 @@
 {
-  "name": "soulbridge",
+  "name": "@soulbridge/cli",
   "version": "0.0.1",
-  "description": "CLI for soulbridge: init / remember / context / recall / reflect / stats / demo.",
+  "private": true,
+  "description": "CLI entry for soulbridge. Published as part of the root package.",
   "license": "Apache-2.0",
   "type": "module",
-  "bin": {
-    "soulbridge": "src/cli.ts"
-  },
   "engines": {
-    "node": ">=22.6"
+    "node": ">=22.18"
   }
 }
