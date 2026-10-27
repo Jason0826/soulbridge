@@ -1,5 +1,7 @@
 # 架构
 
+> 本文与 [ADR 0001–0011](rfcs/README.md) 同步；两者冲突时**以 ADR 为准**。架构级变更必须先有 RFC 或 ADR。
+
 ## 一、唯一的原则
 
 **依赖只能朝内。** `core` 不认识任何宿主、任何数据库、任何模型。
@@ -88,15 +90,18 @@ interface SoulStore {
 
 这条分界就是 [thesis.md](thesis.md) 推论 A 的工程表达。
 
-## 六、宿主适配矩阵
+## 六、接入阶梯（ADR 0007）
 
-| 宿主 | 接入点 | 能拿到 transcript | 优先级 |
+不是"接某个宿主"，而是四级阶梯，逐级增加依赖：
+
+| 级别 | 形态 | 依赖宿主 | 目标版本 |
 |---|---|---|---|
-| Claude Code | hooks(SessionStart/UserPromptSubmit/Stop) + MCP | ✅ 本地 jsonl | P0 |
-| Pi agent | extension + skills | ✅ | P1 |
-| DSH | skills + plugin + MCP | ✅ | P1 |
-| Cursor | rules + MCP | ⚠️ 不完整 | P2 |
-| Codex | AGENTS.md + MCP | ⚠️ 有限 | P2 |
+| T0 | `SKILL.md` + CLI | 能读指令、能跑命令 | v0.1 |
+| T1 | transcript 摄取 | 会话文件可读（DSH: `session.v4.jsonl.zstd`） | v0.1 |
+| T2 | hooks / 扩展 | 生命周期钩子（Claude Code） | v0.2 |
+| T3 | MCP server | 支持 MCP | v0.3 |
+
+**验证宿主 = DSH，发布宿主 = Claude Code。** T0+T1 已足以验证"跨会话连续性"，T2/T3 是体验优化。
 
 **验收标准**：第二个 adapter 接入时，`core` 的改动必须 < 20%。超了说明协议错了，回去改协议而不是打补丁。
 
@@ -105,11 +110,8 @@ interface SoulStore {
 - 默认落盘 `~/.soulkit/soul.db`，默认零遥测
 - 所有记忆可 `export` / `delete` / 迁移到另一台机器
 - 注入文本默认不落日志（debug 模式除外，且需显式开启）
-- adapter 读取 transcript 时，只保留 `content` 与时间，**不保留工具输出的完整原文**
+- transcript 只读 `user` 消息与 assistant 最终回复，跳过工具输出与推理段（ADR 0008）
 
-## 八、非目标（写下来避免走偏）
+## 八、非目标
 
-- 不做 agent runtime（loop / TUI / 工具集）
-- 不做向量数据库
-- 不做 SaaS 控制台
-- 不做"意识""自主目标"这类不可验证的特性
+见 [ADR 0001](adr/0001-positioning.md) 与 [RFC 0001 §4](rfcs/0001-foundations.md)。此处不再重复，避免两份文档各自漂移。

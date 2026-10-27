@@ -68,6 +68,19 @@ SQLite（默认） / Postgres（可选）
 
 详见 [docs/architecture.md](docs/architecture.md)。
 
+## 设计文档
+
+| 文档 | 内容 |
+|---|---|
+| [thesis](docs/thesis.md) | 核心命题、三条可证伪预测、四臂实验、放弃条件 |
+| [RFC 0001](docs/rfcs/0001-foundations.md) | 定位、用户、非目标、成功指标、四个动词、接入阶梯 |
+| [ADR 索引](docs/rfcs/README.md) | 11 条已生效的架构决定（定位/语言/存储/依赖/协议/许可/接入/范围/评估/质量） |
+| [protocol.v0](docs/spec/protocol.v0.md) | 四个动词的完整契约：字段、错误码、降级、测试映射 |
+| [quality](docs/quality.md) | 质量模型、九条门禁、五条评审清单 |
+| [references](docs/references.md) | 外部资料的去留与过期判断 |
+
+**规则**：架构级改动必须先有 RFC 或 ADR；聊天里达成的不算决定。
+
 ## 为什么值得做
 
 见 [docs/thesis.md](docs/thesis.md)：核心命题、三条可证伪预测、四臂实验设计。
