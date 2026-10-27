@@ -1,7 +1,13 @@
 name: release
 
 # 发布由 tag 触发：推送 v0.0.1 这样的 tag 才会发 npm。
-# 需要仓库 secret: NPM_TOKEN（npm 的 Automation token，绕过 2FA）。
+#
+# 认证方式：npm Trusted Publishing（GitHub OIDC），不需要 NPM_TOKEN。
+# 前置条件（在 npmjs.com 的包设置里配置一次）：
+#   Package settings -> Trusted publishing -> GitHub Actions
+#   Repository: Jason0826/soulbridge
+#   Workflow filename: release.yml
+#   Environment: 留空
 on:
   push:
     tags:
@@ -13,24 +19,16 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # 用于 npm provenance
+      id-token: write # OIDC：npm 用它验证"这次发布确实来自这个仓库的这次运行"
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
+          # 故意不设 registry-url：它会在 .npmrc 里写一个 token 占位符，
+          # 而我们走 OIDC，不需要任何 token。
           node-version: '24.x'
-          registry-url: 'https://registry.npmjs.org'
-
-      - name: Check the token exists
-        run: |
-          if [ -z "${NODE_AUTH_TOKEN}" ]; then
-            echo "::error::NPM_TOKEN secret is missing. Add it in Settings -> Secrets and variables -> Actions."
-            exit 1
-          fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Install dependencies
         run: npm ci
@@ -53,5 +51,3 @@ jobs:
 
       - name: Publish
         run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
