@@ -16,6 +16,11 @@ export interface SoulStore {
   query(spec: QuerySpec): Memory[];
   /** Recall bookkeeping: recallCount++, lastRecalledAt = now. */
   touch(ids: string[], now?: number): void;
+  /**
+   * Tombstone a memory so it never surfaces again (sync-safe: the row stays for
+   * merge, the deletion wins by updatedAt). Returns false when no such active row.
+   */
+  forget(id: string, now?: number): boolean;
 
   /** Persist one affect sample (payload only; no raw text). */
   saveAffect(soulId: string, userId: string, signal: AffectSignal, at: number, deviceId?: string): void;

@@ -285,6 +285,15 @@ export function openSqlite(file: string): SoulStore {
       });
     },
 
+    forget(id: string, now: number = Date.now()): boolean {
+      const result = withRetry(() =>
+        db
+          .prepare('UPDATE memories SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL')
+          .run(now, now, id),
+      );
+      return Number(result.changes ?? 0) > 0;
+    },
+
     saveAffect(soulId: string, userId: string, signal: AffectSignal, at: number, deviceId?: string): void {
       withRetry(() => {
         db.prepare(

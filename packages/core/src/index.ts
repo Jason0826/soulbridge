@@ -27,6 +27,7 @@ export * from './storage/transcript.ts';
 import type {
   AffectSignal,
   ContextRequest,
+  Memory,
   ContextResult,
   Emotion,
   LlmFn,
@@ -94,6 +95,16 @@ export class Soul {
       minImportance: request.minImportance,
       maxItems: request.maxItems,
     });
+  }
+
+  /** Every active memory, newest first. For `list` and for auditing injection. */
+  list(limit = 50): Memory[] {
+    return this.store.query({ soulId: this.soulId, userId: this.userId, limit });
+  }
+
+  /** Tombstone one memory so it never reaches a prompt again. */
+  forget(id: string): boolean {
+    return this.store.forget(id);
   }
 
   /** Verb 3: on demand. */

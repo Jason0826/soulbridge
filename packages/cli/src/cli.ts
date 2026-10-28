@@ -361,6 +361,30 @@ async function main(): Promise<void> {
       return;
     }
 
+    case 'list': {
+      const { soul } = open(flags);
+      const memories = soul.list(flags.limit ? Number(flags.limit) : 20);
+      if (memories.length === 0) {
+        process.stdout.write('no memories yet\n');
+        return;
+      }
+      for (const memory of memories) {
+        const preview = memory.content.replace(/\s+/g, ' ').slice(0, 72);
+        process.stdout.write(
+          `${memory.id}  ${memory.type.padEnd(9)} imp=${String(memory.importance).padEnd(2)} ${preview}\n`,
+        );
+      }
+      return;
+    }
+
+    case 'forget': {
+      const id = positional[0];
+      if (!id) throw new Error('usage: soulbridge forget <memory-id>');
+      const { soul } = open(flags);
+      out({ ok: soul.forget(id), id });
+      return;
+    }
+
     case 'status': {
       const config = ensureConfig();
       const dbPath = resolveDbPath(flags.db);
@@ -430,6 +454,8 @@ async function main(): Promise<void> {
           '  import --in <file>              导入 JSONL',
           '  import --from <steering.md>     导入 AGENTS.md / CLAUDE.md',
           '  ingest --file <transcript.jsonl> 会话转写 → 记忆与情绪采样',
+          '  list [--limit N]                看它记住了什么',
+          '  forget <id>                     忘掉一条记忆（墓碑）',
           '  status                          一眼看它是否在工作',
           '  stats                           看原始状态（JSON）',
           '  demo                            端到端演示（无需模型）',

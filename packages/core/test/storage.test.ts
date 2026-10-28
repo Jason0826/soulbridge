@@ -150,3 +150,15 @@ test('T28/T29 合并语义：LWW + 设备字典序 + 墓碑不复活', () => {
   assert.equal(merged[0].deleted, true);
   assert.equal(liveRecords([original, tombstone]).length, 0, '删除后不能被旧记录复活');
 });
+
+test('T30 forget: 墓碑后不再出现在查询里', () => {
+  const store = openSqlite(':memory:');
+  store.put(memory({ id: 'm_forget', content: '这条应该被忘掉' }));
+  assert.equal(store.query({ soulId: 'xiaoling', userId: 'u1' }).length, 1);
+
+  assert.equal(store.forget('m_forget'), true);
+  assert.equal(store.query({ soulId: 'xiaoling', userId: 'u1' }).length, 0);
+  assert.equal(store.count('xiaoling', 'u1'), 0);
+  assert.equal(store.forget('m_forget'), false, '重复遗忘返回 false');
+  store.close();
+});
