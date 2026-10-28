@@ -3,7 +3,7 @@
 > **给任何 agent 装上一个人格层。**
 > A personality layer for any agent — continuity, forgetting, and growth across tools.
 
-**状态：v0.0.4 · 已发布 npm · 接口仍在演进**
+**状态：v0.0.6 · 已发布 npm · 接口仍在演进**
 
 ---
 
