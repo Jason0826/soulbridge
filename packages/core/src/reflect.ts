@@ -17,17 +17,47 @@ interface Draft {
 }
 
 interface Rule {
-  re: RegExp;
+  /** Stable id for tests and diagnostics. */
+  id: string;
   type: MemoryType;
   importance: number;
+  match: (text: string) => boolean;
 }
 
+/**
+ * A standing instruction needs both halves: when it applies, and what it asks
+ * for. A bare "每次" is usually a complaint ("每次都不能用"), so the trigger
+ * alone must not create a strategy.
+ */
+const TIME_TRIGGER = /(以后|下次|每次|从现在起|在.{0,12}之前|from now on|always)/i;
+const DIRECTIVE = /(先|需要|要|必须|应该|请|别|不要|务必|记得|need to|should|must|please)/i;
+
 /** Cheap, synchronous, no model. Deliberately conservative: false positives cost trust. */
-const RULES: Rule[] = [
-  { re: /(记住|别忘了|remember|don'?t forget)/i, type: 'fact', importance: 7 },
-  { re: /(我喜欢|我习惯|我偏好|我倾向|i prefer|i like)/i, type: 'trait', importance: 6 },
-  { re: /(以后|下次|每次|从现在起|from now on|always)/i, type: 'strategy', importance: 7 },
-  { re: /(我决定|就这么定|原则是|i decided|my rule)/i, type: 'cognition', importance: 7 },
+export const RULES: Rule[] = [
+  {
+    id: 'remember',
+    type: 'fact',
+    importance: 7,
+    match: (text) => /(记住|别忘了|remember|don'?t forget)/i.test(text),
+  },
+  {
+    id: 'preference',
+    type: 'trait',
+    importance: 6,
+    match: (text) => /(我喜欢|我习惯|我偏好|我倾向|i prefer|i like)/i.test(text),
+  },
+  {
+    id: 'standing-instruction',
+    type: 'strategy',
+    importance: 7,
+    match: (text) => TIME_TRIGGER.test(text) && DIRECTIVE.test(text),
+  },
+  {
+    id: 'decision',
+    type: 'cognition',
+    importance: 7,
+    match: (text) => /(我决定|就这么定|原则是|i decided|my rule)/i.test(text),
+  },
 ];
 
 const CORRECTION = /(不对|不是这样|错了|你搞错|wrong|that'?s not right|incorrect)/i;
@@ -40,7 +70,7 @@ export function ruleExtract(turns: Turn[]): Draft[] {
   for (const turn of turns) {
     if (turn.role !== 'user') continue;
     for (const rule of RULES) {
-      if (rule.re.test(turn.content)) {
+      if (rule.match(turn.content)) {
         drafts.push({ type: rule.type, content: turn.content.trim(), importance: rule.importance });
         break;
       }
