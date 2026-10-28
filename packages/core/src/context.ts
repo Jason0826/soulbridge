@@ -95,7 +95,7 @@ export function buildContext(
   if (lines.length > 0) sections.push(`<memories>\n${lines.join('\n')}\n</memories>`);
 
   const text = sections.join('\n\n');
-  if (used.length > 0) store.touch(used, now);
+  if (request.track !== false && used.length > 0) store.touch(used, now);
 
   const result: ContextResult = { text, used, dropped, chars: text.length };
   if (affectMeta) result.affect = affectMeta;

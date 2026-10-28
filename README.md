@@ -111,6 +111,7 @@ SQLite（默认） / Postgres（可选）
 | [storage.v0](docs/spec/storage.v0.md) | 路径、身份、迁移、并发、导出格式 |
 | [sync.v0](docs/spec/sync.v0.md) | 跨设备合并语义（v0.5 实现） |
 | [transcript.v1](docs/spec/transcript.v1.md) | 可移植会话转写格式（ingest 的输入） |
+| [适配器索引](adapters/README.md) | 各宿主适配器与接入契约 |
 | [quality](docs/quality.md) | 质量模型、九条门禁、五条评审清单 |
 | [references](docs/references.md) | 外部资料的去留与过期判断 |
 | [runbook](docs/runbook.md) | 发版流程、维护操作、已知待办 |

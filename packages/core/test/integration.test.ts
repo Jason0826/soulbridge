@@ -135,6 +135,22 @@ test('observe 降级：分析器抛错时退化为规则，不阻塞', async () 
   store.close();
 });
 
+test('适配层：track=false 预览上下文不增加召回次数', () => {
+  const store = openSqlite(':memory:');
+  store.ensureSoul({ soulId: 'xiaoling', name: '小灵', createdAt: NOW });
+  store.put(memory('m1'));
+
+  const preview = buildContext(store, { soulId: 'xiaoling', userId: 'u1', track: false }, NOW);
+  const afterPreview = store.query({ soulId: 'xiaoling', userId: 'u1' })[0];
+  assert.equal(preview.used.length, 1);
+  assert.equal(afterPreview.recallCount, 0, '预览不应计入召回');
+
+  buildContext(store, { soulId: 'xiaoling', userId: 'u1' }, NOW);
+  const afterReal = store.query({ soulId: 'xiaoling', userId: 'u1' })[0];
+  assert.equal(afterReal.recallCount, 1, '默认仍然计入召回');
+  store.close();
+});
+
 test('T26 导出/导入：round-trip 且重复导入幂等', () => {
   const source = openSqlite(':memory:');
   source.ensureSoul({ soulId: 'xiaoling', name: '小灵', createdAt: NOW });

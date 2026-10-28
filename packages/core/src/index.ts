@@ -89,6 +89,7 @@ export class Soul {
       userId: this.userId,
       query: request.query,
       maxChars: request.maxChars,
+      track: request.track,
     });
   }
 

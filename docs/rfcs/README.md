@@ -1,4 +1,4 @@
-﻿# RFC / ADR 索引
+# RFC / ADR 索引
 
 设计文档分两类：
 
@@ -50,6 +50,7 @@
 | [0021](../adr/0021-sync.md) | 跨设备同步：分片 JSONL + LWW | Accepted |
 | [0022](../adr/0022-steering-import.md) | steering 文件导入的抽取与分类规则 | Accepted |
 | [0023](../adr/0023-dsh-adapter.md) | DSH 适配器：T0 skill + 可移植转写 | Accepted |
+| [0024](../adr/0024-adapters.md) | 适配层归属：独立包 + core 定契约 | Accepted |
 
 ## 相关文档
 

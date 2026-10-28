@@ -79,6 +79,12 @@ export interface ContextRequest {
   userId: string;
   query?: string;
   maxChars?: number;
+  /**
+   * Whether this call counts as a recall (increments recallCount / lastRecalledAt).
+   * Host adapters assemble prompts repeatedly per turn; pass false to preview
+   * context without inflating recall statistics. Defaults to true.
+   */
+  track?: boolean;
 }
 
 export interface ContextResult {
