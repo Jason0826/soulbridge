@@ -85,6 +85,7 @@ SQLite（默认） / Postgres（可选）
 | [protocol.v0](docs/spec/protocol.v0.md) | 四个动词的完整契约：字段、错误码、降级、测试映射 |
 | [quality](docs/quality.md) | 质量模型、九条门禁、五条评审清单 |
 | [references](docs/references.md) | 外部资料的去留与过期判断 |
+| [runbook](docs/runbook.md) | 发版流程、维护操作、已知待办 |
 
 **规则**：架构级改动必须先有 RFC 或 ADR；聊天里达成的不算决定。
 
