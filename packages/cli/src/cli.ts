@@ -33,9 +33,17 @@ process.on('warning', (warning) => {
   process.stderr.write(`${warning.name}: ${warning.message}\n`);
 });
 
-const { openSqlite, Soul, ensureConfig, resolveDbPath, analyzeAffect, validateLexicon } = await import(
-  '../../core/src/index.ts'
-);
+const {
+  openSqlite,
+  Soul,
+  ensureConfig,
+  resolveDbPath,
+  analyzeAffect,
+  validateLexicon,
+  parseSteering,
+  normalizeForDedupe,
+  parseTranscriptJsonl,
+} = await import('../../core/src/index.ts');
 const { llmAnalyzerFromEnv } = await import('./llm-analyzer.ts');
 
 interface Parsed {
@@ -275,8 +283,35 @@ async function main(): Promise<void> {
     }
 
     case 'import': {
+      // Steering file (AGENTS.md / CLAUDE.md) → memories (ADR 0022).
+      if (flags.from) {
+        const file = resolve(flags.from);
+        const drafts = parseSteering(readFileSync(file, 'utf8'));
+        const { soul } = open(flags);
+        const dryRun = flags['dry-run'] === 'true';
+        const existing = new Set(
+          soul.store
+            .query({ soulId: soul.soulId, userId: soul.userId, limit: 100_000 })
+            .map((m) => normalizeForDedupe(m.content)),
+        );
+        let written = 0;
+        let skipped = 0;
+        for (const draft of drafts) {
+          const key = normalizeForDedupe(draft.text);
+          if (!key || existing.has(key)) {
+            skipped += 1;
+            continue;
+          }
+          existing.add(key);
+          if (!dryRun) soul.remember(draft.text, { type: draft.type, importance: draft.importance });
+          written += 1;
+        }
+        out({ ok: true, source: file, kind: 'steering', parsed: drafts.length, written, skipped, dryRun });
+        return;
+      }
+
       const file = flags.in;
-      if (!file) throw new Error('usage: soulbridge import --in soulbridge.jsonl');
+      if (!file) throw new Error('usage: soulbridge import --from <steering.md> | --in <export.jsonl>');
       const { soul, deviceId } = open(flags);
       let memories = 0;
       let affects = 0;
@@ -297,7 +332,31 @@ async function main(): Promise<void> {
           affects += 1;
         }
       }
-      out({ ok: true, memories, affects });
+      out({ ok: true, kind: 'jsonl', memories, affects });
+      return;
+    }
+
+    case 'ingest': {
+      const file = flags.file;
+      if (!file) throw new Error('usage: soulbridge ingest --file transcript.jsonl [--dry-run]');
+      const { turns, skipped } = parseTranscriptJsonl(readFileSync(resolve(file), 'utf8'));
+      const { soul } = open(flags);
+      const dryRun = flags['dry-run'] === 'true';
+
+      if (!dryRun) {
+        for (const turn of turns) {
+          if (turn.role !== 'user') continue;
+          const signal = await soul.analyze(turn.content);
+          try {
+            soul.store.saveAffect(soul.soulId, soul.userId, signal, turn.at ?? Date.now(), soul.deviceId);
+          } catch {
+            // Evaluation data is best-effort; ingestion must still complete.
+          }
+        }
+      }
+
+      const reflected = dryRun ? null : await soul.reflect(turns);
+      out({ ok: true, file: resolve(file), turns: turns.length, skipped, reflected, dryRun });
       return;
     }
 
@@ -326,6 +385,8 @@ async function main(): Promise<void> {
           '  reflect --text|--file           会话反思',
           '  export --out <file>             导出 JSONL',
           '  import --in <file>              导入 JSONL',
+          '  import --from <steering.md>     导入 AGENTS.md / CLAUDE.md',
+          '  ingest --file <transcript.jsonl> 会话转写 → 记忆与情绪采样',
           '  stats                           看状态',
           '  demo                            端到端演示（无需模型）',
           '',

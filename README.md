@@ -59,6 +59,7 @@ npx soulbridge init
 npx soulbridge remember --type strategy "提交前先跑 make check，能省一轮 CI"
 npx soulbridge context --query "要不要先跑测试"
 npx soulbridge affect "我不太开心，这个方案又被拒了"
+npx soulbridge import --from AGENTS.md      # 把已有的项目约定导进来
 npx soulbridge demo          # 起一个 soul，跑完整 context→observe→reflect→context
 ```
 
@@ -88,6 +89,15 @@ SQLite（默认） / Postgres（可选）
 
 详见 [docs/architecture.md](docs/architecture.md)。
 
+## 接入宿主
+
+| 宿主 | 方式 | 位置 |
+|---|---|---|
+| DSH | 把 skill 放进 skills 目录 | [`adapters/dsh/SKILL.md`](adapters/dsh/SKILL.md) |
+| Claude Code / Pi / Cursor | 同理：把同一份 `SKILL.md` 当作指令文件 | v0.5+ |
+
+接上之后，宿主在会话开始运行 `soulbridge context`、每轮运行 `soulbridge observe`、结束时运行 `soulbridge ingest`。**拿不到会话转写也不影响使用**：`observe` 已经逐轮记录了观察。
+
 ## 设计文档
 
 | 文档 | 内容 |
@@ -95,11 +105,12 @@ SQLite（默认） / Postgres（可选）
 | [thesis](docs/thesis.md) | 核心命题、三条可证伪预测、四臂实验、放弃条件 |
 | [RFC 0001](docs/rfcs/0001-foundations.md) | 定位、用户、非目标、成功指标、四个动词、接入阶梯 |
 | [RFC 0002](docs/rfcs/0002-affect.md) | 输入侧情感层：两套情绪的边界、数据流、已知局限 |
-| [ADR 索引](docs/rfcs/README.md) | 21 条已生效的架构决定 |
+| [ADR 索引](docs/rfcs/README.md) | 23 条已生效的架构决定 |
 | [protocol.v0](docs/spec/protocol.v0.md) | 四个动词的完整契约：字段、错误码、降级、测试映射 |
 | [affect.v0](docs/spec/affect.v0.md) | 词库格式、8 条规则、置信度公式、黄金集与消融 |
 | [storage.v0](docs/spec/storage.v0.md) | 路径、身份、迁移、并发、导出格式 |
 | [sync.v0](docs/spec/sync.v0.md) | 跨设备合并语义（v0.5 实现） |
+| [transcript.v1](docs/spec/transcript.v1.md) | 可移植会话转写格式（ingest 的输入） |
 | [quality](docs/quality.md) | 质量模型、九条门禁、五条评审清单 |
 | [references](docs/references.md) | 外部资料的去留与过期判断 |
 | [runbook](docs/runbook.md) | 发版流程、维护操作、已知待办 |

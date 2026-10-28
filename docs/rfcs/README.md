@@ -1,4 +1,4 @@
-# RFC / ADR 索引
+﻿# RFC / ADR 索引
 
 设计文档分两类：
 
@@ -48,6 +48,8 @@
 | [0019](../adr/0019-steering-files.md) | 与 AGENTS.md 的边界与必要性判据 | Accepted |
 | [0020](../adr/0020-storage.md) | 存储位置、身份、迁移、并发 | Accepted |
 | [0021](../adr/0021-sync.md) | 跨设备同步：分片 JSONL + LWW | Accepted |
+| [0022](../adr/0022-steering-import.md) | steering 文件导入的抽取与分类规则 | Accepted |
+| [0023](../adr/0023-dsh-adapter.md) | DSH 适配器：T0 skill + 可移植转写 | Accepted |
 
 ## 相关文档
 
@@ -57,5 +59,6 @@
 - [affect.v0](../spec/affect.v0.md)：情感分析契约、规则与黄金集
 - [storage.v0](../spec/storage.v0.md)：路径、身份、迁移
 - [sync.v0](../spec/sync.v0.md)：跨设备合并语义
+- [transcript.v1](../spec/transcript.v1.md)：可移植会话转写格式
 - [quality](../quality.md)：质量模型与评审清单
 - [references](../references.md)：外部资料的去留

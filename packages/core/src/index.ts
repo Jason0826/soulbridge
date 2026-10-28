@@ -21,6 +21,8 @@ export { measureStyle } from './style/measure.ts';
 export type { StyleMetrics } from './style/measure.ts';
 export * from './storage/config.ts';
 export * from './storage/merge.ts';
+export * from './storage/steering.ts';
+export * from './storage/transcript.ts';
 
 import type {
   AffectSignal,
@@ -98,13 +100,9 @@ export class Soul {
     return ranked;
   }
 
-  /** Pure analysis, no storage: useful for the CLI and for tests. */
-  analyze(text: string): AffectSignal {
-    try {
-      return this.analyzer.analyze(text) as AffectSignal;
-    } catch {
-      return analyzeAffect(text);
-    }
+  /** Pure analysis, no storage. Async because the analyzer may call a model. */
+  async analyze(text: string): Promise<AffectSignal> {
+    return this.analyzeTurn(text);
   }
 
   /**
