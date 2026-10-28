@@ -1,59 +1,59 @@
 {
-  "name": "soulbridge",
-  "version": "0.0.5",
-  "description": "A personality layer for any agent: continuity, forgetting, and growth across tools.",
-  "license": "Apache-2.0",
-  "type": "module",
-  "main": "./dist/packages/core/src/index.js",
-  "types": "./dist/packages/core/src/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/packages/core/src/index.d.ts",
-      "import": "./dist/packages/core/src/index.js"
-    },
-    "./package.json": "./package.json"
-  },
-  "bin": {
-    "soulbridge": "dist/packages/cli/src/cli.js"
-  },
-  "files": [
-    "dist",
-    "adapters",
-    "README.md",
-    "LICENSE",
-    "NOTICE"
-  ],
-  "workspaces": [
-    "packages/*"
-  ],
-  "engines": {
-    "node": ">=22.18"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Jason0826/soulbridge.git"
-  },
-  "homepage": "https://github.com/Jason0826/soulbridge#readme",
-  "bugs": {
-    "url": "https://github.com/Jason0826/soulbridge/issues"
-  },
-  "keywords": [
-    "ai-agent",
-    "memory",
-    "personality",
-    "continuity",
-    "mcp",
-    "claude-code"
-  ],
-  "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "test": "node --test \"packages/core/test/*.test.ts\"",
-    "demo": "node packages/cli/src/cli.ts demo",
-    "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build && npm test"
-  },
-  "devDependencies": {
-    "@types/node": "^26.6.5",
-    "typescript": "^7.0.2"
-  }
+    "name":  "soulbridge",
+    "version":  "0.0.6",
+    "description":  "A personality layer for any agent: continuity, forgetting, and growth across tools.",
+    "license":  "Apache-2.0",
+    "type":  "module",
+    "main":  "./dist/packages/core/src/index.js",
+    "types":  "./dist/packages/core/src/index.d.ts",
+    "exports":  {
+                    ".":  {
+                              "types":  "./dist/packages/core/src/index.d.ts",
+                              "import":  "./dist/packages/core/src/index.js"
+                          },
+                    "./package.json":  "./package.json"
+                },
+    "bin":  {
+                "soulbridge":  "dist/packages/cli/src/cli.js"
+            },
+    "files":  [
+                  "dist",
+                  "adapters",
+                  "README.md",
+                  "LICENSE",
+                  "NOTICE"
+              ],
+    "workspaces":  [
+                       "packages/*"
+                   ],
+    "engines":  {
+                    "node":  "\u003e=22.18"
+                },
+    "repository":  {
+                       "type":  "git",
+                       "url":  "git+https://github.com/Jason0826/soulbridge.git"
+                   },
+    "homepage":  "https://github.com/Jason0826/soulbridge#readme",
+    "bugs":  {
+                 "url":  "https://github.com/Jason0826/soulbridge/issues"
+             },
+    "keywords":  [
+                     "ai-agent",
+                     "memory",
+                     "personality",
+                     "continuity",
+                     "mcp",
+                     "claude-code"
+                 ],
+    "scripts":  {
+                    "build":  "tsc -p tsconfig.build.json",
+                    "test":  "node --test \"packages/core/test/*.test.ts\"",
+                    "demo":  "node packages/cli/src/cli.ts demo",
+                    "typecheck":  "tsc --noEmit",
+                    "prepublishOnly":  "npm run build \u0026\u0026 npm test"
+                },
+    "devDependencies":  {
+                            "@types/node":  "^26.6.5",
+                            "typescript":  "^7.0.2"
+                        }
 }
