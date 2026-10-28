@@ -22,6 +22,8 @@ interface Rule {
   type: MemoryType;
   importance: number;
   match: (text: string) => boolean;
+  /** Optional rewrite: keep the instruction, drop the surrounding discussion. */
+  distill?: (text: string) => string | null;
 }
 
 /**
@@ -31,6 +33,38 @@ interface Rule {
  */
 const TIME_TRIGGER = /(以后|下次|每次|从现在起|在.{0,12}之前|from now on|always)/i;
 const DIRECTIVE = /(先|需要|要|必须|应该|请|别|不要|务必|记得|need to|should|must|please)/i;
+
+/** Long strategies are noise in a prompt; keep the instruction, not the essay. */
+export const MAX_STRATEGY_CHARS = 80;
+/** How far after a trigger the request may sit and still belong to it. */
+const DIRECTIVE_WINDOW = 40;
+
+/**
+ * Cut a standing instruction down to the clause that carries it.
+ *
+ * A user explains for two lines and states the rule once; storing the whole
+ * paragraph repeats the discussion into every future prompt. Find the trigger
+ * whose neighbourhood also carries a request, and keep from there.
+ */
+export function distillStrategy(text: string): string | null {
+  const trigger = new RegExp(TIME_TRIGGER.source, 'gi');
+  let match = trigger.exec(text);
+  let start = -1;
+  // The rule usually closes the paragraph ("...比如你每次…都需要…"), so the
+  // last qualifying trigger is the instruction, not the setup.
+  while (match !== null) {
+    const rest = text.slice(match.index);
+    if (DIRECTIVE.test(rest.slice(0, DIRECTIVE_WINDOW))) start = match.index;
+    match = trigger.exec(text);
+  }
+  if (start < 0) return null;
+
+  let clause = text.slice(start).replace(/^[\s，,、：:]+/, '');
+  clause = clause.replace(/^(比如|例如|就像|也就是说|你|我)\s*/g, '');
+  if (clause.length > MAX_STRATEGY_CHARS) clause = clause.slice(0, MAX_STRATEGY_CHARS);
+  clause = clause.trim();
+  return clause.length > 0 ? clause : null;
+}
 
 /** Cheap, synchronous, no model. Deliberately conservative: false positives cost trust. */
 export const RULES: Rule[] = [
@@ -51,6 +85,7 @@ export const RULES: Rule[] = [
     type: 'strategy',
     importance: 7,
     match: (text) => TIME_TRIGGER.test(text) && DIRECTIVE.test(text),
+    distill: distillStrategy,
   },
   {
     id: 'decision',
@@ -70,10 +105,11 @@ export function ruleExtract(turns: Turn[]): Draft[] {
   for (const turn of turns) {
     if (turn.role !== 'user') continue;
     for (const rule of RULES) {
-      if (rule.match(turn.content)) {
-        drafts.push({ type: rule.type, content: turn.content.trim(), importance: rule.importance });
-        break;
-      }
+      if (!rule.match(turn.content)) continue;
+      // A rule may rewrite the turn; a strategy we cannot phrase is not stored.
+      const content = rule.distill ? rule.distill(turn.content) : turn.content.trim();
+      if (content) drafts.push({ type: rule.type, content, importance: rule.importance });
+      break;
     }
   }
   return drafts;

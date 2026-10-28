@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ruleExtract, RULES } from '../src/reflect.ts';
+import { ruleExtract, RULES, distillStrategy, MAX_STRATEGY_CHARS } from '../src/reflect.ts';
 import type { Turn } from '../src/types.ts';
 
 const user = (content: string): Turn => ({ role: 'user', content });
@@ -41,4 +41,26 @@ test('assistant turns never produce drafts', () => {
 test('抽取规则预算：≤ 8 条', () => {
   assert.ok(RULES.length <= 8, `rules: ${RULES.length}`);
   assert.equal(new Set(RULES.map((r) => r.id)).size, RULES.length, '规则 id 必须唯一');
+});
+
+test('distill: 长段落只保留带要求的那个从句', () => {
+  const text =
+    '误判倒也谈不上，这些词你是要放到情景里面才有意义，每次有可能是抱怨，也有可能真的是策略，比如你每次在做改动之前，都需要让我解释说明，为什么、怎么做、会有什么影响';
+  const drafts = ruleExtract([user(text)]);
+  assert.equal(drafts.length, 1);
+  assert.ok(drafts[0].content.length <= MAX_STRATEGY_CHARS, '策略必须短');
+  assert.ok(drafts[0].content.includes('做改动之前') && drafts[0].content.includes('需要'), '保留带触发词与要求的从句');
+  assert.ok(!drafts[0].content.startsWith('误判'), '丢掉前面的讨论');
+  assert.ok(!drafts[0].content.includes('有可能是抱怨'), '只保留真正的指令从句');
+});
+
+test('distill: 本来就很短的指令保持不变', () => {
+  assert.equal(distillStrategy('以后提交前先跑 make check'), '以后提交前先跑 make check');
+});
+
+test('distill: 触发词和要求词离得太远则不提炼，也不入库', () => {
+  const text =
+    '每次都很慢，我花了很多时间排查，改了很多地方，最后发现是端口的问题，也换了电脑，清空了缓存，重装了依赖，所以你需要的话我可以再看';
+  assert.equal(distillStrategy(text), null);
+  assert.equal(ruleExtract([user(text)]).length, 0);
 });
