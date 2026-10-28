@@ -36,6 +36,10 @@ export interface Memory {
   validFrom?: number;
   validUntil?: number;
   supersededBy?: string;
+  /** Last-writer-wins clock for cross-device merge (ADR 0021). */
+  updatedAt?: number;
+  /** Tombstone; deletion is never physical on the first pass. */
+  deletedAt?: number;
 }
 
 export interface Identity {
@@ -82,6 +86,8 @@ export interface ContextResult {
   used: string[];
   dropped: number;
   chars: number;
+  /** Present only when the affect section was actually injected. */
+  affect?: { confidence: number; directives: string[] };
 }
 
 export interface RecallRequest {
@@ -113,7 +119,64 @@ export interface ReflectResult {
 export interface ObserveResult {
   written: number;
   emotion: Emotion;
+  /** Analysis of the user turn. Empty signal for assistant turns or on failure. */
+  affect: AffectSignal;
 }
 
 /** Injected by the caller. `core` never imports a model SDK. */
 export type LlmFn = (prompt: string) => Promise<string> | string;
+
+/* ------------------------------------------------------------------ *
+ * Affect (input-side emotion of the *user*)
+ * ------------------------------------------------------------------ */
+
+export type AffectCategory = 'joy' | 'anger' | 'sadness' | 'fear' | 'disgust' | 'surprise';
+export type AffectPolarity = 'positive' | 'negative' | 'neutral';
+
+export interface AffectHit {
+  term: string;
+  category: AffectCategory;
+  /** 1..9, already adjusted by degree modifiers. */
+  intensity: number;
+  polarity: AffectPolarity;
+  negated: boolean;
+  position: number;
+}
+
+export interface AffectFeatures {
+  fillers: number;
+  hedges: number;
+  vague: number;
+  tokens: number;
+  /** meaningful tokens / all tokens, 0..1 */
+  density: number;
+}
+
+export interface AffectSignal {
+  /** Which analyzer produced this: 'lexicon' | 'llm' | 'none'. */
+  analyzer: string;
+  hits: AffectHit[];
+  dominant: AffectCategory | null;
+  intensity: number;
+  valence: number;
+  arousal: number;
+  features: AffectFeatures;
+  confidence: number;
+  /** True when the text looks like withdrawal ("行吧", "随便") but no explicit emotion word. */
+  abstain: boolean;
+}
+
+export const EMPTY_AFFECT: AffectSignal = {
+  analyzer: 'none',
+  hits: [],
+  dominant: null,
+  intensity: 0,
+  valence: 0,
+  arousal: 0,
+  features: { fillers: 0, hedges: 0, vague: 0, tokens: 0, density: 1 },
+  confidence: 0,
+  abstain: false,
+};
+
+/** Wire version of the four verbs. Additive changes bump MINOR (ADR 0005). */
+export const PROTOCOL_VERSION = '0.2';

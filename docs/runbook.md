@@ -112,3 +112,30 @@ npm dist-tag ls soulbridge
 | `npm publish` 成功但没上线 | 看 `dist-tags`，不要只看命令退出码 |
 | 系统级 git 配置把 github.com 重写成 gh-proxy | 用 `https://github.com:443/...` 绕开；SSH 不受影响 |
 | 提交里带个人邮箱 | 用 GitHub noreply（已在历史里全部改过） |
+
+---
+
+## 六、v0.4 迁移说明（重要）
+
+- 默认数据库从 `./.soulbridge/soul.db` 移到 **`~/.soulbridge/soul.db`**（跨工具要求同一路径）
+- 身份写入 `~/.soulbridge/config.json`（soulId / userId / name / deviceId）
+- 旧数据**不会自动搬迁**，需要手动导入：
+
+  ```bash
+  # 在旧目录下导出
+  SOULBRIDGE_DB=./.soulbridge/soul.db soulbridge export --out old.jsonl
+  # 在新库导入
+  soulbridge import --in old.jsonl
+  ```
+
+- schema v1 → v2 升级会自动备份为 `soul.db.bak-v1`
+- 数据库版本高于二进制时会被拒绝（`DB_NEWER_THAN_BINARY`），不会静默写坏
+
+## 七、维护命令速查
+
+| 目的 | 命令 |
+|---|---|
+| 换机器 | `export --out x.jsonl` → `import --in x.jsonl` |
+| 改 soul 身份 | 编辑 `~/.soulbridge/config.json`，或设 `SOULBRIDGE_SOUL` / `SOULBRIDGE_USER` |
+| 看情绪分析 | `soulbridge affect "我不太开心"` |
+| 用本地小模型分析 | `SOULBRIDGE_AFFECT_LLM_URL=http://localhost:11434/v1 soulbridge affect "..." --analyzer llm` |

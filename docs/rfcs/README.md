@@ -1,4 +1,4 @@
-﻿# RFC / ADR 索引
+# RFC / ADR 索引
 
 设计文档分两类：
 
@@ -21,6 +21,7 @@
 | 编号 | 标题 | 状态 |
 |---|---|---|
 | [0001](0001-foundations.md) | 基础设计：定位、四个动词、接入阶梯 | Accepted |
+| [0002](0002-affect.md) | 输入侧情感层：两套情绪、数据流、已知局限 | Accepted |
 
 ## ADR
 
@@ -37,11 +38,24 @@
 | [0009](../adr/0009-content-memory.md) | v0 不做内容记忆适配器 | Accepted |
 | [0010](../adr/0010-evaluation.md) | v0.1 单臂评估，四臂留 P3 | Accepted |
 | [0011](../adr/0011-quality-gates.md) | 质量门禁 | Accepted |
+| [0012](../adr/0012-affect-scope.md) | affect 只改措辞与采样，不桥接情绪 | Accepted |
+| [0013](../adr/0013-affect-lexicon.md) | 只采纳 DUTIR 结构，种子表自写 | Accepted |
+| [0014](../adr/0014-affect-injection.md) | 白名单注入 + 置信度门槛 + 反谄媚 | Accepted |
+| [0015](../adr/0015-affect-analyzer.md) | 分析器端口化，模型 opt-in | Accepted |
+| [0016](../adr/0016-rule-budget.md) | 规则预算 / dev-holdout / 消融 / 停写触发 | Accepted |
+| [0017](../adr/0017-emotion-behavior.md) | 情绪→行为：7 变量、三臂、四条判据 | Accepted |
+| [0018](../adr/0018-growth.md) | 成长→行为：5 变量、4 周、六条判据 | Accepted |
+| [0019](../adr/0019-steering-files.md) | 与 AGENTS.md 的边界与必要性判据 | Accepted |
+| [0020](../adr/0020-storage.md) | 存储位置、身份、迁移、并发 | Accepted |
+| [0021](../adr/0021-sync.md) | 跨设备同步：分片 JSONL + LWW | Accepted |
 
 ## 相关文档
 
 - [thesis](../thesis.md)：核心命题与可证伪预测（最高判据）
 - [architecture](../architecture.md)：分层与依赖规则
 - [protocol.v0](../spec/protocol.v0.md)：四个动词的具体契约
+- [affect.v0](../spec/affect.v0.md)：情感分析契约、规则与黄金集
+- [storage.v0](../spec/storage.v0.md)：路径、身份、迁移
+- [sync.v0](../spec/sync.v0.md)：跨设备合并语义
 - [quality](../quality.md)：质量模型与评审清单
 - [references](../references.md)：外部资料的去留

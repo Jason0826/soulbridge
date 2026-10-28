@@ -1,8 +1,8 @@
 ﻿# protocol.v0 — 四个动词的契约
 
-- 版本：`0.1`
-- 状态：Accepted（2026-10-27）
-- 关联：ADR 0005（版本策略）、ADR 0007（接入阶梯）
+- 版本：`0.2`（2026-10-28：`observe` 增加可选 `affect`；其余动词不变）
+- 状态：Accepted（2026-10-27，0.2 于 2026-10-28）
+- 关联：ADR 0005（版本策略）、ADR 0007（接入阶梯）、ADR 0012（affect 范围）
 
 本文件是**测试的依据**：每个字段、每个错误码、每条降级都应有对应测试。
 
@@ -113,15 +113,33 @@ v0 没有网络协议。同一份契约有三种落地方式，语义必须一�
 ### 响应 `data`
 
 ```json
-{ "written": 1, "emotion": { "passion": 0.3, "bond": 0.32, "tension": 0.1, "selfRegard": 0.3, "curiosity": 0.3, "contentment": 0.3 } }
+{
+  "written": 1,
+  "emotion": { "passion": 0.3, "bond": 0.32, "tension": 0.1, "selfRegard": 0.3, "curiosity": 0.3, "contentment": 0.3 },
+  "affect": {
+    "analyzer": "lexicon",
+    "hits": [{ "term": "难过", "category": "sadness", "intensity": 7, "polarity": "negative", "negated": false, "position": 1 }],
+    "dominant": "sadness",
+    "intensity": 7,
+    "valence": -1,
+    "arousal": 0.78,
+    "features": { "fillers": 0, "hedges": 0, "vague": 0, "tokens": 12, "density": 1 },
+    "confidence": 0.67,
+    "abstain": false
+  }
+}
 ```
+
+`affect` 在 0.2 中是**新增可选字段**：旧 adapter 忽略即可。assistant 消息返回空信号（`analyzer: "none"`）。
 
 ### 约束
 
-1. 同步、无模型调用、P99 < 5ms
+1. 同步、无模型调用、P99 < 5ms（启用 LLM 分析器时除外，见 ADR 0015）
 2. 永不抛异常；存储失败返回 `DB_UNAVAILABLE` 且 `written: 0`
 3. 同一内容重复提交不产生重复记忆（按内容去重）
 4. v0 **不修改** 由 `reflect` 维护的任何策略/认知条目
+5. **`affect` 不得影响 `emotion`**：同一 turn 在任意分析器下，`emotion` 必须逐位相同（T10）
+6. `observe` 在 0.2 中是异步的（可能调用模型）；调用方必须能接受 Promise
 
 ---
 
@@ -198,3 +216,12 @@ v0 没有网络协议。同一份契约有三种落地方式，语义必须一�
 | 5 降级 | `protocol:degrade-*`（每条一个） |
 
 测试未覆盖的条款，视为未生效。
+
+---
+
+## 7. 变更记录
+
+| 版本 | 日期 | 变更 |
+|---|---|---|
+| 0.1 | 2026-10-27 | 四动词初版 |
+| 0.2 | 2026-10-28 | observe 增加可选 affect 字段；observe 改为异步；新增「affect 不影响 emotion」约束 |

@@ -3,7 +3,7 @@
 > **给任何 agent 装上一个人格层。**
 > A personality layer for any agent — continuity, forgetting, and growth across tools.
 
-**状态：v0.0.1 骨架 · 未发布 · 接口随时会变**
+**状态：v0.0.4 · 已发布 npm · 接口仍在演进**
 
 ---
 
@@ -25,6 +25,18 @@ soulbridge 是它们之间那层**不属于任何一家**的记忆与人格：
 | 云端服务 | 默认全本地，数据不出机器 |
 | “更像人”的叙事营销 | 只承诺可观测的事 |
 
+## 什么时候别用我们
+
+诚实地说：**如果你只用一种 agent 工具、只在一个仓库工作、并且愿意手动维护 `AGENTS.md`，那它比我们更好。**
+
+| 你的情况 | 建议 |
+|---|---|
+| 单工具 + 单仓库 + 愿意手动维护 | 用 `AGENTS.md` / `CLAUDE.md`，别装我们 |
+| 团队共享约定 | 用仓库里的 `AGENTS.md`，我们不抢 |
+| 多工具 / 多仓库 + 有个人偏好 | 我们是唯一能跨工具携带的那一层 |
+
+我们只做三件 steering 文件结构上做不到的事：**跨工具携带、自动维护（抽取/遗忘/取代）、注入选择**。详见 [ADR 0019](docs/adr/0019-steering-files.md)。
+
 ## 四个动词
 
 宿主只需要在四个时机调用，就完成了接入：
@@ -32,7 +44,7 @@ soulbridge 是它们之间那层**不属于任何一家**的记忆与人格：
 | 动词 | 时机 | 作用 |
 |---|---|---|
 | `context()` | 会话开始 | 注入：身份 + 画像 + 相关记忆 + 表达风格 |
-| `observe(turn)` | 每轮结束 | 观察：写入经历、更新情绪 |
+| `observe(turn)` | 每轮结束 | 观察：写入经历、分析用户情绪、更新自己的情绪 |
 | `recall(q)` | 需要时 | 召回：按相关性/新旧/重要度/唤醒次数排序 |
 | `reflect(session)` | 会话结束 | 反思：把经历固化成策略与认知 |
 
@@ -46,6 +58,7 @@ soulbridge 是它们之间那层**不属于任何一家**的记忆与人格：
 npx soulbridge init
 npx soulbridge remember --type strategy "提交前先跑 make check，能省一轮 CI"
 npx soulbridge context --query "要不要先跑测试"
+npx soulbridge affect "我不太开心，这个方案又被拒了"
 npx soulbridge demo          # 起一个 soul，跑完整 context→observe→reflect→context
 ```
 
@@ -81,8 +94,12 @@ SQLite（默认） / Postgres（可选）
 |---|---|
 | [thesis](docs/thesis.md) | 核心命题、三条可证伪预测、四臂实验、放弃条件 |
 | [RFC 0001](docs/rfcs/0001-foundations.md) | 定位、用户、非目标、成功指标、四个动词、接入阶梯 |
-| [ADR 索引](docs/rfcs/README.md) | 11 条已生效的架构决定（定位/语言/存储/依赖/协议/许可/接入/范围/评估/质量） |
+| [RFC 0002](docs/rfcs/0002-affect.md) | 输入侧情感层：两套情绪的边界、数据流、已知局限 |
+| [ADR 索引](docs/rfcs/README.md) | 21 条已生效的架构决定 |
 | [protocol.v0](docs/spec/protocol.v0.md) | 四个动词的完整契约：字段、错误码、降级、测试映射 |
+| [affect.v0](docs/spec/affect.v0.md) | 词库格式、8 条规则、置信度公式、黄金集与消融 |
+| [storage.v0](docs/spec/storage.v0.md) | 路径、身份、迁移、并发、导出格式 |
+| [sync.v0](docs/spec/sync.v0.md) | 跨设备合并语义（v0.5 实现） |
 | [quality](docs/quality.md) | 质量模型、九条门禁、五条评审清单 |
 | [references](docs/references.md) | 外部资料的去留与过期判断 |
 | [runbook](docs/runbook.md) | 发版流程、维护操作、已知待办 |
@@ -99,6 +116,8 @@ SQLite（默认） / Postgres（可选）
 - 默认 SQLite，落在 `~/.soulbridge/soul.db`
 - 零遥测、零上报
 - 记忆可导出、可删除、可迁移
+- 情绪采样只存**词条与计数**，不存原句；30 天自动清理
+- 默认不联网；只有显式启用 LLM 分析器时，才会把**当前这一条** user 文本发给你配置的端点
 
 ## License
 

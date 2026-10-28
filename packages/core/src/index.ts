@@ -1,4 +1,4 @@
-﻿/**
+/**
  * soulbridge core — the personality layer.
  *
  * Public surface is deliberately tiny: a facade (`Soul`) over four verbs.
@@ -6,12 +6,24 @@
  */
 export * from './types.ts';
 export type { SoulStore } from './store.ts';
-export { openSqlite } from './sqlite.ts';
-export { buildContext, styleDirectives, DEFAULT_MAX_CHARS } from './context.ts';
+export { openSqlite, SCHEMA_VERSION, AFFECT_RETENTION_MS, DbNewerThanBinaryError } from './sqlite.ts';
+export {
+  buildContext,
+  styleDirectives,
+  DEFAULT_MAX_CHARS,
+  AFFECT_BUDGET,
+  AFFECT_WINDOW_MS,
+} from './context.ts';
 export { reflect, ruleExtract, nextEmotion } from './reflect.ts';
 export { rank, scoreMemory, tokenize, relevance } from './scoring.ts';
+export * from './affect/index.ts';
+export { measureStyle } from './style/measure.ts';
+export type { StyleMetrics } from './style/measure.ts';
+export * from './storage/config.ts';
+export * from './storage/merge.ts';
 
 import type {
+  AffectSignal,
   ContextRequest,
   ContextResult,
   Emotion,
@@ -24,9 +36,11 @@ import type {
   Visibility,
 } from './types.ts';
 import type { SoulStore } from './store.ts';
+import type { AffectAnalyzer } from './affect/port.ts';
 import { buildContext } from './context.ts';
 import { reflect, ruleExtract, nextEmotion } from './reflect.ts';
 import { rank, tokenize } from './scoring.ts';
+import { analyzeAffect, emptyAffect, lexiconAnalyzer } from './affect/analyze.ts';
 
 export interface SoulOptions {
   store: SoulStore;
@@ -35,6 +49,10 @@ export interface SoulOptions {
   name?: string;
   /** When the soul was born. Defaults to now; backdate it to demo long relationships. */
   createdAt?: number;
+  /** Device identity for sync bookkeeping (ADR 0021). Optional in local use. */
+  deviceId?: string;
+  /** Defaults to the lexicon analyzer; pass an LLM-backed one to opt in (ADR 0015). */
+  analyzer?: AffectAnalyzer;
 }
 
 export class Soul {
@@ -42,12 +60,16 @@ export class Soul {
   readonly soulId: string;
   readonly userId: string;
   readonly name: string;
+  readonly deviceId: string;
+  readonly analyzer: AffectAnalyzer;
 
   constructor(options: SoulOptions) {
     this.store = options.store;
     this.soulId = options.soulId;
     this.userId = options.userId;
     this.name = options.name ?? '小灵';
+    this.deviceId = options.deviceId ?? 'dev_local';
+    this.analyzer = options.analyzer ?? lexiconAnalyzer;
 
     if (!this.store.identity(this.soulId)) {
       this.store.ensureSoul({
@@ -76,9 +98,25 @@ export class Soul {
     return ranked;
   }
 
-  /** Verb 2: after each turn. Cheap and synchronous by design. */
-  observe(turn: Turn): ObserveResult {
+  /** Pure analysis, no storage: useful for the CLI and for tests. */
+  analyze(text: string): AffectSignal {
+    try {
+      return this.analyzer.analyze(text) as AffectSignal;
+    } catch {
+      return analyzeAffect(text);
+    }
+  }
+
+  /**
+   * Verb 2: after each turn.
+   *
+   * The analyzer may be async (a model); any failure degrades to the lexicon
+   * analyzer. Emotion is computed from the turn only — never from affect.
+   */
+  async observe(turn: Turn): Promise<ObserveResult> {
     const now = turn.at ?? Date.now();
+    const affect = turn.role === 'user' ? await this.analyzeTurn(turn.content) : emptyAffect();
+
     const drafts = ruleExtract([turn]);
     for (const draft of drafts) {
       this.store.put({
@@ -92,15 +130,24 @@ export class Soul {
         recallCount: 0,
         status: 'active',
         visibility: 'private',
-        keywords: [],
+        keywords: tokenize(draft.content),
         createdAt: now,
+        updatedAt: now,
         validFrom: now,
       });
     }
 
+    if (turn.role === 'user') {
+      try {
+        this.store.saveAffect(this.soulId, this.userId, affect, now, this.deviceId);
+      } catch {
+        // Affect is an enhancement; storage trouble must not break the session.
+      }
+    }
+
     const emotion = nextEmotion(this.store.emotion(this.soulId, this.userId), [turn]);
-    this.store.saveEmotion(this.soulId, this.userId, emotion);
-    return { written: drafts.length, emotion };
+    this.store.saveEmotion(this.soulId, this.userId, emotion, now);
+    return { written: drafts.length, emotion, affect };
   }
 
   /**
@@ -126,6 +173,7 @@ export class Soul {
       visibility: options.visibility ?? 'private',
       keywords: tokenize(content),
       createdAt: now,
+      updatedAt: now,
       validFrom: now,
     });
     return id;
@@ -142,5 +190,18 @@ export class Soul {
       memories: this.store.count(this.soulId, this.userId),
       emotion: this.store.emotion(this.soulId, this.userId),
     };
+  }
+
+  private async analyzeTurn(content: string): Promise<AffectSignal> {
+    try {
+      const signal = await this.analyzer.analyze(content);
+      return { ...signal, analyzer: this.analyzer.id };
+    } catch {
+      try {
+        return analyzeAffect(content);
+      } catch {
+        return emptyAffect();
+      }
+    }
   }
 }

@@ -1,19 +1,28 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 /**
  * Minimal CLI. No framework, no dependencies.
  *
  *   soulbridge init
- *   soulbridge remember "以后提交前先跑 make check" --type strategy --importance 8
+ *   soulbridge remember "以后提交前先跑 make check" --type strategy
  *   soulbridge context --query "提交前要做什么"
- *   soulbridge recall "测试"
- *   soulbridge reflect --text "..."      (or --file transcript.txt)
+ *   soulbridge observe "我不太开心"
+ *   soulbridge affect "我不太开心"
+ *   soulbridge reflect --text "..."
+ *   soulbridge export --out soulbridge.jsonl
+ *   soulbridge import --in soulbridge.jsonl
  *   soulbridge stats
  *   soulbridge demo
  */
-import { mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import type { MemoryType, Turn } from '../../core/src/index.ts';
-import type { Soul as SoulType } from '../../core/src/index.ts';
+import type {
+  AffectAnalyzer,
+  AffectSignal,
+  Lexicon,
+  MemoryType,
+  Soul as SoulType,
+  Turn,
+} from '../../core/src/index.ts';
 
 // node:sqlite prints an ExperimentalWarning the moment it loads. Replace the default
 // printer with a filter: the CLI's own output stays clean, other warnings still show.
@@ -24,7 +33,10 @@ process.on('warning', (warning) => {
   process.stderr.write(`${warning.name}: ${warning.message}\n`);
 });
 
-const { openSqlite, Soul } = await import('../../core/src/index.ts');
+const { openSqlite, Soul, ensureConfig, resolveDbPath, analyzeAffect, validateLexicon } = await import(
+  '../../core/src/index.ts'
+);
+const { llmAnalyzerFromEnv } = await import('./llm-analyzer.ts');
 
 interface Parsed {
   cmd: string;
@@ -56,23 +68,45 @@ function parse(argv: string[]): Parsed {
   return { cmd, positional, flags };
 }
 
-function dbFile(): string {
-  const file = process.env.SOULBRIDGE_DB ?? resolve(process.cwd(), '.soulbridge', 'soul.db');
-  mkdirSync(dirname(file), { recursive: true });
-  return file;
+function lexiconAnalyzerFrom(path: string): AffectAnalyzer {
+  const raw: unknown = JSON.parse(readFileSync(path, 'utf8'));
+  const errors = validateLexicon(raw);
+  if (errors.length > 0) throw new Error(`invalid lexicon (${path}): ${errors.slice(0, 3).join('; ')}`);
+  const lexicon = raw as Lexicon;
+  return { id: 'lexicon', analyze: (text: string) => analyzeAffect(text, { lexicon }) };
 }
 
-function open(file?: string, createdAt?: number): { soul: SoulType; file: string } {
-  const target = file ?? dbFile();
-  const store = openSqlite(target);
+function pickAnalyzer(flags: Record<string, string>): AffectAnalyzer | undefined {
+  let analyzer: AffectAnalyzer | undefined;
+  if (flags.lexicon) analyzer = lexiconAnalyzerFrom(flags.lexicon);
+  if (flags.analyzer === 'llm') {
+    const llm = llmAnalyzerFromEnv();
+    if (llm) analyzer = llm;
+    else process.stderr.write('soulbridge: SOULBRIDGE_AFFECT_LLM_URL not set; using the lexicon analyzer\n');
+  }
+  return analyzer;
+}
+
+interface Opened {
+  soul: SoulType;
+  dbPath: string;
+  deviceId: string;
+}
+
+function open(flags: Record<string, string>): Opened {
+  const config = ensureConfig();
+  const dbPath = resolveDbPath(flags.db);
+  mkdirSync(dirname(dbPath), { recursive: true });
+
   const soul = new Soul({
-    store,
-    soulId: process.env.SOULBRIDGE_SOUL ?? 'xiaoling',
-    userId: process.env.SOULBRIDGE_USER ?? 'local',
-    name: process.env.SOULBRIDGE_NAME ?? '小灵',
-    createdAt,
+    store: openSqlite(dbPath),
+    soulId: config.soulId,
+    userId: config.userId,
+    name: config.name,
+    deviceId: config.deviceId,
+    analyzer: pickAnalyzer(flags),
   });
-  return { soul, file: target };
+  return { soul, dbPath, deviceId: config.deviceId };
 }
 
 function out(value: unknown): void {
@@ -85,7 +119,6 @@ async function demo(): Promise<void> {
   const file = resolve(dir, 'demo.db');
   for (const suffix of ['', '-wal', '-shm']) rmSync(`${file}${suffix}`, { force: true });
 
-  // Backdate the birthday so the demo shows a relationship that has time in it.
   const seed = openSqlite(file);
   seed.ensureSoul({ soulId: 'xiaoling', name: '小灵', createdAt: Date.now() - 3 * 86_400_000 });
   seed.close();
@@ -104,10 +137,13 @@ async function demo(): Promise<void> {
   ]);
   process.stdout.write(`写入 ${result.memories} 条记忆，情绪 ${JSON.stringify(result.emotion)}\n\n`);
 
-  process.stdout.write('=== 第 2 次会话：开场（无查询，按重要度注入全部）===\n');
-  process.stdout.write(`${soul.context().text}\n\n`);
+  process.stdout.write('=== 用户说了一句带情绪的话（observe）===\n');
+  const observed = await soul.observe({ role: 'user', content: '我特别难过，这个方案又被拒了' });
+  process.stdout.write(
+    `affect: ${observed.affect.dominant ?? 'none'} / 强度 ${observed.affect.intensity} / 置信 ${observed.affect.confidence}\n\n`,
+  );
 
-  process.stdout.write('=== 同一会话中，用户问「提交前要做什么」（有查询，只注入相关的）===\n');
+  process.stdout.write('=== 第 2 次会话：开场（含情绪段）===\n');
   process.stdout.write(`${soul.context({ query: '提交前要做什么' }).text}\n\n`);
 
   process.stdout.write('=== stats ===\n');
@@ -115,20 +151,50 @@ async function demo(): Promise<void> {
   process.stdout.write(`\n数据库：${file}\n`);
 }
 
+function exportJsonl(soul: SoulType, deviceId: string): string {
+  const lines: string[] = [
+    JSON.stringify({
+      type: 'header',
+      version: 1,
+      soulId: soul.soulId,
+      userId: soul.userId,
+      deviceId,
+      exportedAt: Date.now(),
+    }),
+  ];
+
+  const memories = soul.store.query({
+    soulId: soul.soulId,
+    userId: soul.userId,
+    status: ['active', 'superseded', 'archived'],
+    limit: 100_000,
+  });
+  for (const memory of memories) lines.push(JSON.stringify({ type: 'memory', memory }));
+
+  const samples = soul.store.recentAffect(soul.soulId, soul.userId, 0);
+  for (const sample of samples) {
+    const withAt = sample as AffectSignal & { at?: number };
+    lines.push(JSON.stringify({ type: 'affect', at: withAt.at ?? 0, signal: sample }));
+  }
+
+  return `${lines.join('\n')}\n`;
+}
+
 async function main(): Promise<void> {
   const { cmd, positional, flags } = parse(process.argv.slice(2));
 
   switch (cmd) {
     case 'init': {
-      const { soul, file } = open();
-      out({ ok: true, db: file, ...soul.stats() });
+      const config = ensureConfig();
+      const { dbPath } = open(flags);
+      out({ ok: true, db: dbPath, config });
       return;
     }
 
     case 'remember': {
       const content = positional.join(' ').trim();
       if (!content) throw new Error('usage: soulbridge remember "内容" [--type T] [--importance N]');
-      const { soul } = open();
+      const { soul } = open(flags);
       const id = soul.remember(content, {
         type: (flags.type as MemoryType | undefined) ?? 'fact',
         importance: flags.importance ? Number(flags.importance) : undefined,
@@ -138,7 +204,7 @@ async function main(): Promise<void> {
     }
 
     case 'context': {
-      const { soul } = open();
+      const { soul } = open(flags);
       const result = soul.context({
         query: flags.query,
         maxChars: flags.max ? Number(flags.max) : undefined,
@@ -150,17 +216,32 @@ async function main(): Promise<void> {
     case 'recall': {
       const query = positional.join(' ').trim();
       if (!query) throw new Error('usage: soulbridge recall "查询" [--limit N]');
-      const { soul } = open();
+      const { soul } = open(flags);
       const hits = soul.recall(query, flags.limit ? Number(flags.limit) : 5);
-      out(hits.map((h) => ({ id: h.memory.id, type: h.memory.type, content: h.memory.content, score: Number(h.score.toFixed(3)) })));
+      out(
+        hits.map((h) => ({
+          id: h.memory.id,
+          type: h.memory.type,
+          content: h.memory.content,
+          score: Number(h.score.toFixed(3)),
+        })),
+      );
       return;
     }
 
     case 'observe': {
       const content = positional.join(' ').trim();
       if (!content) throw new Error('usage: soulbridge observe "一句话"');
-      const { soul } = open();
-      out(soul.observe({ role: 'user', content }));
+      const { soul } = open(flags);
+      out(await soul.observe({ role: 'user', content }));
+      return;
+    }
+
+    case 'affect': {
+      const text = positional.join(' ').trim();
+      if (!text) throw new Error('usage: soulbridge affect "文本" [--analyzer lexicon|llm] [--lexicon path]');
+      const analyzer = pickAnalyzer(flags);
+      out(analyzer ? await analyzer.analyze(text) : analyzeAffect(text));
       return;
     }
 
@@ -177,14 +258,52 @@ async function main(): Promise<void> {
           const role = /^(assistant|助手)$/i.test(match[1]) ? 'assistant' : 'user';
           return { role, content: match[2] } as Turn;
         });
-      const { soul } = open();
+      const { soul } = open(flags);
       out(await soul.reflect(turns));
       return;
     }
 
+    case 'export': {
+      const file = flags.out;
+      if (!file) throw new Error('usage: soulbridge export --out soulbridge.jsonl');
+      const { soul, deviceId } = open(flags);
+      const body = exportJsonl(soul, deviceId);
+      const target = resolve(file);
+      writeFileSync(target, body, 'utf8');
+      out({ ok: true, file: target, lines: body.trimEnd().split('\n').length });
+      return;
+    }
+
+    case 'import': {
+      const file = flags.in;
+      if (!file) throw new Error('usage: soulbridge import --in soulbridge.jsonl');
+      const { soul, deviceId } = open(flags);
+      let memories = 0;
+      let affects = 0;
+      for (const line of readFileSync(resolve(file), 'utf8').split(/\r?\n/)) {
+        if (!line.trim()) continue;
+        const record = JSON.parse(line) as Record<string, unknown>;
+        if (record.type === 'memory' && record.memory) {
+          soul.store.put(record.memory as never);
+          memories += 1;
+        } else if (record.type === 'affect' && record.signal) {
+          soul.store.saveAffect(
+            soul.soulId,
+            soul.userId,
+            record.signal as AffectSignal,
+            Number(record.at ?? 0),
+            deviceId,
+          );
+          affects += 1;
+        }
+      }
+      out({ ok: true, memories, affects });
+      return;
+    }
+
     case 'stats': {
-      const { soul, file } = open();
-      out({ db: file, ...soul.stats() });
+      const { soul, dbPath } = open(flags);
+      out({ db: dbPath, ...soul.stats() });
       return;
     }
 
@@ -198,16 +317,20 @@ async function main(): Promise<void> {
           'soulbridge — 给任何 agent 装上一个人格层',
           '',
           'commands:',
-          '  init                            初始化数据库',
+          '  init                            初始化配置与数据库',
           '  remember <text> [--type T]      显式记住一条',
           '  context [--query Q] [--max N]   生成注入文本',
+          '  observe <text>                  观察一轮（含情绪分析）',
+          '  affect <text> [--analyzer llm]  只做情绪分析',
           '  recall <q> [--limit N]          召回',
-          '  observe <text>                  观察一轮',
           '  reflect --text|--file           会话反思',
+          '  export --out <file>             导出 JSONL',
+          '  import --in <file>              导入 JSONL',
           '  stats                           看状态',
           '  demo                            端到端演示（无需模型）',
           '',
-          'env: SOULBRIDGE_DB, SOULBRIDGE_SOUL, SOULBRIDGE_USER, SOULBRIDGE_NAME',
+          'env: SOULBRIDGE_DB, SOULBRIDGE_SOUL, SOULBRIDGE_USER, SOULBRIDGE_NAME,',
+          '     SOULBRIDGE_AFFECT_LLM_URL / _MODEL / _KEY / _TIMEOUT',
           '',
         ].join('\n'),
       );

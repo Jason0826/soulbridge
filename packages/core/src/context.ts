@@ -1,15 +1,22 @@
 /**
  * Context assembly: turn structured state into the text a host agent injects.
  *
- * Two rules:
+ * Three rules:
  *  - never cut a sentence in half (drop whole memories instead)
  *  - every injected memory id is reported in `used`, so injection is auditable
+ *  - the affect section is opt-in by confidence, capped in size, and only ever
+ *    contains whitelisted sentences (ADR 0014)
  */
 import type { ContextRequest, ContextResult, Emotion } from './types.ts';
 import type { SoulStore } from './store.ts';
 import { rank } from './scoring.ts';
+import { selectDirectives } from './affect/directives.ts';
 
 export const DEFAULT_MAX_CHARS = 1200;
+/** Characters reserved for the affect section; if it does not fit, it is dropped whole. */
+export const AFFECT_BUDGET = 160;
+/** Only the most recent user turn counts; older samples are for evaluation, not injection. */
+export const AFFECT_WINDOW_MS = 30 * 60 * 1000;
 
 /** Emotion → concrete behavioural instruction. Values are -2..+2. */
 export function styleDirectives(emotion: Emotion): string[] {
@@ -48,6 +55,23 @@ export function buildContext(
     sections.push(`<style>\n${styles.map((s) => `- ${s}`).join('\n')}\n</style>`);
   }
 
+  // Affect: newest sample only, and only when it is confident and recent enough.
+  let affectMeta: ContextResult['affect'];
+  const [latest] = store.recentAffect(request.soulId, request.userId, now - AFFECT_WINDOW_MS);
+  if (latest) {
+    const directives = selectDirectives(latest);
+    if (directives.length > 0) {
+      const section =
+        `<affect confidence="${latest.confidence.toFixed(2)}" analyzer="${latest.analyzer}">\n` +
+        `${directives.map((d) => `- ${d.text}`).join('\n')}\n</affect>`;
+      const usedSoFar = sections.join('\n\n').length;
+      if (section.length <= AFFECT_BUDGET && usedSoFar + section.length + 2 <= maxChars) {
+        sections.push(section);
+        affectMeta = { confidence: latest.confidence, directives: directives.map((d) => d.id) };
+      }
+    }
+  }
+
   const candidates = store.query({ soulId: request.soulId, userId: request.userId });
   const ranked = rank(candidates, request.query ?? '', now);
 
@@ -73,5 +97,7 @@ export function buildContext(
   const text = sections.join('\n\n');
   if (used.length > 0) store.touch(used, now);
 
-  return { text, used, dropped, chars: text.length };
+  const result: ContextResult = { text, used, dropped, chars: text.length };
+  if (affectMeta) result.affect = affectMeta;
+  return result;
 }

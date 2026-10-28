@@ -1,11 +1,32 @@
-﻿/**
+/**
  * SQLite implementation of SoulStore, using Node's built-in `node:sqlite`.
  * Zero npm dependencies on purpose: `npx soulbridge` must work offline.
+ *
+ * Schema versioning (ADR 0020): every open checks `schema_meta.schema_version`.
+ * Older databases are upgraded in place after a one-off backup; a database
+ * from a newer binary is refused instead of being silently written.
  */
+import { copyFileSync, existsSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { DEFAULT_EMOTION } from './types.ts';
-import type { Emotion, Identity, Memory, QuerySpec } from './types.ts';
+import type { AffectSignal, Emotion, Identity, Memory, QuerySpec } from './types.ts';
 import type { SoulStore } from './store.ts';
+
+export const SCHEMA_VERSION = 2;
+export const AFFECT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const BUSY_TIMEOUT_MS = 5000;
+const WRITE_ATTEMPTS = 3;
+
+export class DbNewerThanBinaryError extends Error {
+  readonly code = 'DB_NEWER_THAN_BINARY';
+  readonly dbVersion: number;
+
+  constructor(dbVersion: number) {
+    super(`database schema v${dbVersion} is newer than this binary (v${SCHEMA_VERSION})`);
+    this.name = 'DbNewerThanBinaryError';
+    this.dbVersion = dbVersion;
+  }
+}
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS schema_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
@@ -46,55 +67,121 @@ CREATE TABLE IF NOT EXISTS memories (
 );
 CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(soul_id, user_id, status);
 CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(soul_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS affect_samples (
+  soul_id    TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  at         INTEGER NOT NULL,
+  analyzer   TEXT NOT NULL,
+  dominant   TEXT,
+  intensity  REAL NOT NULL,
+  valence    REAL NOT NULL,
+  arousal    REAL NOT NULL,
+  confidence REAL NOT NULL,
+  payload    TEXT NOT NULL,
+  device_id  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_affect ON affect_samples(soul_id, user_id, at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_affect_unique ON affect_samples(soul_id, user_id, at, analyzer);
 `;
 
 type Row = Record<string, unknown>;
 
-function toMemory(row: Row): Memory {
-  return {
-    id: String(row.id),
-    soulId: String(row.soul_id),
-    userId: String(row.user_id),
-    type: row.type as Memory['type'],
-    content: String(row.content),
-    importance: Number(row.importance),
-    vividness: Number(row.vividness),
-    recallCount: Number(row.recall_count),
-    status: row.status as Memory['status'],
-    visibility: row.visibility as Memory['visibility'],
-    keywords: JSON.parse(String(row.keywords ?? '[]')) as string[],
-    createdAt: Number(row.created_at),
-    lastRecalledAt: row.last_recalled_at == null ? undefined : Number(row.last_recalled_at),
-    validFrom: row.valid_from == null ? undefined : Number(row.valid_from),
-    validUntil: row.valid_until == null ? undefined : Number(row.valid_until),
-    supersededBy: row.superseded_by == null ? undefined : String(row.superseded_by),
-  };
+const sleepSync = (ms: number): void => {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+};
+
+function withRetry<T>(fn: () => T): T {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < WRITE_ATTEMPTS; attempt += 1) {
+    try {
+      return fn();
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/locked|busy/i.test(message)) throw error;
+      if (attempt < WRITE_ATTEMPTS - 1) sleepSync(50 * 3 ** attempt);
+    }
+  }
+  throw lastError;
+}
+
+function readVersion(db: DatabaseSync): number {
+  const row = db.prepare("SELECT v FROM schema_meta WHERE k = 'schema_version'").get() as Row | undefined;
+  if (!row) return 1;
+  const version = Number(row.v);
+  return Number.isFinite(version) ? version : 1;
+}
+
+function setVersion(db: DatabaseSync, version: number): void {
+  db.prepare('INSERT OR REPLACE INTO schema_meta (k, v) VALUES (?, ?)').run('schema_version', String(version));
+}
+
+function columnExists(db: DatabaseSync, table: string, column: string): boolean {
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Row[];
+  return rows.some((row) => String(row.name) === column);
+}
+
+function ensureColumn(db: DatabaseSync, table: string, column: string, ddl: string): void {
+  if (!columnExists(db, table, column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+}
+
+/** v1 → v2: sync-ready columns (updated_at / deleted_at / device_id). */
+function upgradeToV2(db: DatabaseSync): void {
+  ensureColumn(db, 'memories', 'updated_at', 'INTEGER');
+  ensureColumn(db, 'memories', 'deleted_at', 'INTEGER');
+  ensureColumn(db, 'emotions', 'updated_at', 'INTEGER');
+  db.exec('UPDATE memories SET updated_at = created_at WHERE updated_at IS NULL');
+  db.exec('UPDATE emotions SET updated_at = 0 WHERE updated_at IS NULL');
+}
+
+function backupBeforeUpgrade(file: string, from: number): void {
+  if (file === ':memory:' || !existsSync(file)) return;
+  const backup = `${file}.bak-v${from}`;
+  if (!existsSync(backup)) copyFileSync(file, backup);
 }
 
 export function openSqlite(file: string): SoulStore {
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL;');
+  db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS};`);
   db.exec(SCHEMA);
-  db.prepare('INSERT OR REPLACE INTO schema_meta (k, v) VALUES (?, ?)').run('version', '1');
+
+  const version = readVersion(db);
+  if (version > SCHEMA_VERSION) {
+    db.close();
+    throw new DbNewerThanBinaryError(version);
+  }
+  if (version < SCHEMA_VERSION) {
+    backupBeforeUpgrade(file, version);
+    if (version < 2) upgradeToV2(db);
+    setVersion(db, SCHEMA_VERSION);
+  }
 
   const stmtPut = db.prepare(`
     INSERT INTO memories (
       id, soul_id, user_id, type, content, importance, vividness, recall_count,
-      status, visibility, keywords, created_at, last_recalled_at, valid_from, valid_until, superseded_by
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      status, visibility, keywords, created_at, last_recalled_at, valid_from, valid_until,
+      superseded_by, updated_at, deleted_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       content = excluded.content,
       importance = excluded.importance,
       vividness = excluded.vividness,
       status = excluded.status,
-      superseded_by = excluded.superseded_by
+      superseded_by = excluded.superseded_by,
+      updated_at = excluded.updated_at,
+      deleted_at = excluded.deleted_at
   `);
 
   return {
     ensureSoul(identity: Identity): void {
-      db.prepare(
-        'INSERT INTO souls (soul_id, name, creator, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(soul_id) DO NOTHING',
-      ).run(identity.soulId, identity.name, identity.creator ?? null, identity.createdAt);
+      withRetry(() =>
+        db
+          .prepare(
+            'INSERT INTO souls (soul_id, name, creator, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(soul_id) DO NOTHING',
+          )
+          .run(identity.soulId, identity.name, identity.creator ?? null, identity.createdAt),
+      );
     },
 
     identity(soulId: string): Identity | null {
@@ -123,44 +210,53 @@ export function openSqlite(file: string): SoulStore {
       };
     },
 
-    saveEmotion(soulId: string, userId: string, emotion: Emotion): void {
-      db.prepare(
-        `INSERT INTO emotions (soul_id, user_id, passion, bond, tension, self_regard, curiosity, contentment)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(soul_id, user_id) DO UPDATE SET
-           passion = excluded.passion, bond = excluded.bond, tension = excluded.tension,
-           self_regard = excluded.self_regard, curiosity = excluded.curiosity,
-           contentment = excluded.contentment`,
-      ).run(
-        soulId,
-        userId,
-        emotion.passion,
-        emotion.bond,
-        emotion.tension,
-        emotion.selfRegard,
-        emotion.curiosity,
-        emotion.contentment,
+    saveEmotion(soulId: string, userId: string, emotion: Emotion, now: number = Date.now()): void {
+      withRetry(() =>
+        db
+          .prepare(
+            `INSERT INTO emotions (soul_id, user_id, passion, bond, tension, self_regard, curiosity, contentment, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(soul_id, user_id) DO UPDATE SET
+               passion = excluded.passion, bond = excluded.bond, tension = excluded.tension,
+               self_regard = excluded.self_regard, curiosity = excluded.curiosity,
+               contentment = excluded.contentment, updated_at = excluded.updated_at`,
+          )
+          .run(
+            soulId,
+            userId,
+            emotion.passion,
+            emotion.bond,
+            emotion.tension,
+            emotion.selfRegard,
+            emotion.curiosity,
+            emotion.contentment,
+            now,
+          ),
       );
     },
 
     put(memory: Memory): void {
-      stmtPut.run(
-        memory.id,
-        memory.soulId,
-        memory.userId,
-        memory.type,
-        memory.content,
-        memory.importance,
-        memory.vividness,
-        memory.recallCount,
-        memory.status,
-        memory.visibility,
-        JSON.stringify(memory.keywords),
-        memory.createdAt,
-        memory.lastRecalledAt ?? null,
-        memory.validFrom ?? null,
-        memory.validUntil ?? null,
-        memory.supersededBy ?? null,
+      withRetry(() =>
+        stmtPut.run(
+          memory.id,
+          memory.soulId,
+          memory.userId,
+          memory.type,
+          memory.content,
+          memory.importance,
+          memory.vividness,
+          memory.recallCount,
+          memory.status,
+          memory.visibility,
+          JSON.stringify(memory.keywords),
+          memory.createdAt,
+          memory.lastRecalledAt ?? null,
+          memory.validFrom ?? null,
+          memory.validUntil ?? null,
+          memory.supersededBy ?? null,
+          memory.updatedAt ?? memory.createdAt,
+          memory.deletedAt ?? null,
+        ),
       );
     },
 
@@ -170,12 +266,13 @@ export function openSqlite(file: string): SoulStore {
       const rows = db
         .prepare(
           `SELECT * FROM memories
-           WHERE soul_id = ? AND (user_id = ? OR visibility = 'shared') AND status IN (${placeholders})
+           WHERE soul_id = ? AND (user_id = ? OR visibility = 'shared')
+             AND status IN (${placeholders}) AND deleted_at IS NULL
            ORDER BY created_at DESC LIMIT ?`,
         )
         .all(spec.soulId, spec.userId, ...statuses, spec.limit ?? 500) as Row[];
 
-      const memories = rows.map(toMemory);
+      const memories = rows.map(rowToMemory);
       return spec.types ? memories.filter((m) => spec.types!.includes(m.type)) : memories;
     },
 
@@ -183,13 +280,63 @@ export function openSqlite(file: string): SoulStore {
       const stmt = db.prepare(
         'UPDATE memories SET recall_count = recall_count + 1, last_recalled_at = ? WHERE id = ?',
       );
-      for (const id of ids) stmt.run(now, id);
+      withRetry(() => {
+        for (const id of ids) stmt.run(now, id);
+      });
+    },
+
+    saveAffect(soulId: string, userId: string, signal: AffectSignal, at: number, deviceId?: string): void {
+      withRetry(() => {
+        db.prepare(
+          `INSERT OR IGNORE INTO affect_samples
+             (soul_id, user_id, at, analyzer, dominant, intensity, valence, arousal, confidence, payload, device_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          soulId,
+          userId,
+          at,
+          signal.analyzer,
+          signal.dominant ?? null,
+          signal.intensity,
+          signal.valence,
+          signal.arousal,
+          signal.confidence,
+          JSON.stringify({ ...signal, at }),
+          deviceId ?? null,
+        );
+        db.prepare('DELETE FROM affect_samples WHERE at < ?').run(at - AFFECT_RETENTION_MS);
+      });
+    },
+
+    recentAffect(soulId: string, userId: string, sinceMs: number): AffectSignal[] {
+      const rows = db
+        .prepare(
+          `SELECT payload FROM affect_samples
+           WHERE soul_id = ? AND user_id = ? AND at >= ?
+           ORDER BY at DESC LIMIT 1000`,
+        )
+        .all(soulId, userId, sinceMs) as Row[];
+      return rows
+        .map((row) => {
+          try {
+            return JSON.parse(String(row.payload)) as AffectSignal;
+          } catch {
+            return null;
+          }
+        })
+        .filter((signal): signal is AffectSignal => signal !== null);
+    },
+
+    purgeAffect(beforeMs: number): number {
+      const result = withRetry(() => db.prepare('DELETE FROM affect_samples WHERE at < ?').run(beforeMs));
+      return Number(result.changes ?? 0);
     },
 
     count(soulId: string, userId: string): number {
       const row = db
         .prepare(
-          "SELECT COUNT(*) AS n FROM memories WHERE soul_id = ? AND (user_id = ? OR visibility = 'shared')",
+          `SELECT COUNT(*) AS n FROM memories
+           WHERE soul_id = ? AND (user_id = ? OR visibility = 'shared') AND deleted_at IS NULL`,
         )
         .get(soulId, userId) as Row;
       return Number(row.n);
@@ -198,5 +345,28 @@ export function openSqlite(file: string): SoulStore {
     close(): void {
       db.close();
     },
+  };
+}
+
+function rowToMemory(row: Row): Memory {
+  return {
+    id: String(row.id),
+    soulId: String(row.soul_id),
+    userId: String(row.user_id),
+    type: row.type as Memory['type'],
+    content: String(row.content),
+    importance: Number(row.importance),
+    vividness: Number(row.vividness),
+    recallCount: Number(row.recall_count),
+    status: row.status as Memory['status'],
+    visibility: row.visibility as Memory['visibility'],
+    keywords: JSON.parse(String(row.keywords ?? '[]')) as string[],
+    createdAt: Number(row.created_at),
+    lastRecalledAt: row.last_recalled_at == null ? undefined : Number(row.last_recalled_at),
+    validFrom: row.valid_from == null ? undefined : Number(row.valid_from),
+    validUntil: row.valid_until == null ? undefined : Number(row.valid_until),
+    supersededBy: row.superseded_by == null ? undefined : String(row.superseded_by),
+    updatedAt: row.updated_at == null ? undefined : Number(row.updated_at),
+    deletedAt: row.deleted_at == null ? undefined : Number(row.deleted_at),
   };
 }
