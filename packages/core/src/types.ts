@@ -85,6 +85,12 @@ export interface ContextRequest {
    * context without inflating recall statistics. Defaults to true.
    */
   track?: boolean;
+  /** Only these memory types may be injected. Defaults to every type. */
+  types?: MemoryType[];
+  /** Skip memories below this importance (1..10). */
+  minImportance?: number;
+  /** Cap the number of injected memory lines. */
+  maxItems?: number;
 }
 
 export interface ContextResult {

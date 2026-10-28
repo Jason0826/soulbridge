@@ -90,6 +90,9 @@ export class Soul {
       query: request.query,
       maxChars: request.maxChars,
       track: request.track,
+      types: request.types,
+      minImportance: request.minImportance,
+      maxItems: request.maxItems,
     });
   }
 

@@ -72,8 +72,15 @@ export function buildContext(
     }
   }
 
-  const candidates = store.query({ soulId: request.soulId, userId: request.userId });
+  const candidates = store
+    .query({ soulId: request.soulId, userId: request.userId })
+    .filter(
+      (memory) =>
+        (request.types === undefined || request.types.includes(memory.type)) &&
+        (request.minImportance === undefined || memory.importance >= request.minImportance),
+    );
   const ranked = rank(candidates, request.query ?? '', now);
+  const maxItems = request.maxItems ?? Number.POSITIVE_INFINITY;
 
   let chars = sections.join('\n\n').length;
   let dropped = 0;
@@ -81,6 +88,10 @@ export function buildContext(
   const used: string[] = [];
 
   for (const { memory } of ranked) {
+    if (lines.length >= maxItems) {
+      dropped += 1;
+      continue;
+    }
     const line = `- [${memory.type}] ${memory.content}`;
     const cost = line.length + 1 + 10; // line + newline + section overhead share
     if (chars + cost > maxChars) {

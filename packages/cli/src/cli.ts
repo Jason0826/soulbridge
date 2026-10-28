@@ -43,6 +43,7 @@ const {
   parseSteering,
   normalizeForDedupe,
   parseTranscriptJsonl,
+  soulbridgeHome,
 } = await import('../../core/src/index.ts');
 const { llmAnalyzerFromEnv } = await import('./llm-analyzer.ts');
 
@@ -360,6 +361,48 @@ async function main(): Promise<void> {
       return;
     }
 
+    case 'status': {
+      const config = ensureConfig();
+      const dbPath = resolveDbPath(flags.db);
+      const store = openSqlite(dbPath);
+      const memories = store.query({ soulId: config.soulId, userId: config.userId, limit: 100_000 });
+      const samples = store.recentAffect(config.soulId, config.userId, 0);
+      store.close();
+
+      const byType = new Map<string, number>();
+      for (const memory of memories) byType.set(memory.type, (byType.get(memory.type) ?? 0) + 1);
+      const typeText = [...byType].sort((a, b) => b[1] - a[1]).map(([t, n]) => `${t} ${n}`).join(' · ') || '—';
+
+      let plugin: Record<string, unknown> | null = null;
+      try {
+        plugin = JSON.parse(readFileSync(resolve(soulbridgeHome(), 'plugin-state.json'), 'utf8')) as Record<string, unknown>;
+      } catch {
+        plugin = null;
+      }
+
+      const ago = (value: unknown): string => {
+        if (typeof value !== 'number' || value <= 0) return '—';
+        const seconds = Math.max(0, Math.round((Date.now() - value) / 1000));
+        if (seconds < 60) return `${seconds}s ago`;
+        if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
+        if (seconds < 86_400) return `${Math.round(seconds / 3600)}h ago`;
+        return `${Math.round(seconds / 86_400)}d ago`;
+      };
+
+      const lines = [
+        `soul       ${config.soulId} / ${config.userId}`,
+        `db         ${dbPath}`,
+        `memories   ${memories.length}  (${typeText})`,
+        `affect     ${samples.length} samples${samples.length > 0 ? ` · last ${ago((samples[0] as { at?: number }).at)}` : ''}`,
+        plugin
+          ? `plugin     v${plugin.version ?? '?'} · applied ${ago(plugin.appliedAt)} · inject ${plugin.injects ?? 0} · observe ${plugin.observes ?? 0} · fail ${plugin.observeFails ?? 0}`
+          : 'plugin     no heartbeat (plugin never loaded, or runs on another machine)',
+      ];
+      if (plugin?.lastError) lines.push(`last error ${String(plugin.lastError)}`);
+      process.stdout.write(`${lines.join('\n')}\n`);
+      return;
+    }
+
     case 'stats': {
       const { soul, dbPath } = open(flags);
       out({ db: dbPath, ...soul.stats() });
@@ -387,7 +430,8 @@ async function main(): Promise<void> {
           '  import --in <file>              导入 JSONL',
           '  import --from <steering.md>     导入 AGENTS.md / CLAUDE.md',
           '  ingest --file <transcript.jsonl> 会话转写 → 记忆与情绪采样',
-          '  stats                           看状态',
+          '  status                          一眼看它是否在工作',
+          '  stats                           看原始状态（JSON）',
           '  demo                            端到端演示（无需模型）',
           '',
           'env: SOULBRIDGE_DB, SOULBRIDGE_SOUL, SOULBRIDGE_USER, SOULBRIDGE_NAME,',

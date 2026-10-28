@@ -151,6 +151,27 @@ test('适配层：track=false 预览上下文不增加召回次数', () => {
   store.close();
 });
 
+test('注入过滤：类型 / 重要度 / 条数', () => {
+  const store = openSqlite(':memory:');
+  store.ensureSoul({ soulId: 'xiaoling', name: '小灵', createdAt: NOW });
+  const base = { createdAt: NOW, updatedAt: NOW };
+  store.put({ ...memory('a'), ...base, type: 'strategy', importance: 8, content: '策略 A' });
+  store.put({ ...memory('b'), ...base, type: 'fact', importance: 7, content: '事实 B' });
+  store.put({ ...memory('c'), ...base, type: 'episodic', importance: 9, content: '经历 C' });
+  store.put({ ...memory('d'), ...base, type: 'fact', importance: 3, content: '低价值 D' });
+
+  const onlyStrategy = buildContext(store, { soulId: 'xiaoling', userId: 'u1', types: ['strategy'] }, NOW);
+  assert.equal(onlyStrategy.used.length, 1, '只注入 strategy');
+  assert.match(onlyStrategy.text, /策略 A/);
+
+  const important = buildContext(store, { soulId: 'xiaoling', userId: 'u1', minImportance: 6 }, NOW);
+  assert.ok(!important.text.includes('低价值 D'), '低重要度被过滤');
+
+  const capped = buildContext(store, { soulId: 'xiaoling', userId: 'u1', maxItems: 2 }, NOW);
+  assert.equal(capped.used.length, 2, '条数上限');
+  store.close();
+});
+
 test('T26 导出/导入：round-trip 且重复导入幂等', () => {
   const source = openSqlite(':memory:');
   source.ensureSoul({ soulId: 'xiaoling', name: '小灵', createdAt: NOW });
