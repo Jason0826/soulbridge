@@ -58,7 +58,7 @@ observe ok: chars=3 written=0 committed=false by=none llm=failed ms=2263
 
 | 级别 | 需求 | 验收方式 |
 |---|---|---|
-| **必须** | 日志能区分 `llm=null` / `llm=failed` / `llm=stored` | 已实现（0.0.18），首条数据为 `failed` |`n| **必须** | 失败时保留模型的**完整原始输出**（不截断） | 单独文件 `llm-raw.log`，每条一行 |
+| **必须** | 日志能区分 `llm=null` / `llm=failed` / `llm=stored` | 已实现（0.0.18），首条数据为 `failed` |`n| **必须** | 失败时保留模型的**完整原始输出**（不截断） | 单独文件 `llm-raw.log`，每条一行 |`n| **必须** | `llmOff` 不能把"没配模型"和"规则先命中"混为一谈 | `off` / `skipped-rules` / `skipped-long` 三态 |
 | **必须** | 长期事实类陈述（时间/约定/配置）能被记住 | 固定样本集上 ≥80% 为 `stored` |
 | **必须** | 闲聊、一次性情绪、纯礼貌语不记 | 同上样本集上 ≥90% 为 `null` |
 | **应该** | 改动能被复现，不依赖"感觉变好了" | 同一批样本重跑结果可比 |
