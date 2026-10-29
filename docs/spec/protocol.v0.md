@@ -114,7 +114,9 @@ v0 没有网络协议。同一份契约有三种落地方式，语义必须一�
 
 ```json
 {
-  "written": 1,`n  "committed": true,`n  "rejections": [],
+  "written": 1,
+  "committed": true,
+  "rejections": [],
   "emotion": { "passion": 0.3, "bond": 0.32, "tension": 0.1, "selfRegard": 0.3, "curiosity": 0.3, "contentment": 0.3 },
   "affect": {
     "analyzer": "lexicon",
