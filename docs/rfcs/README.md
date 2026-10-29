@@ -52,7 +52,7 @@ ADR（定下来的决定）
 | 编号 | 标题 | 状态 |
 |---|---|---|
 | [0001](0001-foundations.md) | 基础设计：定位、四个动词、接入阶梯 | Accepted |
-| [0002](0002-affect.md) | 输入侧情感层：两套情绪、数据流、已知局限 | Accepted |`n| [0003](0003-self-improvement.md) | 自我改进环路：证据 → 策略 | Proposed |`n| [0004](0004-validity-supersession.md) | 记忆的时效与取代 | Accepted |`n| [0005](0005-dsh-tools.md) | DSH 工具：soul_recall / soul_remember | Proposed |
+| [0002](0002-affect.md) | 输入侧情感层：两套情绪、数据流、已知局限 | Accepted |`n| [0003](0003-self-improvement.md) | 自我改进环路：证据 → 策略 | Proposed |`n| [0004](0004-validity-supersession.md) | 记忆的时效与取代 | Accepted |`n| [0005](0005-dsh-tools.md) | DSH 工具：soul_recall / soul_remember | Accepted |`n| [0006](0006-injection-pre-step.md) | 在 agent/pre-step 注入上下文记忆 | Proposed |
 
 ## ADR
 
