@@ -143,6 +143,12 @@ export interface ReflectOptions {
   userId: string;
   turns: Turn[];
   now?: number;
+  /**
+   * Whether this call also advances emotion (default true). A caller that runs
+   * reflect per turn, alongside observe(), must pass false or the turn is
+   * counted twice.
+   */
+  updateEmotion?: boolean;
   /** Reserved for richer extraction; unused in v0. */
   llm?: LlmFn;
 }
@@ -176,8 +182,11 @@ export async function reflect(store: SoulStore, options: ReflectOptions): Promis
     written += 1;
   }
 
-  const emotion = nextEmotion(store.emotion(options.soulId, options.userId), options.turns);
-  store.saveEmotion(options.soulId, options.userId, emotion);
+  let emotion = store.emotion(options.soulId, options.userId);
+  if (options.updateEmotion !== false) {
+    emotion = nextEmotion(emotion, options.turns);
+    store.saveEmotion(options.soulId, options.userId, emotion);
+  }
 
   return { memories: written, superseded: 0, emotion };
 }

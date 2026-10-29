@@ -127,3 +127,21 @@ test('nextEmotion: 普通会话让张力衰减', () => {
   const calm = nextEmotion({ ...DEFAULT_EMOTION, tension: 1 }, [{ role: 'user', content: '继续' }]);
   assert.ok(calm.tension < 1);
 });
+
+test('reflect: updateEmotion=false 不改变情绪（每轮调用不重复计数）', async () => {
+  const store = openSqlite(':memory:');
+  store.ensureSoul({ soulId: 'xiaoling', name: '小灵', createdAt: NOW });
+  store.saveEmotion('xiaoling', 'u1', { ...DEFAULT_EMOTION }, NOW);
+  const before = store.emotion('xiaoling', 'u1');
+
+  const result = await reflect(store, {
+    soulId: 'xiaoling',
+    userId: 'u1',
+    turns: [{ role: 'user', content: '不对，这个方案错了' }],
+    updateEmotion: false,
+  });
+
+  assert.deepEqual(result.emotion, before);
+  assert.deepEqual(store.emotion('xiaoling', 'u1'), before);
+  store.close();
+});

@@ -193,8 +193,14 @@ export class Soul {
   }
 
   /** Verb 4: session end. */
-  async reflect(turns: Turn[], llm?: LlmFn): Promise<ReflectResult> {
-    return reflect(this.store, { soulId: this.soulId, userId: this.userId, turns, llm });
+  async reflect(turns: Turn[], options: { llm?: LlmFn; updateEmotion?: boolean } = {}): Promise<ReflectResult> {
+    return reflect(this.store, {
+      soulId: this.soulId,
+      userId: this.userId,
+      turns,
+      llm: options.llm,
+      updateEmotion: options.updateEmotion,
+    });
   }
 
   stats(): { memories: number; emotion: Emotion; name: string } {
