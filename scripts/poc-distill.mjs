@@ -13,7 +13,7 @@
  * short (<= 40 chars), keeps a request marker, free of complaint markers, and
  * faithful (every bigram appears in the source, so nothing is invented).
  */
-import { ruleExtract } from '../dist/packages/core/src/reflect.js';
+import { ruleExtract, llmExtractTurn } from '../dist/packages/core/src/reflect.js';
 
 const DIRECTIVE = /(先|需要|要|必须|应该|请|别|不要|务必|记得|need to|should|must|please)/i;
 const COMPLAINT = /(又|失败|啊|不能让我|气|烦|崩溃|挂了)/;
@@ -58,43 +58,38 @@ function quality(output, source) {
   };
 }
 
-const LLM_SYSTEM = [
-  '你是记忆提炼器。输入是用户的一段话，判断其中有没有值得长期记住的内容。',
-  '输出严格 JSON，二选一：',
-  '{"type":"strategy|trait|fact|cognition|null","text":"不超过 40 字的记忆"}',
-  '规则：',
-  '1. 只保留长期有效的要求、偏好或事实；一次性的抱怨、讨论、玩笑都输出 null；',
-  '2. 保留条件（什么时候）和动作（做什么）；',
-  '3. 不要解释，不要编造原文没有的内容。',
-].join('\n');
-
-async function llmExtract(text) {
+/** Adapter for this POC: an OpenAI-compatible endpoint behind the core port. */
+function endpointLlm() {
   const url = process.env.POC_LLM_URL;
   const model = process.env.POC_LLM_MODEL;
-  if (!url || !model) throw new Error('POC_LLM_URL / POC_LLM_MODEL not set');
-  const response = await fetch(`${url.replace(/\/$/, '')}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...(process.env.POC_LLM_KEY ? { authorization: `Bearer ${process.env.POC_LLM_KEY}` } : {}),
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0,
-      messages: [
-        { role: 'system', content: LLM_SYSTEM },
-        { role: 'user', content: text },
-      ],
-    }),
-  });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const payload = await response.json();
-  const raw = (payload.choices?.[0]?.message?.content ?? '').trim();
-  const json = JSON.parse(raw.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim());
-  if (!json || json.type === 'null' || !json.text) return null;
-  return String(json.text).trim();
+  if (!url || !model) return null;
+  return async (prompt) => {
+    const response = await fetch(`${url.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(process.env.POC_LLM_KEY ? { authorization: `Bearer ${process.env.POC_LLM_KEY}` } : {}),
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    return payload.choices?.[0]?.message?.content ?? '';
+  };
 }
 
+async function llmArm(text, llm) {
+  try {
+    const draft = await llmExtractTurn(text, llm);
+    return draft ? draft.content : null;
+  } catch {
+    return null; // transport failure; the production path would fall back to rules
+  }
+}
 function ruleArm(text) {
   const drafts = ruleExtract([{ role: 'user', content: text }]);
   return drafts.length > 0 ? drafts[0].content : null;
@@ -104,12 +99,14 @@ async function main() {
   const useLlm = process.argv.includes('--llm');
   const arms = useLlm ? ['rule', 'llm'] : ['rule'];
   const rows = [];
+  const llm = useLlm ? endpointLlm() : null;
+  if (useLlm && !llm) throw new Error('POC_LLM_URL / POC_LLM_MODEL not set');
 
   for (const fixture of FIXTURES) {
     const row = { fixture, rule: ruleArm(fixture.text), llm: null, error: null };
     if (useLlm) {
       try {
-        row.llm = await llmExtract(fixture.text);
+        row.llm = await llmArm(fixture.text, llm);
       } catch (error) {
         row.error = error instanceof Error ? error.message : String(error);
       }

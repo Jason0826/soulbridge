@@ -155,7 +155,22 @@ export interface ReflectOptions {
 
 export async function reflect(store: SoulStore, options: ReflectOptions): Promise<ReflectResult> {
   const now = options.now ?? Date.now();
-  const drafts = ruleExtract(options.turns);
+  const drafts: Draft[] = [];
+  if (options.llm) {
+    for (const turn of options.turns) {
+      if (turn.role !== 'user') continue;
+      try {
+        const draft = await llmExtractTurn(turn.content, options.llm);
+        // A deliberate null means the model decided this is not worth storing.
+        if (draft) drafts.push(draft);
+      } catch {
+        // Transport or parse failure: fall back to rules for this turn.
+        drafts.push(...ruleExtract([turn]));
+      }
+    }
+  } else {
+    drafts.push(...ruleExtract(options.turns));
+  }
   const existing = store.query({ soulId: options.soulId, userId: options.userId });
   const seen = new Set(existing.map((m) => m.content));
 
@@ -189,4 +204,67 @@ export async function reflect(store: SoulStore, options: ReflectOptions): Promis
   }
 
   return { memories: written, superseded: 0, emotion };
+}
+
+/* ------------------------------------------------------------------ *
+ * LLM distillation port (optional)
+ *
+ * Core owns the prompt, the JSON contract and the fallback; adapters own the
+ * transport. A DSH adapter wraps `ctx.llm.stream`, a CLI adapter calls an
+ * OpenAI-compatible endpoint, and both satisfy the same `LlmFn`.
+ * ------------------------------------------------------------------ */
+
+/** Only these types travel over the port; episodic/relationship stay host-local. */
+export const LLM_MEMORY_TYPES: MemoryType[] = ['strategy', 'trait', 'fact', 'cognition'];
+
+export const LLM_PROMPT = [
+  '你是记忆提炼器。输入是用户的一段话，判断其中有没有值得长期记住的内容。',
+  '只输出 JSON，二选一：',
+  '{"type":"strategy|trait|fact|cognition|null","text":"不超过 40 字的记忆"}',
+  '规则：',
+  '1. 只保留长期有效的要求、偏好或事实；一次性的抱怨、讨论、玩笑都输出 null；',
+  '2. 保留条件（什么时候）和动作（做什么）；',
+  '3. 不要解释，不要编造原文没有的内容。',
+].join('\n');
+
+export interface LlmDraft {
+  type: MemoryType;
+  content: string;
+  importance: number;
+}
+
+function parseLlmJson(raw: string): { type?: unknown; text?: unknown } | null {
+  const trimmed = raw.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start < 0 || end < start) return null;
+  try {
+    const parsed = JSON.parse(trimmed.slice(start, end + 1)) as Record<string, unknown>;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ask the model for one memory. Returns null when the model deliberately says
+ * "nothing worth storing"; throws when the transport or the output is unusable,
+ * so the caller can fall back to rules.
+ */
+export async function llmExtractTurn(text: string, llm: LlmFn): Promise<LlmDraft | null> {
+  const raw = await llm(`${LLM_PROMPT}\n\n用户：${text}`);
+  const parsed = parseLlmJson(String(raw));
+  if (!parsed) throw new Error('llm returned no JSON');
+  const type = parsed.type;
+  if (type === 'null' || parsed.text === undefined || parsed.text === null) return null;
+  if (typeof type !== 'string' || !LLM_MEMORY_TYPES.includes(type as MemoryType)) {
+    throw new Error(`llm returned an unsupported type: ${String(type)}`);
+  }
+  const content = String(parsed.text).trim();
+  if (content.length === 0) return null;
+  return {
+    type: type as MemoryType,
+    content: content.slice(0, 120),
+    importance: type === 'strategy' ? 7 : 6,
+  };
 }

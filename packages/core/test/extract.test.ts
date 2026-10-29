@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ruleExtract, RULES, distillStrategy, MAX_STRATEGY_CHARS } from '../src/reflect.ts';
+import { ruleExtract, RULES, distillStrategy, MAX_STRATEGY_CHARS, llmExtractTurn } from '../src/reflect.ts';
+import { openSqlite } from '../src/sqlite.ts';
 import type { Turn } from '../src/types.ts';
 
 const user = (content: string): Turn => ({ role: 'user', content });
@@ -74,5 +75,51 @@ test('observe 去重：同一句话重复出现只写一条', async () => {
   await soul.observe({ role: 'user', content: '我习惯先看日志再动手' });
 
   assert.equal(store.count('xiaoling', 'u1'), 1);
+  store.close();
+});
+test('LLM 端口：解析 JSON 并保留类型', async () => {
+  const llm = async () => '{"type":"strategy","text":"改动前先解释方案"}';
+  const draft = await llmExtractTurn('随便一句', llm);
+  assert.equal(draft?.type, 'strategy');
+  assert.equal(draft?.content, '改动前先解释方案');
+});
+
+test('LLM 端口：null 表示不值得记，不抛错', async () => {
+  const draft = await llmExtractTurn('今天天气不错', async () => '{"type":"null"}');
+  assert.equal(draft, null);
+});
+
+test('LLM 端口：坏 JSON / 非法类型抛错（交给调用方回退规则）', async () => {
+  await assert.rejects(() => llmExtractTurn('x', async () => '这不是 JSON'));
+  await assert.rejects(() => llmExtractTurn('x', async () => '{"type":"episodic","text":"a"}'));
+});
+
+test('reflect：模型说 null 时不再用规则兜底', async () => {
+  const store = openSqlite(':memory:');
+  store.ensureSoul({ soulId: 'xiaoling', name: '小灵', createdAt: Date.now() });
+  const { reflect } = await import('../src/reflect.ts');
+  const result = await reflect(store, {
+    soulId: 'xiaoling',
+    userId: 'u1',
+    turns: [{ role: 'user', content: '以后提交前先跑 make check' }],
+    llm: async () => '{"type":"null"}',
+  });
+  assert.equal(result.memories, 0, '模型判定不记，则规则不得插手');
+  store.close();
+});
+
+test('reflect：模型失败时回退到规则', async () => {
+  const store = openSqlite(':memory:');
+  store.ensureSoul({ soulId: 'xiaoling', name: '小灵', createdAt: Date.now() });
+  const { reflect } = await import('../src/reflect.ts');
+  const result = await reflect(store, {
+    soulId: 'xiaoling',
+    userId: 'u1',
+    turns: [{ role: 'user', content: '以后提交前先跑 make check' }],
+    llm: async () => {
+      throw new Error('network down');
+    },
+  });
+  assert.equal(result.memories, 1, '传输失败时规则兜底');
   store.close();
 });
