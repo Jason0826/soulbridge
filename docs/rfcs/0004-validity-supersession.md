@@ -1,6 +1,6 @@
 # RFC 0004：记忆的时效与取代
 
-- 状态：Proposed
+- 状态：Accepted（0.0.15 实现）
 - 日期：2026-10-29
 - 需求说明：[briefs/0001-validity-conflict.md](../briefs/0001-validity-conflict.md)
 - 路线图：N3

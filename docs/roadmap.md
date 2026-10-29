@@ -11,7 +11,7 @@
 
 ## 下一步（Next，按顺序）
 
-### N1. MCP 适配器（跨宿主通用面）
+### N1. MCP 适配器（跨宿主通用面）— 下一步
 
 一个 `soulbridge-mcp`（stdio JSON-RPC）覆盖 Claude Code / Codex CLI / ZCode 等；
 DSH 插件保留，因为只有它能拿 `session/event`（自动观察）。
@@ -19,7 +19,7 @@ DSH 插件保留，因为只有它能拿 `session/event`（自动观察）。
 - 工具：`soul_context` / `soul_observe` / `soul_recall` / `soul_remember`
 - 验收：从任意 MCP 宿主调用 `soul_context` 能拿到同一份注入文本
 
-### N2. 规则写入的三道闸门 + `committed`
+### N2. 规则写入的三道闸门 + `committed` ✅ 已完成（0.0.14）
 
 当前 `observe` 直接写库。借鉴灵枢："记什么、能不能写入由确定性规则裁决，过闸门后
 以 `committed` 确认，绝不假装成功"。
@@ -34,7 +34,7 @@ DSH 插件保留，因为只有它能拿 `session/event`（自动观察）。
 - `ObserveResult` 增加 `committed: boolean`（与实际写入行数一致）
 - 验收：任一闸门拒绝时 `written=0, committed=false`，且能说明是哪道闸门
 
-### N3. 时效与冲突（字段已有，逻辑未用）
+### N3. 时效与冲突 ✅ 已完成（0.0.15）
 
 `Memory` 已有 `validFrom` / `validUntil` / `supersededBy`，但没有任何代码使用。
 
