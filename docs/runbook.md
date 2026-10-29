@@ -19,6 +19,18 @@
 
 ## 二、发版流程（4 步）
 
+### 第 0 步：闸门（不绿不 tag）
+
+**打 tag 之前必须跑完并贴出结果**，任何一条红都不允许进第 1 步：
+
+```bash
+npm run typecheck && npm test          # core：期望 fail 0
+cd ../dsh-plugin-soulbridge && node --test test/index.test.mjs   # 插件：期望 fail 0
+```
+
+这条是 2026-10-29 的教训：插件 0.0.26、0.0.27 在测试红着的情况下被发布，
+原因是「改测试被工具拒绝」被当成了「改好了」。**看到 `fail 0` 才算过。**
+
 ```bash
 # 1. 升版本（不动 git tag）
 npm version patch --no-git-tag-version
