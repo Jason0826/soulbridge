@@ -51,6 +51,7 @@
 | [0022](../adr/0022-steering-import.md) | steering 文件导入的抽取与分类规则 | Accepted |
 | [0023](../adr/0023-dsh-adapter.md) | DSH 适配器：T0 skill + 可移植转写 | Accepted |
 | [0024](../adr/0024-adapters.md) | 适配层归属：独立包 + core 定契约 | Accepted |
+| [0025](../adr/0025-model-capability.md) | 可选模型能力：构造注入 + 适配器义务 | Accepted |
 
 ## 相关文档
 

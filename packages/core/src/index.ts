@@ -57,6 +57,14 @@ export interface SoulOptions {
   deviceId?: string;
   /** Defaults to the lexicon analyzer; pass an LLM-backed one to opt in (ADR 0015). */
   analyzer?: AffectAnalyzer;
+  /**
+   * Optional model access, injected the same way as `analyzer`. Adapters supply
+   * it from their host's own model (an in-process service, a CLI subprocess, an
+   * HTTP endpoint). Omit it and every verb stays rule-only.
+   */
+  llm?: LlmFn;
+  /** Messages longer than this are not sent to the model. Defaults to 2000. */
+  llmMaxChars?: number;
 }
 
 export class Soul {
@@ -66,6 +74,8 @@ export class Soul {
   readonly name: string;
   readonly deviceId: string;
   readonly analyzer: AffectAnalyzer;
+  readonly llm?: LlmFn;
+  readonly llmMaxChars: number;
 
   constructor(options: SoulOptions) {
     this.store = options.store;
@@ -74,6 +84,8 @@ export class Soul {
     this.name = options.name ?? '小灵';
     this.deviceId = options.deviceId ?? 'dev_local';
     this.analyzer = options.analyzer ?? lexiconAnalyzer;
+    this.llm = options.llm;
+    this.llmMaxChars = options.llmMaxChars ?? 2000;
 
     if (!this.store.identity(this.soulId)) {
       this.store.ensureSoul({
@@ -127,10 +139,7 @@ export class Soul {
    * The analyzer may be async (a model); any failure degrades to the lexicon
    * analyzer. Emotion is computed from the turn only — never from affect.
    */
-  async observe(
-    turn: Turn,
-    options: { llm?: LlmFn; maxLlmChars?: number } = {},
-  ): Promise<ObserveResult> {
+  async observe(turn: Turn): Promise<ObserveResult> {
     const now = turn.at ?? Date.now();
     const affect = turn.role === 'user' ? await this.analyzeTurn(turn.content) : emptyAffect();
 
@@ -139,11 +148,10 @@ export class Soul {
     // a rule that already fired.
     let drafts = ruleExtract([turn]);
     let extractedBy: 'rules' | 'llm' | 'none' = drafts.length > 0 ? 'rules' : 'none';
-    if (drafts.length === 0 && turn.role === 'user' && options.llm) {
-      const limit = options.maxLlmChars ?? 2000;
-      if (turn.content.length <= limit) {
+    if (drafts.length === 0 && turn.role === 'user' && this.llm) {
+      if (turn.content.length <= this.llmMaxChars) {
         try {
-          const draft = await llmExtractTurn(turn.content, options.llm);
+          const draft = await llmExtractTurn(turn.content, this.llm);
           if (draft) {
             drafts = [draft];
             extractedBy = 'llm';
@@ -224,12 +232,12 @@ export class Soul {
   }
 
   /** Verb 4: session end. */
-  async reflect(turns: Turn[], options: { llm?: LlmFn; updateEmotion?: boolean } = {}): Promise<ReflectResult> {
+  async reflect(turns: Turn[], options: { updateEmotion?: boolean } = {}): Promise<ReflectResult> {
     return reflect(this.store, {
       soulId: this.soulId,
       userId: this.userId,
       turns,
-      llm: options.llm,
+      llm: this.llm,
       updateEmotion: options.updateEmotion,
     });
   }
