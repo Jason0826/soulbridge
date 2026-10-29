@@ -21,6 +21,12 @@ export interface SoulStore {
    * merge, the deletion wins by updatedAt). Returns false when no such active row.
    */
   forget(id: string, now?: number): boolean;
+  /**
+   * Mark `oldId` as replaced by `newId` (status superseded, supersededBy set).
+   * Both rows stay; returns false when the replacement is missing or the old row
+   * is not active.
+   */
+  supersede(oldId: string, newId: string, now?: number): boolean;
 
   /** Persist one affect sample (payload only; no raw text). */
   saveAffect(soulId: string, userId: string, signal: AffectSignal, at: number, deviceId?: string): void;

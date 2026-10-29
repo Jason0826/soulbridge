@@ -111,14 +111,28 @@ export class Soul {
     });
   }
 
-  /** Every active memory, newest first. For `list` and for auditing injection. */
+  /**
+   * Audit view: every non-deleted row, including superseded and expired ones.
+   * Prompt builders use `context`, which filters both out.
+   */
   list(limit = 50): Memory[] {
-    return this.store.query({ soulId: this.soulId, userId: this.userId, limit });
+    return this.store.query({
+      soulId: this.soulId,
+      userId: this.userId,
+      status: ['active', 'superseded'],
+      includeExpired: true,
+      limit,
+    });
   }
 
   /** Tombstone one memory so it never reaches a prompt again. */
   forget(id: string): boolean {
     return this.store.forget(id);
+  }
+
+  /** Mark `oldId` replaced by `newId`; neither row is deleted (RFC 0004). */
+  supersede(oldId: string, newId: string): boolean {
+    return this.store.supersede(oldId, newId);
   }
 
   /**

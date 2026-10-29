@@ -370,8 +370,10 @@ async function main(): Promise<void> {
       }
       for (const memory of memories) {
         const preview = memory.content.replace(/\s+/g, ' ').slice(0, 72);
+        const status = memory.status === 'active' ? '' : ` [${memory.status}]`;
+        const superseded = memory.supersededBy ? ` -> ${memory.supersededBy}` : '';
         process.stdout.write(
-          `${memory.id}  ${memory.type.padEnd(9)} imp=${String(memory.importance).padEnd(2)} ${preview}\n`,
+          `${memory.id}  ${memory.type.padEnd(9)} imp=${String(memory.importance).padEnd(2)}${status}${superseded} ${preview}\n`,
         );
       }
       return;
@@ -382,6 +384,14 @@ async function main(): Promise<void> {
       if (!id) throw new Error('usage: soulbridge forget <memory-id>');
       const { soul } = open(flags);
       out({ ok: soul.forget(id), id });
+      return;
+    }
+
+    case 'supersede': {
+      const [oldId, newId] = positional;
+      if (!oldId || !newId) throw new Error('usage: soulbridge supersede <old-id> <new-id>');
+      const { soul } = open(flags);
+      out({ ok: soul.supersede(oldId, newId), oldId, newId });
       return;
     }
 
@@ -405,9 +415,24 @@ async function main(): Promise<void> {
       const config = ensureConfig();
       const dbPath = resolveDbPath(flags.db);
       const store = openSqlite(dbPath);
-      const memories = store.query({ soulId: config.soulId, userId: config.userId, limit: 100_000 });
+      const memories = store.query({
+        soulId: config.soulId,
+        userId: config.userId,
+        status: ['active', 'superseded'],
+        includeExpired: true,
+        limit: 100_000,
+      });
       const samples = store.recentAffect(config.soulId, config.userId, 0);
       store.close();
+
+      const now = Date.now();
+      const activeCount = memories.filter(
+        (m) => m.status === 'active' && (m.validUntil === undefined || m.validUntil > now),
+      ).length;
+      const supersededCount = memories.filter((m) => m.status === 'superseded').length;
+      const expiredCount = memories.filter(
+        (m) => m.status === 'active' && m.validUntil !== undefined && m.validUntil <= now,
+      ).length;
 
       const byType = new Map<string, number>();
       for (const memory of memories) byType.set(memory.type, (byType.get(memory.type) ?? 0) + 1);
@@ -432,7 +457,7 @@ async function main(): Promise<void> {
       const lines = [
         `soul       ${config.soulId} / ${config.userId}`,
         `db         ${dbPath}`,
-        `memories   ${memories.length}  (${typeText})`,
+        `memories   ${memories.length}  (有效 ${activeCount} · 被取代 ${supersededCount} · 已过期 ${expiredCount})  (${typeText})`,
         `affect     ${samples.length} samples${samples.length > 0 ? ` · last ${ago((samples[0] as { at?: number }).at)}` : ''}`,
         plugin
           ? `plugin     v${plugin.version ?? '?'} · applied ${ago(plugin.appliedAt)} · inject ${plugin.injects ?? 0} · observe ${plugin.observes ?? 0} · fail ${plugin.observeFails ?? 0}`
@@ -473,6 +498,7 @@ async function main(): Promise<void> {
           '  list [--limit N]                看它记住了什么',
           '  corrections [--limit N]         看被纠正过的证据',
           '  forget <id>                     忘掉一条记忆（墓碑）',
+          '  supersede <old> <new>           用新记忆取代旧记忆（保留历史）',
           '  status                          一眼看它是否在工作',
           '  stats                           看原始状态（JSON）',
           '  demo                            端到端演示（无需模型）',

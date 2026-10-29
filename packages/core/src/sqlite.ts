@@ -290,14 +290,23 @@ export function openSqlite(file: string): SoulStore {
     query(spec: QuerySpec): Memory[] {
       const statuses = spec.status ?? ['active'];
       const placeholders = statuses.map(() => '?').join(', ');
+      const now = spec.now ?? Date.now();
+      // Expiry is a filter, not a deletion: audit views can still see the row.
+      const expiry = spec.includeExpired ? '' : 'AND (valid_until IS NULL OR valid_until > ?)';
       const rows = db
         .prepare(
           `SELECT * FROM memories
            WHERE soul_id = ? AND (user_id = ? OR visibility = 'shared')
-             AND status IN (${placeholders}) AND deleted_at IS NULL
+             AND status IN (${placeholders}) AND deleted_at IS NULL ${expiry}
            ORDER BY created_at DESC LIMIT ?`,
         )
-        .all(spec.soulId, spec.userId, ...statuses, spec.limit ?? 500) as Row[];
+        .all(
+          spec.soulId,
+          spec.userId,
+          ...statuses,
+          ...(spec.includeExpired ? [] : [now]),
+          spec.limit ?? 500,
+        ) as Row[];
 
       const memories = rows.map(rowToMemory);
       return spec.types ? memories.filter((m) => spec.types!.includes(m.type)) : memories;
@@ -317,6 +326,23 @@ export function openSqlite(file: string): SoulStore {
         db
           .prepare('UPDATE memories SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL')
           .run(now, now, id),
+      );
+      return Number(result.changes ?? 0) > 0;
+    },
+
+    /** Mark `oldId` as replaced by `newId`. Neither row is deleted. */
+    supersede(oldId: string, newId: string, now: number = Date.now()): boolean {
+      const replacement = db
+        .prepare('SELECT id FROM memories WHERE id = ? AND deleted_at IS NULL')
+        .get(newId) as Row | undefined;
+      if (!replacement) return false;
+      const result = withRetry(() =>
+        db
+          .prepare(
+            `UPDATE memories SET status = 'superseded', superseded_by = ?, updated_at = ?
+             WHERE id = ? AND status = 'active' AND deleted_at IS NULL`,
+          )
+          .run(newId, now, oldId),
       );
       return Number(result.changes ?? 0) > 0;
     },

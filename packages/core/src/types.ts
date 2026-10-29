@@ -118,6 +118,13 @@ export interface QuerySpec {
   status?: MemoryStatus[];
   types?: MemoryType[];
   limit?: number;
+  /** Clock for expiry checks; defaults to now. */
+  now?: number;
+  /**
+   * Audit views (`list`) need to see expired rows; prompt builders must not.
+   * Defaults to false, so expiry applies unless a caller asks otherwise.
+   */
+  includeExpired?: boolean;
 }
 
 export interface ReflectResult {
