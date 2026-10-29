@@ -113,7 +113,7 @@ A 阶段积累 ≥ 20 条带上下文的纠正，才值得动手。
 | 项目 | 定位 | 检索 | 学习机制 | 与我们的差异 |
 |---|---|---|---|---|
 | [`dsh-memory`](https://www.npmjs.com/package/dsh-memory) 0.1.0 | 跨会话持久记忆：SQLite FTS5 + 3 个模型工具 + 召回提示段 | FTS5 全文 | 由模型主动调用工具写入 | 工具驱动（依赖模型自觉）；我们是指令抽取驱动 |
-| [`@furongjun1999/dsh-memory`](https://www.npmjs.com/package/@furongjun1999/dsh-memory)（灵枢） | 长期记忆 + 知识图谱 + 自我认知 + 递归反思 | md 认知图 | 反思沉淀 | 覆盖面比我们大得多；我们只做 soul 层 + 可证伪指标 |
+| [`@furongjun1999/dsh-memory`](https://www.npmjs.com/package/@furongjun1999/dsh-memory)（灵枢 0.9.16） | 平台级：md 认知图 + Rust 检索 + 蜂群 + 编译器 | md 文件即真源，索引为派生 | **确定性规则裁决，零 LLM 判断**；元认知按条件路由，不确定标 BLINDSPOT | 体量 1813 文件 / 27.5MB，需 Python（+Rust 编译）；接口是 **MCP**，五端通用 |
 | [`@lmzhen/dsh-memory`](https://www.npmjs.com/package/@lmzhen/dsh-memory) | 自演化的记忆 provider 注册表 | provider 可插拔 | 社区构建的演化流程 | 偏框架；我们是单一实现 + 明确实验 |
 | [kovey/dsh-memory](https://github.com/kovey/dsh-memory) | 分层记忆：项目/全局严格分离，任务前召回、任务后持续学习 | 分层 | 任务后学习 | 它的"持续学习"偏任务结果；我们的学习要经纠正证据 |
 
@@ -135,3 +135,45 @@ A 阶段积累 ≥ 20 条带上下文的纠正，才值得动手。
 2. 证据保留期 90 天是否合理？需要按数据量调整吗？
 3. B 阶段的模型调用应该按条触发还是按会话触发？
 4. 是否要把 corrections 暴露给用户编辑（删除误判的纠正）？
+
+## 7. 从灵枢（FuRongJun-1999/dsh-memory）学到的四条
+
+依据：其 README 与 npm 元数据（0.9.16），未读源码。
+
+### 7.1 接口用 MCP，而不是"每个宿主写一个适配器"
+
+灵枢把能力做成 stdio MCP server，DSH / CodeBuddy / ZCode / Codex CLI / Claude Code
+挂同一个 server，差异只在"纪律怎么注入"。这比我们 ADR 0024 的"一宿主一包"更省。
+
+**对我们的含义**：`soulbridge` 可以再出一个 MCP 适配器，一次覆盖多宿主；
+DSH 插件保留是因为它能拿到 `session/event`（MCP 拿不到自动观察）。
+
+### 7.2 写入要"确定性裁决 + 显式 committed"
+
+灵枢明确"记什么、取什么、能不能写入全部由确定性规则裁决"，写入过三道闸门并以
+`committed` 确认，**绝不假装成功**。
+
+我们的 `observe` 返回 `written` 计数，但没有"提交确认"语义；Phase B 引入模型后，
+这一点更重要——**模型产出的东西必须有独立的提交判据**，不能因为调用成功就认为写入成立。
+
+### 7.3 分层写入闸门：越靠近"自我"，越需要外部裁定
+
+灵枢按层收紧：`contextual` 可直写 → `knowledge` 需反思单元 → `structural` 需反思+验证 →
+`self`/`anchor` **需人工裁定**。
+
+这正好回答我们 Phase B 的护栏问题：自我蒸馏出的策略属于 `self` 层，**不应该自动生效**。
+修订：B 阶段产出的策略先进 `pending` 状态，由用户确认后才进入注入（`soulbridge approve`）。
+
+### 7.4 长会话提醒：每 10 个真实用户回合
+
+它按"真实用户回合"计数（不是 system prompt 组装次数）提醒归档。我们目前没有任何
+会话长度的感知，长会话里记忆会被越冲越淡。
+
+## 8. 修订后的 B 阶段设计（相对第 4 节）
+
+1. 采集（A 阶段）不变；
+2. 达到 20 条纠正后，提炼产出 `cognition` 草稿，状态 `pending`；
+3. `soulbridge review` 逐条确认/拒绝；确认后才 `active` 并参与注入；
+4. 指标仍是 `repeatCorrection`，对照组是"不提炼"。
+
+这样即使模型提炼错了，也不会自动污染注入——**错误停在待审区**。
