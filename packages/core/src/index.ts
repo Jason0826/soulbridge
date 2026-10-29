@@ -46,6 +46,7 @@ import { reflect, ruleExtract, nextEmotion } from './reflect.ts';
 import { rank, tokenize } from './scoring.ts';
 import { analyzeAffect, emptyAffect, lexiconAnalyzer } from './affect/analyze.ts';
 import { gateDrafts, llmExtractTurn } from './reflect.ts';
+export { gateDrafts } from './reflect.ts';
 
 export interface SoulOptions {
   store: SoulStore;
@@ -279,6 +280,40 @@ export class Soul {
       validFrom: now,
     });
     return id;
+  }
+
+  /**
+   * Explicit write requested by a host or its model (RFC 0005). Unlike
+   * `remember`, it passes the same gates as `observe` and dedupes by content,
+   * so a tool cannot bypass shape/semantics or flood duplicates.
+   */
+  rememberExplicit(input: { content: string; type?: MemoryType; importance?: number }): {
+    ok: boolean;
+    id?: string;
+    duplicate?: boolean;
+    reason?: string;
+  } {
+    const type = input.type ?? 'fact';
+    const importance = Math.min(10, Math.max(1, input.importance ?? 7));
+    const { accepted, rejected } = gateDrafts([{ type, content: input.content, importance }]);
+    if (accepted.length === 0) {
+      return { ok: false, reason: rejected[0]?.reason ?? 'rejected by write gates' };
+    }
+    const content = accepted[0].content;
+
+    const existing = this.store
+      .query({
+        soulId: this.soulId,
+        userId: this.userId,
+        status: ['active'],
+        includeExpired: true,
+        limit: 10_000,
+      })
+      .find((memory) => memory.content.trim() === content);
+    if (existing) return { ok: true, id: existing.id, duplicate: true };
+
+    const id = this.remember(content, { type, importance });
+    return { ok: true, id };
   }
 
   /** Verb 4: session end. */
