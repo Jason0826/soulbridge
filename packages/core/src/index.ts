@@ -72,6 +72,12 @@ export interface SoulOptions {
    * duplicate rather than a second row. Set 0 to disable. Defaults to 30s.
    */
   dedupeWindowMs?: number;
+  /**
+   * Receives the model's raw reply, complete. Diagnostics belong to the adapter,
+   * not to core, which stays free of I/O; the DSH adapter appends it to a file
+   * so a parse failure is explainable instead of silent.
+   */
+  onLlmRaw?: (raw: string) => void;
 }
 
 export class Soul {
@@ -84,6 +90,7 @@ export class Soul {
   readonly llm?: LlmFn;
   readonly llmMaxChars: number;
   readonly dedupeWindowMs: number;
+  readonly onLlmRaw?: (raw: string) => void;
 
   constructor(options: SoulOptions) {
     this.store = options.store;
@@ -95,6 +102,7 @@ export class Soul {
     this.llm = options.llm;
     this.llmMaxChars = options.llmMaxChars ?? 2000;
     this.dedupeWindowMs = options.dedupeWindowMs ?? 30_000;
+    this.onLlmRaw = options.onLlmRaw;
 
     if (!this.store.identity(this.soulId)) {
       this.store.ensureSoul({
@@ -201,7 +209,7 @@ export class Soul {
     if (drafts.length === 0 && turn.role === 'user' && this.llm) {
       if (turn.content.length <= this.llmMaxChars) {
         try {
-          const draft = await llmExtractTurn(turn.content, this.llm);
+          const draft = await llmExtractTurn(turn.content, this.llm, this.onLlmRaw);
           if (draft) {
             drafts = [draft];
             extractedBy = 'llm';

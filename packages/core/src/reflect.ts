@@ -300,8 +300,13 @@ function parseLlmJson(raw: string): { type?: unknown; text?: unknown } | null {
  * "nothing worth storing"; throws when the transport or the output is unusable,
  * so the caller can fall back to rules.
  */
-export async function llmExtractTurn(text: string, llm: LlmFn): Promise<LlmDraft | null> {
+export async function llmExtractTurn(
+  text: string,
+  llm: LlmFn,
+  onRaw?: (raw: string) => void,
+): Promise<LlmDraft | null> {
   const raw = await llm(`${LLM_PROMPT}\n\n用户：${text}`);
+  onRaw?.(String(raw));
   const parsed = parseLlmJson(String(raw));
   if (!parsed) throw new Error('llm returned no JSON');
   const type = parsed.type;

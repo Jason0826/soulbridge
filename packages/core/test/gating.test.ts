@@ -126,3 +126,32 @@ test('llmOutcome：区分模型说 null 与模型失败', async () => {
 
   store.close();
 });
+test('onLlmRaw：成功与失败都能拿到模型原文', async () => {
+  const store = openSqlite(':memory:');
+  const seen: string[] = [];
+
+  const good = new Soul({
+    store,
+    soulId: 'xiaoling',
+    userId: 'r1',
+    llm: async () => '{"type":"fact","text":"发布窗口是每周三"}',
+    onLlmRaw: (raw) => seen.push(raw),
+  });
+  await good.observe({ role: 'user', content: '我们的发布窗口在每周三' });
+  assert.equal(seen.length, 1);
+  assert.match(seen[0], /发布窗口/);
+
+  const bad = new Soul({
+    store,
+    soulId: 'xiaoling',
+    userId: 'r2',
+    llm: async () => '抱歉，我无法判断。',
+    onLlmRaw: (raw) => seen.push(raw),
+  });
+  const result = await bad.observe({ role: 'user', content: '今天先到这里' });
+  assert.equal(result.llmOutcome, 'failed');
+  assert.equal(seen.length, 2);
+  assert.equal(seen[1], '抱歉，我无法判断。', '失败时原文必须完整保留');
+
+  store.close();
+});
