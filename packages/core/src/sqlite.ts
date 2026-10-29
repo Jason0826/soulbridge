@@ -160,10 +160,20 @@ function upgradeToV3(db: DatabaseSync): void {
   db.exec('CREATE INDEX IF NOT EXISTS idx_corrections ON corrections(soul_id, user_id, at DESC)');
 }
 
-function backupBeforeUpgrade(file: string, from: number): void {
+/**
+ * Copy the database aside before a schema upgrade.
+ *
+ * In WAL mode the most recent commits can live in the `-wal` sidecar, so a copy
+ * of the main file alone can be missing data exactly when it matters. Checkpoint
+ * first (TRUNCATE moves the WAL back into the main file and empties it), then
+ * copy. Exported for the upgrade test.
+ */
+export function backupBeforeUpgrade(db: DatabaseSync, file: string, from: number): void {
   if (file === ':memory:' || !existsSync(file)) return;
   const backup = `${file}.bak-v${from}`;
-  if (!existsSync(backup)) copyFileSync(file, backup);
+  if (existsSync(backup)) return;
+  db.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+  copyFileSync(file, backup);
 }
 
 export function openSqlite(file: string): SoulStore {
@@ -178,7 +188,7 @@ export function openSqlite(file: string): SoulStore {
     throw new DbNewerThanBinaryError(version);
   }
   if (version < SCHEMA_VERSION) {
-    backupBeforeUpgrade(file, version);
+    backupBeforeUpgrade(db, file, version);
     if (version < 2) upgradeToV2(db);
     if (version < 3) upgradeToV3(db);
     setVersion(db, SCHEMA_VERSION);
