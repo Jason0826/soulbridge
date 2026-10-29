@@ -1,6 +1,6 @@
-﻿# protocol.v0 — 四个动词的契约
+# protocol.v0 — 四个动词的契约
 
-- 版本：`0.2`（2026-10-28：`observe` 增加可选 `affect`；其余动词不变）
+- 版本：`0.3`（2026-10-29：写入闸门与 `committed`；`superseded` 改为诚实上报；模型边界见 ADR 0025）
 - 状态：Accepted（2026-10-27，0.2 于 2026-10-28）
 - 关联：ADR 0005（版本策略）、ADR 0007（接入阶梯）、ADR 0012（affect 范围）
 
@@ -114,7 +114,7 @@ v0 没有网络协议。同一份契约有三种落地方式，语义必须一�
 
 ```json
 {
-  "written": 1,
+  "written": 1,`n  "committed": true,`n  "rejections": [],
   "emotion": { "passion": 0.3, "bond": 0.32, "tension": 0.1, "selfRegard": 0.3, "curiosity": 0.3, "contentment": 0.3 },
   "affect": {
     "analyzer": "lexicon",
@@ -134,7 +134,7 @@ v0 没有网络协议。同一份契约有三种落地方式，语义必须一�
 
 ### 约束
 
-1. 同步、无模型调用、P99 < 5ms（启用 LLM 分析器时除外，见 ADR 0015）
+1. 规则路径同步、无模型调用；注入 `llm` 时可能调用模型（ADR 0025），此时不保证 5ms
 2. 永不抛异常；存储失败返回 `DB_UNAVAILABLE` 且 `written: 0`
 3. 同一内容重复提交不产生重复记忆（按内容去重）
 4. v0 **不修改** 由 `reflect` 维护的任何策略/认知条目
@@ -180,7 +180,7 @@ v0 没有网络协议。同一份契约有三种落地方式，语义必须一�
 ### 响应 `data`
 
 ```json
-{ "memories": 2, "superseded": 0, "emotion": { } }
+{ "memories": 2, "superseded": null, "committed": true, "rejections": [], "emotion": { } }
 ```
 
 ### 约束
@@ -225,3 +225,4 @@ v0 没有网络协议。同一份契约有三种落地方式，语义必须一�
 |---|---|---|
 | 0.1 | 2026-10-27 | 四动词初版 |
 | 0.2 | 2026-10-28 | observe 增加可选 affect 字段；observe 改为异步；新增「affect 不影响 emotion」约束 |
+| 0.3 | 2026-10-29 | observe 增加 committed / rejections（写入闸门）；reflect 的 superseded 改为 null（未实现不得报 0）；明确模型可选边界 |

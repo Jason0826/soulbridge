@@ -124,12 +124,33 @@ export interface QuerySpec {
 
 export interface ReflectResult {
   memories: number;
-  superseded: number;
+  /**
+   * How many older memories were replaced by a newer conflicting one.
+   * `null` means this build does not track supersession yet — it used to report
+   * a hardcoded 0, which claimed a capability that did not exist.
+   */
+  superseded: number | null;
   emotion: Emotion;
+  /** True when at least one memory was durably written by this call. */
+  committed: boolean;
+  /** Drafts refused before writing, with the gate that refused them. */
+  rejections: DraftRejection[];
+}
+
+export type GateName = 'shape' | 'semantic' | 'budget';
+
+export interface DraftRejection {
+  gate: GateName;
+  reason: string;
+  content: string;
 }
 
 export interface ObserveResult {
   written: number;
+  /** True when at least one memory was durably written by this call. */
+  committed: boolean;
+  /** Drafts refused before writing, with the gate that refused them. */
+  rejections: DraftRejection[];
   emotion: Emotion;
   /** Analysis of the user turn. Empty signal for assistant turns or on failure. */
   affect: AffectSignal;

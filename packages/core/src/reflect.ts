@@ -6,7 +6,7 @@
  * the whole loop runnable offline.
  */
 import { randomUUID } from 'node:crypto';
-import type { Emotion, LlmFn, Memory, MemoryType, ReflectResult, Turn } from './types.ts';
+import type { DraftRejection, Emotion, LlmFn, Memory, MemoryType, ReflectResult, Turn } from './types.ts';
 import type { SoulStore } from './store.ts';
 import { tokenize } from './scoring.ts';
 
@@ -111,6 +111,43 @@ export function correctionRule(text: string): string | null {
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/** Types an extractor may produce; episodic/relationship are host-local. */
+export const EXTRACTABLE_TYPES: MemoryType[] = ['strategy', 'trait', 'fact', 'cognition'];
+export const MAX_CONTENT_CHARS = 500;
+/** A single turn should not flood the store. */
+export const MAX_DRAFTS_PER_TURN = 3;
+
+/**
+ * Deterministic write gates. A draft must pass shape, then semantics, then the
+ * per-turn budget; anything refused is reported with the gate that refused it,
+ * so a "written: 0" is explainable rather than mysterious.
+ */
+export function gateDrafts(drafts: Draft[]): { accepted: Draft[]; rejected: DraftRejection[] } {
+  const accepted: Draft[] = [];
+  const rejected: DraftRejection[] = [];
+  for (const draft of drafts) {
+    const content = draft.content.trim();
+    if (!EXTRACTABLE_TYPES.includes(draft.type)) {
+      rejected.push({ gate: 'shape', reason: `type ${draft.type} is not extractable`, content });
+      continue;
+    }
+    if (content.length < 2 || content.length > MAX_CONTENT_CHARS) {
+      rejected.push({ gate: 'shape', reason: `length ${content.length} (2..${MAX_CONTENT_CHARS})`, content });
+      continue;
+    }
+    if (content.replace(/[\s\p{P}\p{S}]/gu, '').length < 2) {
+      rejected.push({ gate: 'semantic', reason: 'no word characters', content });
+      continue;
+    }
+    if (accepted.length >= MAX_DRAFTS_PER_TURN) {
+      rejected.push({ gate: 'budget', reason: `more than ${MAX_DRAFTS_PER_TURN} drafts in one turn`, content });
+      continue;
+    }
+    accepted.push({ ...draft, content });
+  }
+  return { accepted, rejected };
+}
+
 export function ruleExtract(turns: Turn[]): Draft[] {
   const drafts: Draft[] = [];
   for (const turn of turns) {
@@ -185,8 +222,9 @@ export async function reflect(store: SoulStore, options: ReflectOptions): Promis
   const existing = store.query({ soulId: options.soulId, userId: options.userId });
   const seen = new Set(existing.map((m) => m.content));
 
+  const { accepted, rejected } = gateDrafts(drafts);
   let written = 0;
-  for (const draft of drafts) {
+  for (const draft of accepted) {
     if (seen.has(draft.content)) continue;
     seen.add(draft.content);
     const memory: Memory = {
@@ -214,7 +252,7 @@ export async function reflect(store: SoulStore, options: ReflectOptions): Promis
     store.saveEmotion(options.soulId, options.userId, emotion);
   }
 
-  return { memories: written, superseded: 0, emotion };
+  return { memories: written, superseded: null, emotion, committed: written > 0, rejections: rejected };
 }
 
 /* ------------------------------------------------------------------ *

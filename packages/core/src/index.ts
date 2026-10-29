@@ -45,7 +45,7 @@ import { buildContext } from './context.ts';
 import { reflect, ruleExtract, nextEmotion } from './reflect.ts';
 import { rank, tokenize } from './scoring.ts';
 import { analyzeAffect, emptyAffect, lexiconAnalyzer } from './affect/analyze.ts';
-import { llmExtractTurn } from './reflect.ts';
+import { gateDrafts, llmExtractTurn } from './reflect.ts';
 
 export interface SoulOptions {
   store: SoulStore;
@@ -187,12 +187,16 @@ export class Soul {
         }
       }
     }
+    // Deterministic write gates: shape -> semantics -> per-turn budget. Whatever
+    // they refuse is reported, so written: 0 always has a reason.
+    const gated = gateDrafts(drafts);
+
     // observe runs every turn; repeating a sentence must not create a second row.
     const seen = new Set(
       this.store.query({ soulId: this.soulId, userId: this.userId, limit: 10_000 }).map((m) => m.content.trim()),
     );
     let written = 0;
-    for (const draft of drafts) {
+    for (const draft of gated.accepted) {
       if (seen.has(draft.content.trim())) continue;
       seen.add(draft.content.trim());
       written += 1;
@@ -224,7 +228,14 @@ export class Soul {
 
     const emotion = nextEmotion(this.store.emotion(this.soulId, this.userId), [turn]);
     this.store.saveEmotion(this.soulId, this.userId, emotion, now);
-    return { written, emotion, affect, extractedBy: written > 0 ? extractedBy : 'none' };
+    return {
+      written,
+      committed: written > 0,
+      rejections: gated.rejected,
+      emotion,
+      affect,
+      extractedBy: written > 0 ? extractedBy : 'none',
+    };
   }
 
   /**
