@@ -195,6 +195,9 @@ export class Soul {
     // a rule that already fired.
     let drafts = ruleExtract([turn]);
     let extractedBy: 'rules' | 'llm' | 'none' = drafts.length > 0 ? 'rules' : 'none';
+    // A model that says "nothing to keep" and a model that answers garbage used
+    // to be indistinguishable; keep them apart for measurement.
+    let llmOutcome: 'off' | 'skipped' | 'stored' | 'null' | 'failed' = 'off';
     if (drafts.length === 0 && turn.role === 'user' && this.llm) {
       if (turn.content.length <= this.llmMaxChars) {
         try {
@@ -202,11 +205,17 @@ export class Soul {
           if (draft) {
             drafts = [draft];
             extractedBy = 'llm';
+            llmOutcome = 'stored';
+          } else {
+            llmOutcome = 'null';
           }
         } catch {
           // The model is an enhancement; a transport or parse failure leaves the
           // rule result (nothing) in place.
+          llmOutcome = 'failed';
         }
+      } else {
+        llmOutcome = 'skipped';
       }
     }
     // Deterministic write gates: shape -> semantics -> per-turn budget. Whatever
@@ -254,6 +263,7 @@ export class Soul {
       written,
       committed: written > 0,
       rejections: gated.rejected,
+      llmOutcome,
       emotion,
       affect,
       extractedBy: written > 0 ? extractedBy : 'none',

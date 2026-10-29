@@ -87,3 +87,42 @@ test('observe 门控：没有注入模型时行为不变（纯规则）', async 
   assert.equal(result.extractedBy, 'none');
   store.close();
 });
+
+test('llmOutcome：区分模型说 null 与模型失败', async () => {
+  const store = openSqlite(':memory:');
+
+  const off = new Soul({ store, soulId: 'xiaoling', userId: 'u1' });
+  assert.equal((await off.observe({ role: 'user', content: '今天天气不错' })).llmOutcome, 'off');
+
+  const said = new Soul({ store, soulId: 'xiaoling', userId: 'u2', llm: async () => '{"type":"null"}' });
+  assert.equal((await said.observe({ role: 'user', content: '今天天气不错' })).llmOutcome, 'null');
+
+  const broke = new Soul({
+    store,
+    soulId: 'xiaoling',
+    userId: 'u3',
+    llm: async () => '不是 JSON',
+  });
+  assert.equal((await broke.observe({ role: 'user', content: '今天天气不错' })).llmOutcome, 'failed');
+
+  const stored = new Soul({
+    store,
+    soulId: 'xiaoling',
+    userId: 'u4',
+    llm: async () => '{"type":"fact","text":"发布窗口是每周三"}',
+  });
+  const result = await stored.observe({ role: 'user', content: '我们的发布窗口在每周三' });
+  assert.equal(result.llmOutcome, 'stored');
+  assert.equal(result.extractedBy, 'llm');
+
+  const skipped = new Soul({
+    store,
+    soulId: 'xiaoling',
+    userId: 'u5',
+    llm: async () => '{"type":"null"}',
+    llmMaxChars: 10,
+  });
+  assert.equal((await skipped.observe({ role: 'user', content: '这是一段超过十个字的内容' })).llmOutcome, 'skipped');
+
+  store.close();
+});
