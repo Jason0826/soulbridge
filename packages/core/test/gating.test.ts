@@ -122,7 +122,7 @@ test('llmOutcome：区分模型说 null 与模型失败', async () => {
     llm: async () => '{"type":"null"}',
     llmMaxChars: 10,
   });
-  assert.equal((await skipped.observe({ role: 'user', content: '这是一段超过十个字的内容' })).llmOutcome, 'skipped');
+  assert.equal((await skipped.observe({ role: 'user', content: '这是一段超过十个字的内容' })).llmOutcome, 'skipped-long');
 
   store.close();
 });
@@ -153,5 +153,22 @@ test('onLlmRaw：成功与失败都能拿到模型原文', async () => {
   assert.equal(seen.length, 2);
   assert.equal(seen[1], '抱歉，我无法判断。', '失败时原文必须完整保留');
 
+  store.close();
+});
+test('llmOutcome: rules firing is reported as skipped-rules, not off', async () => {
+  const store = openSqlite(':memory:');
+  const withModel = new Soul({
+    store,
+    soulId: 'xiaoling',
+    userId: 's1',
+    llm: async () => '{"type":"null"}',
+  });
+  const hit = await withModel.observe({ role: 'user', content: '以后提交前先跑测试' });
+  assert.equal(hit.extractedBy, 'rules');
+  assert.equal(hit.llmOutcome, 'skipped-rules');
+
+  const noModel = new Soul({ store, soulId: 'xiaoling', userId: 's2' });
+  const plain = await noModel.observe({ role: 'user', content: '以后提交前先跑测试' });
+  assert.equal(plain.llmOutcome, 'off', 'no model configured stays off');
   store.close();
 });

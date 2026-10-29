@@ -205,7 +205,9 @@ export class Soul {
     let extractedBy: 'rules' | 'llm' | 'none' = drafts.length > 0 ? 'rules' : 'none';
     // A model that says "nothing to keep" and a model that answers garbage used
     // to be indistinguishable; keep them apart for measurement.
-    let llmOutcome: 'off' | 'skipped' | 'stored' | 'null' | 'failed' = 'off';
+    let llmOutcome: 'off' | 'skipped-rules' | 'skipped-long' | 'stored' | 'null' | 'failed' = this.llm
+      ? 'skipped-rules'
+      : 'off';
     if (drafts.length === 0 && turn.role === 'user' && this.llm) {
       if (turn.content.length <= this.llmMaxChars) {
         try {
@@ -223,7 +225,7 @@ export class Soul {
           llmOutcome = 'failed';
         }
       } else {
-        llmOutcome = 'skipped';
+        llmOutcome = 'skipped-long';
       }
     }
     // Deterministic write gates: shape -> semantics -> per-turn budget. Whatever

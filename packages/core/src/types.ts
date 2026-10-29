@@ -161,7 +161,7 @@ export interface ObserveResult {
    * What the optional model did, kept apart from `extractedBy` because a null
    * answer and a broken answer used to look identical in the logs.
    */
-  llmOutcome: 'off' | 'skipped' | 'stored' | 'null' | 'failed';
+  llmOutcome: 'off' | 'skipped-rules' | 'skipped-long' | 'stored' | 'null' | 'failed';
   emotion: Emotion;
   /** Analysis of the user turn. Empty signal for assistant turns or on failure. */
   affect: AffectSignal;
