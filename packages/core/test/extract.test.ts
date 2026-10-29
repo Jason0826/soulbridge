@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ruleExtract, RULES, distillStrategy, MAX_STRATEGY_CHARS, llmExtractTurn } from '../src/reflect.ts';
+import { ruleExtract, RULES, distillStrategy, MAX_STRATEGY_CHARS, llmExtractTurn, isQuestion } from '../src/reflect.ts';
 import { openSqlite } from '../src/sqlite.ts';
 import { Soul } from '../src/index.ts';
 import type { Turn } from '../src/types.ts';
@@ -123,4 +123,22 @@ test('reflect：模型失败时回退到规则', async () => {
   });
   assert.equal(result.memories, 1, '传输失败时规则兜底');
   store.close();
+});
+
+test('question guard: interrogatives are not extracted', () => {
+  const no = ruleExtract([{ role: 'user', content: '我们这个记忆会记住日常生活吗？' }]);
+  assert.equal(no.length, 0, 'a question is not a fact');
+
+  const tail = ruleExtract([{ role: 'user', content: '以后提交前先跑测试吗' }]);
+  assert.equal(tail.length, 0, 'trailing 吗 without punctuation still marks a question');
+
+  const ok = ruleExtract([{ role: 'user', content: '以后提交前先跑测试' }]);
+  assert.equal(ok.length, 1, 'statements still work');
+});
+
+test('isQuestion: shapes', () => {
+  assert.equal(isQuestion('为什么'), false);
+  assert.equal(isQuestion('这个怎么做？'), true);
+  assert.equal(isQuestion('what?'), true);
+  assert.equal(isQuestion('以后别问我为什么'), false);
 });

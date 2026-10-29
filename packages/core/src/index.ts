@@ -14,7 +14,7 @@ export {
   AFFECT_BUDGET,
   AFFECT_WINDOW_MS,
 } from './context.ts';
-export { reflect, ruleExtract, nextEmotion, isCorrection, correctionRule } from './reflect.ts';
+export { reflect, ruleExtract, nextEmotion, isCorrection, correctionRule, isQuestion } from './reflect.ts';
 export { rank, scoreMemory, tokenize, relevance } from './scoring.ts';
 export * from './affect/index.ts';
 export { measureStyle } from './style/measure.ts';

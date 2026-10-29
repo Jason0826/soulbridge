@@ -148,10 +148,23 @@ export function gateDrafts(drafts: Draft[]): { accepted: Draft[]; rejected: Draf
   return { accepted, rejected };
 }
 
+/**
+ * A question is not a statement to remember.
+ *
+ * Measured case: "我们这个记忆会记住日常生活吗？" was stored as a fact because a
+ * trigger word matched before anything looked at the sentence type.
+ */
+export function isQuestion(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.endsWith('？') || trimmed.endsWith('?')) return true;
+  return /(吗|呢)[。.!！~～]?$/.test(trimmed);
+}
+
 export function ruleExtract(turns: Turn[]): Draft[] {
   const drafts: Draft[] = [];
   for (const turn of turns) {
     if (turn.role !== 'user') continue;
+    if (isQuestion(turn.content)) continue;
     for (const rule of RULES) {
       if (!rule.match(turn.content)) continue;
       // A rule may rewrite the turn; a strategy we cannot phrase is not stored.
