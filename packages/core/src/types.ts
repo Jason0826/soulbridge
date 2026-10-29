@@ -133,6 +133,8 @@ export interface ObserveResult {
   emotion: Emotion;
   /** Analysis of the user turn. Empty signal for assistant turns or on failure. */
   affect: AffectSignal;
+  /** Which extractor produced the memory, for measurement. */
+  extractedBy: 'rules' | 'llm' | 'none';
 }
 
 /** Injected by the caller. `core` never imports a model SDK. */

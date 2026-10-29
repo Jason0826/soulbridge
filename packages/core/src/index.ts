@@ -44,6 +44,7 @@ import { buildContext } from './context.ts';
 import { reflect, ruleExtract, nextEmotion } from './reflect.ts';
 import { rank, tokenize } from './scoring.ts';
 import { analyzeAffect, emptyAffect, lexiconAnalyzer } from './affect/analyze.ts';
+import { llmExtractTurn } from './reflect.ts';
 
 export interface SoulOptions {
   store: SoulStore;
@@ -126,18 +127,42 @@ export class Soul {
    * The analyzer may be async (a model); any failure degrades to the lexicon
    * analyzer. Emotion is computed from the turn only — never from affect.
    */
-  async observe(turn: Turn): Promise<ObserveResult> {
+  async observe(
+    turn: Turn,
+    options: { llm?: LlmFn; maxLlmChars?: number } = {},
+  ): Promise<ObserveResult> {
     const now = turn.at ?? Date.now();
     const affect = turn.role === 'user' ? await this.analyzeTurn(turn.content) : emptyAffect();
 
-    const drafts = ruleExtract([turn]);
+    // Rules first: they are precise and cheap. Only when they find nothing does
+    // the optional model get a chance, so it can add recall without overriding
+    // a rule that already fired.
+    let drafts = ruleExtract([turn]);
+    let extractedBy: 'rules' | 'llm' | 'none' = drafts.length > 0 ? 'rules' : 'none';
+    if (drafts.length === 0 && turn.role === 'user' && options.llm) {
+      const limit = options.maxLlmChars ?? 2000;
+      if (turn.content.length <= limit) {
+        try {
+          const draft = await llmExtractTurn(turn.content, options.llm);
+          if (draft) {
+            drafts = [draft];
+            extractedBy = 'llm';
+          }
+        } catch {
+          // The model is an enhancement; a transport or parse failure leaves the
+          // rule result (nothing) in place.
+        }
+      }
+    }
     // observe runs every turn; repeating a sentence must not create a second row.
     const seen = new Set(
       this.store.query({ soulId: this.soulId, userId: this.userId, limit: 10_000 }).map((m) => m.content.trim()),
     );
+    let written = 0;
     for (const draft of drafts) {
       if (seen.has(draft.content.trim())) continue;
       seen.add(draft.content.trim());
+      written += 1;
       this.store.put({
         id: `mem_${now.toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
         soulId: this.soulId,
@@ -166,7 +191,7 @@ export class Soul {
 
     const emotion = nextEmotion(this.store.emotion(this.soulId, this.userId), [turn]);
     this.store.saveEmotion(this.soulId, this.userId, emotion, now);
-    return { written: drafts.length, emotion, affect };
+    return { written, emotion, affect, extractedBy: written > 0 ? extractedBy : 'none' };
   }
 
   /**

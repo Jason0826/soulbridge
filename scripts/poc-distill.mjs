@@ -13,7 +13,10 @@
  * short (<= 40 chars), keeps a request marker, free of complaint markers, and
  * faithful (every bigram appears in the source, so nothing is invented).
  */
-import { ruleExtract, llmExtractTurn } from '../dist/packages/core/src/reflect.js';
+import { ruleExtract, llmExtractTurn, LLM_PROMPT } from '../dist/packages/core/src/reflect.js';
+import { writeFileSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 const DIRECTIVE = /(先|需要|要|必须|应该|请|别|不要|务必|记得|need to|should|must|please)/i;
 const COMPLAINT = /(又|失败|啊|不能让我|气|烦|崩溃|挂了)/;
@@ -95,7 +98,77 @@ function ruleArm(text) {
   return drafts.length > 0 ? drafts[0].content : null;
 }
 
+/** Emit the one-shot config the DSH plugin reads at startup. */
+function emitPoc(outPath) {
+  const config = {
+    provider: process.env.POC_PROVIDER ?? 'deepseek-account',
+    model: process.env.POC_MODEL ?? 'deepseek-flash',
+    prompt: LLM_PROMPT,
+    fixtures: FIXTURES.map(({ id, text }) => ({ id, text })),
+    out: process.env.POC_OUT ?? join(homedir(), '.soulbridge', 'poc-result.json'),
+  };
+  writeFileSync(outPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+  console.log(`poc config written to ${outPath}`);
+  console.log(`  provider ${config.provider} · model ${config.model} · out ${config.out}`);
+}
+
+/** Score raw model outputs collected by the plugin. */
+function scoreResults(file) {
+  const results = JSON.parse(readFileSync(file, 'utf8'));
+  const byId = new Map(results.map((r) => [r.id, r]));
+  console.log('\n## LLM arm (host model)\n');
+  console.log('| id | kind | expect | stored | len | short | dir | clean | faithful | ms |');
+  console.log('|---|---|---|---|---|---|---|---|---|---|');
+  let tp = 0, fp = 0, fn = 0, kept = 0, short = 0, directive = 0, clean = 0, faithfulN = 0;
+  for (const fixture of FIXTURES) {
+    const r = byId.get(fixture.id);
+    let output = null;
+    let note = '';
+    if (r?.error) note = `error: ${r.error}`;
+    else if (r?.raw) {
+      try {
+        const parsed = JSON.parse(r.raw.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim());
+        if (parsed && parsed.type !== 'null' && parsed.text) output = String(parsed.text).trim();
+      } catch {
+        note = 'unparsable';
+      }
+    }
+    const stored = output !== null;
+    if (stored && fixture.expect === 'store') tp += 1;
+    if (stored && fixture.expect === 'null') fp += 1;
+    if (!stored && fixture.expect === 'store') fn += 1;
+    if (stored) {
+      kept += 1;
+      const q = quality(output, fixture.text);
+      if (q.short) short += 1;
+      if (q.directive) directive += 1;
+      if (q.clean) clean += 1;
+      if (q.faithful) faithfulN += 1;
+    }
+    const q = quality(output, fixture.text);
+    console.log(
+      `| ${fixture.id} | ${fixture.kind} | ${fixture.expect} | ${output ?? note ?? 'null'} | ${output ? output.length : 0} | ` +
+        `${q.short ? '✓' : '·'} | ${q.directive ? '✓' : '·'} | ${q.clean ? '✓' : '·'} | ${q.faithful ? '✓' : '·'} | ${r?.ms ?? '?'} |`,
+    );
+  }
+  const precision = tp + fp > 0 ? tp / (tp + fp) : 1;
+  const recall = tp + fn > 0 ? tp / (tp + fn) : 0;
+  console.log(
+    `\nllm   store-decision P=${precision.toFixed(2)} R=${recall.toFixed(2)} (tp ${tp} fp ${fp} fn ${fn}) · ` +
+      `kept ${kept} · short ${short}/${kept} · directive ${directive}/${kept} · clean ${clean}/${kept} · faithful ${faithfulN}/${kept}`,
+  );
+}
 async function main() {
+  const emitIndex = process.argv.indexOf('--emit-poc');
+  if (emitIndex > 0) {
+    emitPoc(process.argv[emitIndex + 1]);
+    return;
+  }
+  const scoreIndex = process.argv.indexOf('--score');
+  if (scoreIndex > 0) {
+    scoreResults(process.argv[scoreIndex + 1]);
+    return;
+  }
   const useLlm = process.argv.includes('--llm');
   const arms = useLlm ? ['rule', 'llm'] : ['rule'];
   const rows = [];

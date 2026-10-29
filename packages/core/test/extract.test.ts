@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ruleExtract, RULES, distillStrategy, MAX_STRATEGY_CHARS, llmExtractTurn } from '../src/reflect.ts';
 import { openSqlite } from '../src/sqlite.ts';
+import { Soul } from '../src/index.ts';
 import type { Turn } from '../src/types.ts';
 
 const user = (content: string): Turn => ({ role: 'user', content });
@@ -121,5 +122,68 @@ test('reflect：模型失败时回退到规则', async () => {
     },
   });
   assert.equal(result.memories, 1, '传输失败时规则兜底');
+  store.close();
+});
+test('observe 门控：规则命中的句子不调用模型', async () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 'xiaoling', userId: 'u1' });
+  let calls = 0;
+  const result = await soul.observe(
+    { role: 'user', content: '以后提交前先跑测试' },
+    { llm: async () => { calls += 1; return '{"type":"null"}'; } },
+  );
+  assert.equal(calls, 0, '规则命中时模型不应被调用');
+  assert.equal(result.extractedBy, 'rules');
+  store.close();
+});
+
+test('observe 门控：规则漏掉时由模型补，并标记来源', async () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 'xiaoling', userId: 'u1' });
+  const result = await soul.observe(
+    { role: 'user', content: '这个文件里存的是 schema 版本号，升级时要先备份' },
+    { llm: async () => '{"type":"fact","text":"升级前先备份 schema 版本文件"}' },
+  );
+  assert.equal(result.written, 1);
+  assert.equal(result.extractedBy, 'llm');
+  assert.equal(store.query({ soulId: 'xiaoling', userId: 'u1' })[0].content, '升级前先备份 schema 版本文件');
+  store.close();
+});
+
+test('observe 门控：模型说 null 时不写，也不回退', async () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 'xiaoling', userId: 'u1' });
+  const result = await soul.observe(
+    { role: 'user', content: '今天先到这里吧' },
+    { llm: async () => '{"type":"null"}' },
+  );
+  assert.equal(result.written, 0);
+  assert.equal(result.extractedBy, 'none');
+  store.close();
+});
+
+test('observe 门控：模型失败不影响 observe', async () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 'xiaoling', userId: 'u1' });
+  const result = await soul.observe(
+    { role: 'user', content: '这个文件里存的是 schema 版本号' },
+    { llm: async () => { throw new Error('network down'); } },
+  );
+  assert.equal(result.written, 0);
+  assert.equal(result.extractedBy, 'none');
+  store.close();
+});
+
+test('observe 门控：超长消息不送模型（跳过而非截断）', async () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 'xiaoling', userId: 'u1' });
+  let calls = 0;
+  const long = '日志'.repeat(1500);
+  const result = await soul.observe(
+    { role: 'user', content: long },
+    { llm: async () => { calls += 1; return '{"type":"null"}'; }, maxLlmChars: 2000 },
+  );
+  assert.equal(calls, 0);
+  assert.equal(result.extractedBy, 'none');
   store.close();
 });
