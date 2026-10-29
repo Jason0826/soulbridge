@@ -9,7 +9,7 @@
 import { copyFileSync, existsSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { DEFAULT_EMOTION } from './types.ts';
-import type { AffectSignal, Emotion, Identity, Memory, QuerySpec } from './types.ts';
+import type { AffectSignal, Correction, Emotion, Identity, Memory, QuerySpec } from './types.ts';
 import type { SoulStore } from './store.ts';
 
 export const SCHEMA_VERSION = 2;
@@ -82,6 +82,17 @@ CREATE TABLE IF NOT EXISTS affect_samples (
 );
 CREATE INDEX IF NOT EXISTS idx_affect ON affect_samples(soul_id, user_id, at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_affect_unique ON affect_samples(soul_id, user_id, at, analyzer);
+CREATE TABLE IF NOT EXISTS corrections (
+  id             TEXT PRIMARY KEY,
+  soul_id        TEXT NOT NULL,
+  user_id        TEXT NOT NULL,
+  at             INTEGER NOT NULL,
+  user_text      TEXT NOT NULL,
+  assistant_text TEXT,
+  rule           TEXT,
+  device_id      TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_corrections ON corrections(soul_id, user_id, at DESC);
 `;
 
 type Row = Record<string, unknown>;
@@ -134,6 +145,21 @@ function upgradeToV2(db: DatabaseSync): void {
   db.exec('UPDATE emotions SET updated_at = 0 WHERE updated_at IS NULL');
 }
 
+/** v2 → v3: corrections evidence table (RFC 0003 phase A). */
+function upgradeToV3(db: DatabaseSync): void {
+  db.exec(`CREATE TABLE IF NOT EXISTS corrections (
+    id             TEXT PRIMARY KEY,
+    soul_id        TEXT NOT NULL,
+    user_id        TEXT NOT NULL,
+    at             INTEGER NOT NULL,
+    user_text      TEXT NOT NULL,
+    assistant_text TEXT,
+    rule           TEXT,
+    device_id      TEXT
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_corrections ON corrections(soul_id, user_id, at DESC)');
+}
+
 function backupBeforeUpgrade(file: string, from: number): void {
   if (file === ':memory:' || !existsSync(file)) return;
   const backup = `${file}.bak-v${from}`;
@@ -154,6 +180,7 @@ export function openSqlite(file: string): SoulStore {
   if (version < SCHEMA_VERSION) {
     backupBeforeUpgrade(file, version);
     if (version < 2) upgradeToV2(db);
+    if (version < 3) upgradeToV3(db);
     setVersion(db, SCHEMA_VERSION);
   }
 
@@ -339,6 +366,52 @@ export function openSqlite(file: string): SoulStore {
     purgeAffect(beforeMs: number): number {
       const result = withRetry(() => db.prepare('DELETE FROM affect_samples WHERE at < ?').run(beforeMs));
       return Number(result.changes ?? 0);
+    },
+
+    saveCorrection(correction: Correction): void {
+      withRetry(() =>
+        db
+          .prepare(
+            `INSERT INTO corrections (id, soul_id, user_id, at, user_text, assistant_text, rule, device_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            correction.id,
+            correction.soulId,
+            correction.userId,
+            correction.at,
+            correction.userText,
+            correction.assistantText ?? null,
+            correction.rule ?? null,
+            correction.deviceId ?? null,
+          ),
+      );
+    },
+
+    recentCorrections(soulId: string, userId: string, limit: number): Correction[] {
+      const rows = db
+        .prepare(
+          `SELECT * FROM corrections WHERE soul_id = ? AND user_id = ?
+           ORDER BY at DESC LIMIT ?`,
+        )
+        .all(soulId, userId, limit) as Row[];
+      return rows.map((row) => ({
+        id: String(row.id),
+        soulId: String(row.soul_id),
+        userId: String(row.user_id),
+        at: Number(row.at),
+        userText: String(row.user_text),
+        assistantText: row.assistant_text == null ? undefined : String(row.assistant_text),
+        rule: row.rule == null ? undefined : String(row.rule),
+        deviceId: row.device_id == null ? undefined : String(row.device_id),
+      }));
+    },
+
+    countCorrections(soulId: string, userId: string): number {
+      const row = db
+        .prepare('SELECT COUNT(*) AS n FROM corrections WHERE soul_id = ? AND user_id = ?')
+        .get(soulId, userId) as Row;
+      return Number(row.n);
     },
 
     count(soulId: string, userId: string): number {

@@ -194,3 +194,32 @@ export const EMPTY_AFFECT: AffectSignal = {
 
 /** Wire version of the four verbs. Additive changes bump MINOR (ADR 0005). */
 export const PROTOCOL_VERSION = '0.2';
+
+/**
+ * Evidence, not memory: a user correction captured with the reply it targeted.
+ * Stored separately so it never reaches a prompt; distillation (RFC 0003 phase B)
+ * is what turns evidence into a strategy.
+ */
+export interface Correction {
+  id: string;
+  soulId: string;
+  userId: string;
+  at: number;
+  /** The user's own words, complete. */
+  userText: string;
+  /** The reply the correction targeted, complete; undefined when unknown. */
+  assistantText?: string;
+  /** Which marker matched (for statistics). */
+  rule?: string;
+  deviceId?: string;
+}
+
+export interface CorrectionInput {
+  soulId: string;
+  userId: string;
+  userText: string;
+  assistantText?: string;
+  rule?: string;
+  deviceId?: string;
+  at?: number;
+}

@@ -2,7 +2,7 @@
  * The only port. Every added method is a storage engine's opinion leaking into
  * the domain, so the surface stays deliberately small.
  */
-import type { AffectSignal, Emotion, Identity, Memory, QuerySpec } from './types.ts';
+import type { AffectSignal, Correction, Emotion, Identity, Memory, QuerySpec } from './types.ts';
 
 export interface SoulStore {
   ensureSoul(identity: Identity): void;
@@ -28,6 +28,11 @@ export interface SoulStore {
   recentAffect(soulId: string, userId: string, sinceMs: number): AffectSignal[];
   /** Drop samples older than `beforeMs`; returns rows removed. */
   purgeAffect(beforeMs: number): number;
+
+  /** Evidence, not memory: a user correction plus the reply it targeted. */
+  saveCorrection(correction: Correction): void;
+  recentCorrections(soulId: string, userId: string, limit: number): Correction[];
+  countCorrections(soulId: string, userId: string): number;
 
   count(soulId: string, userId: string): number;
   close(): void;

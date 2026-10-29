@@ -14,7 +14,7 @@ export {
   AFFECT_BUDGET,
   AFFECT_WINDOW_MS,
 } from './context.ts';
-export { reflect, ruleExtract, nextEmotion } from './reflect.ts';
+export { reflect, ruleExtract, nextEmotion, isCorrection, correctionRule } from './reflect.ts';
 export { rank, scoreMemory, tokenize, relevance } from './scoring.ts';
 export * from './affect/index.ts';
 export { measureStyle } from './style/measure.ts';
@@ -27,6 +27,7 @@ export * from './storage/transcript.ts';
 import type {
   AffectSignal,
   ContextRequest,
+  Correction,
   Memory,
   ContextResult,
   Emotion,
@@ -118,6 +119,30 @@ export class Soul {
   /** Tombstone one memory so it never reaches a prompt again. */
   forget(id: string): boolean {
     return this.store.forget(id);
+  }
+
+  /**
+   * Record a user correction as evidence (RFC 0003 phase A). Nothing here
+   * reaches a prompt; distillation to a strategy is a later phase.
+   */
+  recordCorrection(input: { userText: string; assistantText?: string; rule?: string }): string {
+    const now = Date.now();
+    const id = `cor_${now.toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    this.store.saveCorrection({
+      id,
+      soulId: this.soulId,
+      userId: this.userId,
+      at: now,
+      userText: input.userText,
+      assistantText: input.assistantText,
+      rule: input.rule,
+      deviceId: this.deviceId,
+    });
+    return id;
+  }
+
+  corrections(limit = 20): Correction[] {
+    return this.store.recentCorrections(this.soulId, this.userId, limit);
   }
 
   /** Verb 3: on demand. */

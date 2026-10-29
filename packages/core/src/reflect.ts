@@ -97,6 +97,17 @@ export const RULES: Rule[] = [
 
 const CORRECTION = /(不对|不是这样|错了|你搞错|wrong|that'?s not right|incorrect)/i;
 
+/** Is this user turn a correction? Evidence for RFC 0003, not a memory by itself. */
+export function isCorrection(text: string): boolean {
+  return CORRECTION.test(text);
+}
+
+/** Which marker matched, for statistics; null when the turn is not a correction. */
+export function correctionRule(text: string): string | null {
+  const match = CORRECTION.exec(text);
+  return match ? match[0] : null;
+}
+
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 const round2 = (n: number) => Math.round(n * 100) / 100;
 

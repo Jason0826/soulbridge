@@ -385,6 +385,22 @@ async function main(): Promise<void> {
       return;
     }
 
+    case 'corrections': {
+      const { soul } = open(flags);
+      const rows = soul.corrections(flags.limit ? Number(flags.limit) : 10);
+      if (rows.length === 0) {
+        process.stdout.write('no corrections recorded yet\n');
+        return;
+      }
+      for (const row of rows) {
+        const when = new Date(row.at).toISOString().slice(0, 19).replace('T', ' ');
+        process.stdout.write(`${when}  [${row.rule ?? '-'}]\n`);
+        process.stdout.write(`  用户: ${row.userText}\n`);
+        if (row.assistantText) process.stdout.write(`  当时: ${row.assistantText}\n`);
+      }
+      return;
+    }
+
     case 'status': {
       const config = ensureConfig();
       const dbPath = resolveDbPath(flags.db);
@@ -455,6 +471,7 @@ async function main(): Promise<void> {
           '  import --from <steering.md>     导入 AGENTS.md / CLAUDE.md',
           '  ingest --file <transcript.jsonl> 会话转写 → 记忆与情绪采样',
           '  list [--limit N]                看它记住了什么',
+          '  corrections [--limit N]         看被纠正过的证据',
           '  forget <id>                     忘掉一条记忆（墓碑）',
           '  status                          一眼看它是否在工作',
           '  stats                           看原始状态（JSON）',
