@@ -131,7 +131,13 @@ export class Soul {
     const affect = turn.role === 'user' ? await this.analyzeTurn(turn.content) : emptyAffect();
 
     const drafts = ruleExtract([turn]);
+    // observe runs every turn; repeating a sentence must not create a second row.
+    const seen = new Set(
+      this.store.query({ soulId: this.soulId, userId: this.userId, limit: 10_000 }).map((m) => m.content.trim()),
+    );
     for (const draft of drafts) {
+      if (seen.has(draft.content.trim())) continue;
+      seen.add(draft.content.trim());
       this.store.put({
         id: `mem_${now.toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
         soulId: this.soulId,
