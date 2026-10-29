@@ -114,6 +114,7 @@ SQLite（默认） / Postgres（可选）
 | [适配器索引](adapters/README.md) | 各宿主适配器与接入契约 |
 | [quality](docs/quality.md) | 质量模型、九条门禁、五条评审清单 |
 | [references](docs/references.md) | 外部资料的去留与过期判断 |
+| [roadmap](docs/roadmap.md) | 下一步做什么、借鉴了什么、明确不做什么 |
 | [runbook](docs/runbook.md) | 发版流程、维护操作、已知待办 |
 
 **规则**：架构级改动必须先有 RFC 或 ADR；聊天里达成的不算决定。
