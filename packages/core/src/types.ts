@@ -33,8 +33,11 @@ export interface Memory {
   keywords: string[];
   createdAt: number;
   lastRecalledAt?: number;
+  /** Written on create; no code filters by it yet (roadmap N3). */
   validFrom?: number;
+  /** Reserved for expiry filtering; not enforced yet (roadmap N3). */
   validUntil?: number;
+  /** Reserved for conflict replacement; not written yet (roadmap N3). */
   supersededBy?: string;
   /** Last-writer-wins clock for cross-device merge (ADR 0021). */
   updatedAt?: number;
@@ -102,12 +105,7 @@ export interface ContextResult {
   affect?: { confidence: number; directives: string[] };
 }
 
-export interface RecallRequest {
-  soulId: string;
-  userId: string;
-  q: string;
-  limit?: number;
-}
+
 
 export interface ScoredMemory {
   memory: Memory;
@@ -126,7 +124,8 @@ export interface ReflectResult {
   memories: number;
   /**
    * How many older memories were replaced by a newer conflicting one.
-   * `null` means this build does not track supersession yet — it used to report
+   * 
+ull` means this build does not track supersession yet — it used to report
    * a hardcoded 0, which claimed a capability that did not exist.
    */
   superseded: number | null;
@@ -235,12 +234,3 @@ export interface Correction {
   deviceId?: string;
 }
 
-export interface CorrectionInput {
-  soulId: string;
-  userId: string;
-  userText: string;
-  assistantText?: string;
-  rule?: string;
-  deviceId?: string;
-  at?: number;
-}
