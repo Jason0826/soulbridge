@@ -59,3 +59,38 @@ test('rememberExplicit 的写入会被 list 看到、被 context 注入（重要
   assert.ok(instance.context({ track: false }).text.includes('发布窗口'));
   store.close();
 });
+
+test('rememberExplicit：同轮改写不产生第二条（窗口内共享片段）', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 'xiaoling', userId: 'u1' });
+  const first = soul.rememberExplicit({ content: '记住：测试工具', type: 'fact' });
+  const second = soul.rememberExplicit({
+    content: '「测试工具」是用户要求记住的一条内容；具体指代尚未说明，待确认后补充。',
+    type: 'fact',
+  });
+  assert.equal(second.duplicate, true, '改写应被判为重复');
+  assert.equal(second.id, first.id);
+  assert.equal(store.count('xiaoling', 'u1'), 1);
+  store.close();
+});
+
+test('rememberExplicit：无关内容在窗口内仍可写入', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 'xiaoling', userId: 'u1' });
+  soul.rememberExplicit({ content: '记住：测试工具', type: 'fact' });
+  const other = soul.rememberExplicit({ content: '发布窗口是每周三', type: 'fact' });
+  assert.equal(other.ok, true);
+  assert.equal(other.duplicate, undefined);
+  assert.equal(store.count('xiaoling', 'u1'), 2);
+  store.close();
+});
+
+test('rememberExplicit：窗口可关闭', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 'xiaoling', userId: 'u1', dedupeWindowMs: 0 });
+  soul.rememberExplicit({ content: '记住：测试工具', type: 'fact' });
+  const second = soul.rememberExplicit({ content: '测试工具的具体用法待确认', type: 'fact' });
+  assert.equal(second.duplicate, undefined, '关闭窗口后不按改写去重');
+  assert.equal(store.count('xiaoling', 'u1'), 2);
+  store.close();
+});

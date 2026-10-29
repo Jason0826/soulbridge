@@ -67,6 +67,11 @@ export interface SoulOptions {
   llm?: LlmFn;
   /** Messages longer than this are not sent to the model. Defaults to 2000. */
   llmMaxChars?: number;
+  /**
+   * A paraphrase written this many ms after a similar memory is treated as a
+   * duplicate rather than a second row. Set 0 to disable. Defaults to 30s.
+   */
+  dedupeWindowMs?: number;
 }
 
 export class Soul {
@@ -78,6 +83,7 @@ export class Soul {
   readonly analyzer: AffectAnalyzer;
   readonly llm?: LlmFn;
   readonly llmMaxChars: number;
+  readonly dedupeWindowMs: number;
 
   constructor(options: SoulOptions) {
     this.store = options.store;
@@ -88,6 +94,7 @@ export class Soul {
     this.analyzer = options.analyzer ?? lexiconAnalyzer;
     this.llm = options.llm;
     this.llmMaxChars = options.llmMaxChars ?? 2000;
+    this.dedupeWindowMs = options.dedupeWindowMs ?? 30_000;
 
     if (!this.store.identity(this.soulId)) {
       this.store.ensureSoul({
@@ -300,17 +307,31 @@ export class Soul {
       return { ok: false, reason: rejected[0]?.reason ?? 'rejected by write gates' };
     }
     const content = accepted[0].content;
+    const now = Date.now();
 
-    const existing = this.store
-      .query({
-        soulId: this.soulId,
-        userId: this.userId,
-        status: ['active'],
-        includeExpired: true,
-        limit: 10_000,
-      })
-      .find((memory) => memory.content.trim() === content);
-    if (existing) return { ok: true, id: existing.id, duplicate: true };
+    const candidates = this.store.query({
+      soulId: this.soulId,
+      userId: this.userId,
+      status: ['active'],
+      includeExpired: true,
+      limit: 50,
+    });
+
+    // Same content anywhere: the exact duplicate.
+    const same = candidates.find((memory) => memory.content.trim() === content);
+    if (same) return { ok: true, id: same.id, duplicate: true };
+
+    // A paraphrase of something just written (usually the automatic observer
+    // moments earlier) must not become a second row: a shared run of characters
+    // inside the dedupe window is treated as the same statement.
+    const window = this.dedupeWindowMs;
+    if (window > 0) {
+      const recent = candidates.filter((memory) => now - memory.createdAt <= window);
+      const overlapping = recent.find((memory) => sharesRun(memory.content, content, MIN_SHARED_RUN));
+      if (overlapping) {
+        return { ok: true, id: overlapping.id, duplicate: true, reason: 'already recorded this turn' };
+      }
+    }
 
     const id = this.remember(content, { type, importance });
     return { ok: true, id };
@@ -347,4 +368,20 @@ export class Soul {
       }
     }
   }
+}
+
+/** Shortest shared character run that means "the same statement" (RFC 0005). */
+const MIN_SHARED_RUN = 4;
+
+function sharesRun(a: string, b: string, minRun: number): boolean {
+  const left = a.trim();
+  const right = b.trim();
+  if (left.length === 0 || right.length === 0) return false;
+  const window = Math.min(left.length, right.length);
+  for (let len = window; len >= minRun; len -= 1) {
+    for (let i = 0; i + len <= right.length; i += 1) {
+      if (left.includes(right.slice(i, i + len))) return true;
+    }
+  }
+  return false;
 }
