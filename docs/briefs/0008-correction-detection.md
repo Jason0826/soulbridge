@@ -102,8 +102,9 @@ const CORRECTION = /(不对|不是这样|错了|你搞错|wrong|that'?s not righ
 
 ## 8. 前置条件与时机
 
-- **什么时候可以实施**：S1 收尾后。这属于"能力声明了但没工作"的缺陷，但修法要改判定逻辑，不是改 typo。
-- **依赖**：黄金集需要人工标答案（你），约 20 分钟。
+- **什么时候可以实施**：**已纳入 S1 范围内**（2026-10-30 明确决定，见 [stages/s1-dsh-memory.md](../stages/s1-dsh-memory.md)）。理由：声明了但没实现，按 bug 处理。
+- **本阶段能做到哪一层**：L1 + L2 + `correctionOutcome` 分档。**L3 LLM 仲裁推迟**——它要新增模型调用，属于新功能。
+- **黄金集已就绪**：`packages/core/test/fixtures/correction-golden.ts`（19 条，人工标注，分 clear/ambiguous 三组），基线已钉死：L1 在 clear-yes 上召回 **0/6**、clear-no 误报 0、ambiguous 0/2。
 - **什么情况下不做**：如果标完答案发现"真实纠正"本身就极少（比如一周 <2 次），那 `repeatCorrection` 的样本量撑不起 4 周实验，应该先解决"怎么让用户愿意纠正"这个问题。
 
 ## 9. 开放问题
