@@ -108,6 +108,80 @@ export function correctionRule(text: string): string | null {
   return match ? match[0] : null;
 }
 
+export type CorrectionLayer = 'rule' | 'structural' | 'none';
+export type CorrectionSignal = 'negation' | 'replacement' | 'meta';
+
+export interface CorrectionVerdict {
+  isCorrection: boolean;
+  layer: CorrectionLayer;
+  /** L1 命中的词，或 L2 的信号名；便于统计"为什么记/为什么没记" */
+  marker: string | null;
+}
+
+/**
+ * A-not-A questions and fixed positive words contain a negator but negate nothing.
+ * Without these exceptions the structural layer fires on half of ordinary questions
+ * (是不是 / 可不可以 / 不错 / 不断 / 算不算).
+ */
+const NEGATION_EXEMPT = /是不是|可不可以|有没有|要不要|对不对|好不好|算不算|是否可以|不错|不断|不仅|不但|不过|不只是/g;
+const NEGATOR = /[不没别]/;
+/** Replacement: the user supplies an alternative instead of denying. */
+const REPLACEMENT = /我想的是|我的意思是|应该是|应该用|改用|换成|不是[^。；]{0,20}而是/;
+/** Meta: the user refers to what the assistant just did. */
+const META = /你刚才|你上一步|你上次|你前面|刚才那/;
+
+function sharedBigrams(a: string, b: string): number {
+  const grams = (s: string): Set<string> => {
+    const lower = s.toLowerCase();
+    const out = new Set<string>();
+    for (const word of lower.match(/[a-z0-9_]{2,}/g) ?? []) out.add(word);
+    for (const run of lower.match(/[\u4e00-\u9fa5]+/g) ?? []) {
+      for (let i = 0; i < run.length - 1; i += 1) out.add(run.slice(i, i + 2));
+    }
+    return out;
+  };
+  const left = grams(a);
+  const right = grams(b);
+  let hit = 0;
+  for (const g of left) if (right.has(g)) hit += 1;
+  return hit;
+}
+
+/**
+ * L1 + L2 correction detection.
+ *
+ * L1: explicit markers, high precision. L2: structure — a negator/replacement/meta
+ * marker aimed at what the previous reply claimed. L2 only runs when a previous
+ * reply exists, and negation additionally requires ≥2 shared bigrams, so a bare
+ * "不行" about the weather is not mistaken for a correction.
+ *
+ * What this deliberately does NOT do: judge "是否真的不同意" — that needs a model.
+ * 有否定 + 指向上一轮 只能说明"这是候选"，不能说明"用户是对的"。
+ */
+export function detectCorrection(text: string, previousReply?: string): CorrectionVerdict {
+  const l1 = CORRECTION.exec(text);
+  if (l1) return { isCorrection: true, layer: 'rule', marker: l1[0] };
+
+  if (!previousReply || previousReply.length === 0) {
+    return { isCorrection: false, layer: 'none', marker: null };
+  }
+
+  const stripped = text.replace(NEGATION_EXEMPT, ' ');
+  if (NEGATOR.test(stripped) && sharedBigrams(text, previousReply) >= 2) {
+    return { isCorrection: true, layer: 'structural', marker: 'negation' };
+  }
+
+  const replacement = REPLACEMENT.exec(text);
+  if (replacement) return { isCorrection: true, layer: 'structural', marker: 'replacement' };
+
+  const meta = META.exec(text);
+  if (meta && (NEGATOR.test(stripped) || /[?？]/.test(text))) {
+    return { isCorrection: true, layer: 'structural', marker: 'meta' };
+  }
+
+  return { isCorrection: false, layer: 'none', marker: null };
+}
+
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 const round2 = (n: number) => Math.round(n * 100) / 100;
 

@@ -155,3 +155,31 @@ export const CLEAR_CASES = CORRECTION_CASES.filter((c) => c.bucket.startsWith('c
 export const AMBIGUOUS_CASES = CORRECTION_CASES.filter((c) => c.bucket === 'ambiguous');
 export const CLEAR_YES = CORRECTION_CASES.filter((c) => c.bucket === 'clear-yes');
 export const CLEAR_NO = CORRECTION_CASES.filter((c) => c.bucket === 'clear-no');
+
+/**
+ * 每条的"上一轮助手回复"，L2 结构判定的输入。
+ *
+ * 这些是**构造**的：真实对话里每轮都有上下文，但黄金集只保存了用户原话。
+ * 取值来自我当时真实的说法，压缩成一句。用户原话一字未改，只有这里是我补的。
+ */
+export const PREVIOUS_REPLY: Record<string, string> = {
+  'deepinfer-not-rl': '我按强化学习里的 experience replay 来理解"有界重放"。',
+  'repeat-mistake': '我改完只验证了局部，没有做整体核对。',
+  'steering-is-personal': '项目约定应放仓库的 steering 文件，soulbridge 不接管。',
+  'thought-is-portable': '脚本不可迁移，所以经验也难以跨工具携带。',
+  'work-dialogue-is-usage': '这 34 条消息里绝大多数是项目设计的记忆，不是关于你的记忆。',
+  'why-corrections-zero': 'corrections 表一直是 0 行。',
+  'who-are-you': '我是小灵，一个持续成长的伙伴。',
+  'what-are-we-doing': '当前在 S1 观察期，只修 bug 不加功能。',
+  'observe-first': '建议接下来继续观察，攒真实使用数据。',
+  'suggestion-good': '建议先做 A，再决定 B。',
+  'continue-design': 'S1 结束之后可以开始下一阶段的设计。',
+  'formula-choice': '这类公式是心理学借来的骨架，常数需要自己标定。',
+  'bounded-replay-idea': '评估 harness 的骨架写好了，可以开始实施。',
+  're-survey-state': '下一步建议停手观察，别再产出文档。',
+  'script-portable': '这个脚本与仓库结构是绑定的。',
+  'review-loop': '接下来建议停手观察。',
+  'current-data': '我先汇总一下当前的数据情况。',
+  'affect-not-done': '情绪链路是通的，只是触发得少。',
+  'fields-or-redesign': '我按现有字段做了评估，结论是三个分量几乎没有分辨率。',
+};
