@@ -55,6 +55,26 @@
 | 0008 纠正检测 | **部分实现**（core 有、插件未更新） | 插件重装 + 重启 |
 | 0009 schema 重设计 | Draft | 先定 `valid_until` 写入路径 |
 
+## 环境与工具（新会话先看这一节）
+
+| 东西 | 在哪 |
+|---|---|
+| **DSH profile（真机跑的那份）** | `D:\DSH\home\profiles\desktop`（`~/.dsh/profiles/desktop` 指向同一份存储）|
+| 装进 profile 的包 | 上面 `node_modules/soulbridge`、`node_modules/dsh-plugin-soulbridge` |
+| **重启 DSH** | `dsh-plugin-soulbridge/scripts/restart-dsh.ps1` |
+| 重启日志 | `~/.soulbridge/restart.log`；取消用哨兵文件 `~/.soulbridge/restart.cancel` |
+| 回滚插件 | `dsh-plugin-soulbridge/scripts/rollback.ps1`；profile 清单工具 `profile-manifest.ps1` |
+| 结构体检 | `soulbridge/scripts/health-check.mjs` |
+| 字段审计 | `soulbridge/scripts/field-audit.mjs` |
+| 真实数据 | `~/.soulbridge/soul.db`、`plugin.log`、`restart.log` |
+
+**重启脚本的关键约束**：
+
+- 它**必须由计划任务拉起**，不能直接从 app 里跑——桌面端把子进程放进 job object，脚本会跟 app 一起被杀
+- 默认 `DelaySeconds=180`（等 3 分钟再杀进程），`-SoulbridgeHome` 可把它指向临时库做实验
+- 连续启动失败会走 fallback：从 profile 里摘掉 soulbridge bundle，保证 app 还能起来
+- `schtasks` 在 agent 沙箱里跑不了（会报 "The system cannot find the path specified"），所以**重启这一步要人来触发**
+
 ## 约定（必须遵守）
 
 1. 改动前解释：为什么、怎么做、影响

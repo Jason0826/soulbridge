@@ -156,7 +156,7 @@ npm dist-tag ls soulbridge
 
 改了 core 或插件但还没发 npm，要在真机验证时走这条路。**它是一次性的 overlay，不是持久真相。**
 
-profile 位置：`~/.dsh/profiles/desktop/node_modules/`（`soulbridge` + `dsh-plugin-soulbridge`）
+profile 位置：`D:\DSH\home\profiles\desktop\node_modules\`（`~/.dsh/profiles/desktop` 指向同一份存储）
 
 ```
 1. soulbridge 里 npm run build            # tsc → dist
@@ -164,8 +164,11 @@ profile 位置：`~/.dsh/profiles/desktop/node_modules/`（`soulbridge` + `dsh-p
 3. 替换 core：dist / adapters / package.json / README / LICENSE / NOTICE
    → profile/node_modules/soulbridge
 4. 覆盖插件：index.js + package.json → profile/node_modules/dsh-plugin-soulbridge
-5. 重启 DSH
+5. 重启 DSH —— 用 `dsh-plugin-soulbridge/scripts/restart-dsh.ps1`，
+   且必须由**计划任务**拉起（app 的 job object 会杀掉从内部启动的脚本）
 ```
+
+`schtasks` 在 agent 沙箱里不可用，所以第 5 步需要人触发；脚本日志在 `~/.soulbridge/restart.log`。
 
 **验证**（重启后）：
 
