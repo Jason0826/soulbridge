@@ -32,14 +32,14 @@
 
 ### N2. 审计留痕
 
-`list` 看不到每条记忆是**哪条规则/哪次模型调用**写的。
+`list` 看不到每条记忆是**哪条规则/哪次模型调用**写的，也不知道**何时、为什么**写的。现在只有墓碑，没有原因。
 
-- 验收：`soulbridge list --audit` 显示来源（rule id 或 `llm`）
+- 验收：`soulbridge list --audit` 显示来源（rule id 或 `llm`）+ 时间
 - 消费者：排查误记的用户（你）
 
 ### N3. 长会话提醒
 
-按真实用户回合计数，每 10 轮提醒归档一次。
+借鉴灵枢：按**真实用户回合**计数（不是 system prompt 组装次数），每 10 轮提醒归档一次。
 
 - 验收：第 10、20 轮各出现一次，只出现一步
 - 消费者：DSH 长会话
@@ -88,7 +88,9 @@ DSH 插件保留，因为只有它能拿 `session/event`（自动观察）。
 - 工具：`soul_context` / `soul_observe` / `soul_recall` / `soul_remember`
 - 验收：从任意 MCP 宿主调用 `soul_context` 能拿到同一份注入文本
 
-### N2. 规则写入的三道闸门 + `committed` ✅ 已完成（0.0.14）
+## 已完成（编号归档，不再占号）
+
+### 规则写入的三道闸门 + `committed`（0.0.14）
 
 当前 `observe` 直接写库。借鉴灵枢："记什么、能不能写入由确定性规则裁决，过闸门后
 以 `committed` 确认，绝不假装成功"。
@@ -103,25 +105,17 @@ DSH 插件保留，因为只有它能拿 `session/event`（自动观察）。
 - `ObserveResult` 增加 `committed: boolean`（与实际写入行数一致）
 - 验收：任一闸门拒绝时 `written=0, committed=false`，且能说明是哪道闸门
 
-### N3. 时效与冲突 ✅ 已完成（0.0.15）
+### 时效与冲突（0.0.15）—— **只完成一半**
 
-`Memory` 已有 `validFrom` / `validUntil` / `supersededBy`，但没有任何代码使用。
+`Memory` 已有 `validFrom` / `validUntil` / `supersededBy`。
 
-- 检索时按 `validUntil` 过滤（借鉴其 `validity=true`）
-- 新记忆与旧记忆冲突时，旧的置 `superseded` 并写 `supersededBy`（不删除）
-- 验收：同一事实两次写入（内容不同）→ 旧的变成 superseded，注入只出现新的
+- ✅ 检索时按 `validUntil` 过滤（`sqlite.ts` 的 `query()`；`validity.test.ts` 覆盖）
+- ✅ `supersede()` 三层都有实现（store / sqlite / Soul）
+- ❌ **没有业务调用者**：`observe` / `remember` 不会判冲突，真机 30/30 条 `superseded_by` 为 NULL
+- ❌ `validUntil` 从不被生成（只有类型与映射，没有写入点）
+- 结论：**能力存在，机制没接上**。要补的是"写入时判冲突 → 调 supersede"，不是重写 API
 
-### N4. 审计留痕
-
-每次写入/遗忘记录"谁、何时、为什么"（规则 id 或模型来源）。当前只有墓碑，没有原因。
-
-- 验收：`soulbridge list --audit` 能看到每条记忆的来源规则
-
-### N5. 长会话提醒
-
-借鉴灵枢：按**真实用户回合**计数（不是 system prompt 组装次数），每 10 轮提醒一次归档。
-
-- 验收：第 10、20 轮各出现一次提醒，只出现一步
+> 这条原来标 ✅ 已完成，与代码不符。2026-10-30 体检时降级为部分完成。
 
 ## 之后（Later）
 
