@@ -151,3 +151,29 @@ npm dist-tag ls soulbridge
 | 改 soul 身份 | 编辑 `~/.soulbridge/config.json`，或设 `SOULBRIDGE_SOUL` / `SOULBRIDGE_USER` |
 | 看情绪分析 | `soulbridge affect "我不太开心"` |
 | 用本地小模型分析 | `SOULBRIDGE_AFFECT_LLM_URL=http://localhost:11434/v1 soulbridge affect "..." --analyzer llm` |
+
+## 八、本地 overlay 安装（未发版时怎么上真机）
+
+改了 core 或插件但还没发 npm，要在真机验证时走这条路。**它是一次性的 overlay，不是持久真相。**
+
+profile 位置：`~/.dsh/profiles/desktop/node_modules/`（`soulbridge` + `dsh-plugin-soulbridge`）
+
+```
+1. soulbridge 里 npm run build            # tsc → dist
+2. 备份：把 profile 下两个包目录拷到 node_modules.bak-<时间戳>
+3. 替换 core：dist / adapters / package.json / README / LICENSE / NOTICE
+   → profile/node_modules/soulbridge
+4. 覆盖插件：index.js + package.json → profile/node_modules/dsh-plugin-soulbridge
+5. 重启 DSH
+```
+
+**验证**（重启后）：
+
+- `plugin.log` 出现 `apply() called (v<插件版本>)`
+- 故意说一句纠正话术，日志出现 `correction recorded: <id> layer=structural|rule`
+- `soul.db` 的 `corrections` 表出现行（之前一直是 0）
+
+**坑**：在 profile 目录里跑 `npm install`，会按 `package.json` 的 `^0.0.x` 把 core 覆盖回 npm 上的旧版。
+overlay 装过之后，任何 `npm install` 都要重新走一遍第 3 步。
+
+**回滚**：把 `node_modules.bak-<时间戳>` 里的两个目录拷回去，再重启。

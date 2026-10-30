@@ -19,8 +19,8 @@
 
 | 组件 | 版本 | 状态 |
 |---|---|---|
-| core | 0.0.23 | 本地构建（**未发布 npm**） |
-| dsh-plugin | 0.0.32 | 待装进 profile |
+| core | 0.0.23 | 本地构建（**未发布 npm**），已 overlay 进 profile |
+| dsh-plugin | 0.0.32 | 已 overlay 进 profile，**待重启生效** |
 
 ## 机制速览（都在跑）
 
