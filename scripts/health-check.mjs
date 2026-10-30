@@ -156,6 +156,43 @@ if (!existsSync(pkgPath) || !existsSync(handoffPath)) {
   }
 }
 
+// ---------- 4.5 spec 字段说明覆盖 ----------
+// 规则：代码里出现一列，spec/storage.v0.md 里必须有一句说明。
+const sqliteSrc = readFileSync(join(ROOT, 'packages/core/src/sqlite.ts'), 'utf8');
+const columns = new Set();
+// 基础表：按逗号切分括号内的定义（同一行多个列也能拆开）
+for (const m of sqliteSrc.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)\s*\(([\s\S]*?)\);/g)) {
+  for (const part of m[2].split(',')) {
+    const c = /^\s*([a-z][a-z0-9_]*)\s+(TEXT|INTEGER|REAL|BLOB|NUMERIC)/i.exec(part.replace(/\n/g, ' '));
+    if (c) columns.add(c[1]);
+  }
+}
+// 迁移增列：ensureColumn(db, 'table', 'column', ...) 与 ALTER TABLE ... ADD COLUMN 两种写法
+for (const m of sqliteSrc.matchAll(/ensureColumn\([^,]+,\s*'[^']+',\s*'([a-z][a-z0-9_]*)'/g)) columns.add(m[1]);
+for (const m of sqliteSrc.matchAll(/ADD COLUMN\s+([a-z][a-z0-9_]*)/gi)) columns.add(m[1]);
+
+const storageSpecPath = join(ROOT, 'docs/spec/storage.v0.md');
+if (!existsSync(storageSpecPath)) {
+  add('WARN', '文档', '缺少 spec/storage.v0.md，跳过字段说明检查');
+} else if (columns.size === 0) {
+  add('WARN', '文档', '没能从 sqlite.ts 解析出任何列 —— 检查规则可能已失效');
+} else {
+  const spec = readFileSync(storageSpecPath, 'utf8');
+  const section = spec.slice(Math.max(0, spec.indexOf('## 7.')));
+  const documented = new Set();
+  for (const line of section.split('\n')) {
+    const cell = /^\|\s*([^|]*)\|/.exec(line);
+    if (!cell) continue;
+    for (const m of cell[1].matchAll(/`([a-z][a-z0-9_]*)`/g)) documented.add(m[1]);
+  }
+  const missing = [...columns].filter((c) => !documented.has(c));
+  if (missing.length > 0) {
+    add('FAIL', '文档', `spec 缺 ${missing.length}/${columns.size} 列的说明`, missing.join(', '));
+  } else {
+    add('PASS', '文档', `spec 覆盖全部 ${columns.size} 列`);
+  }
+}
+
 // ---------- 5. 工作区 ----------
 const git = spawnSync('git', ['status', '--short'], { cwd: ROOT, encoding: 'utf8' });
 if (git.status === 0) {
