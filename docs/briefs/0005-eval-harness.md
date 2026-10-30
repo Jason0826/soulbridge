@@ -60,6 +60,8 @@ Google 的 Harness²（见 [references.md](../references.md) 的"2026-10 新增"
 | **必须** | 每次改进声明**采样预算**（参考 Harness²：k 个候选 ≈ 4k 次执行） | 预算写进 case 元数据；超预算的配置不跑 |
 | **必须** | 归因口径：只有 `ON 过且 OFF 挂` 才算记忆的功劳 | 与 soulkernel 的 `ablation` 语义一致 |
 | **必须** | 断言分层：字符串断言优先，judge 只做兜底 | 每条 case 标注用了哪一层 |
+| **必须** | **主指标是 `Pass^k`（k 次全过），不是 `Pass@k`（有一次过）** | 三臂各跑 3 次；只报 `Pass@3` 视为不合格的报表 |
+| **必须** | **评分要能追到三通道证据**：`context().used` / `plugin.log` / 记忆库快照 | 每次评估导出三通道引用，不能只看最终回答 |
 | **必须** | **每个评分器自带基准集与测试**：自己先可信，才配去评别人 | 每个 grader 有 fixture + 单测；判错的 case 进基准集 |
 | **必须** | 可复现：同 commit 连跑两次，归因方向一致 | 记录两次的差异，写进 README |
 | **应该** | 复用 soulkernel 的 case schema（`seed/probe/assert/ablation`） | 能直接读同一份 JSON 结构 |
@@ -77,11 +79,17 @@ Google 的 Harness²（见 [references.md](../references.md) 的"2026-10 新增"
 ## 7. 成功判据（可执行）
 
 ```
-npm test                          → 现有单测全绿，一条不降
-<harness> --arm=off,on --n=1      → 四象限计数表，0 个 infra_error
-同一 commit 连跑 2 次              → mem_helps 的方向一致（数量可抖动）
-<harness> --filter=recall         → 只跑可用的子集，且不因缺能力而误报失败
+npm test                           → 现有单测全绿，一条不降
+<harness> --trials=3               → 同时输出 Pass@3 与 Pass^3；**主指标看 Pass^3**
+<harness> --arm=off,on --trials=3  → 四象限计数表，0 个 infra_error
+同一 commit 连跑 2 次               → 归因方向一致（数量可抖动）
+<harness> --filter=recall          → 只跑可用的子集，且不因缺能力而误报失败
+通道完整性                          → 每次评估导得出 used / 日志 / 库快照三份引用
 ```
+
+> `Pass@k` 会掩盖不稳定：错误注入下它几乎不掉，`Pass^k` 能掉 24 个百分点（Claw-Eval 的实测）。
+> 这条要求会牵动 **ADR 0010 的指标口径**（"重复率下降"要补上"能力 vs 一致性"的区分），
+> 修订放进 S1 收尾后的下一份 ADR，不在本期改。
 
 ## 8. 前置条件与时机
 
