@@ -93,11 +93,13 @@
 
 ## 最近变化（2026-10-30）
 
-- 纠正检测：core 加了 `detectCorrection`（规则 + 结构两层），黄金集 `test/fixtures/correction-golden.ts`；**插件未更新，尚未在真机生效**
-- 文档：新增 [briefs/0005](briefs/0005-eval-harness.md)（评估 harness）、[0006](briefs/0006-emotion-dynamics.md)（情绪动力学）、[0007](briefs/0007-retrieval-scoring.md)（检索骨架）、[0008](briefs/0008-correction-detection.md)（纠正检测）、[0009](briefs/0009-schema-redesign.md)（schema 重设计）
+- 纠正检测：core 加 `detectCorrection`（规则 + 结构两层）+ 黄金集；插件 **0.0.32 已 overlay 并重启生效**，等第一次真实纠正落库
+- **ADR 0026：生命感分层与降级**（L0 数据 / L1 注入 / L2 采样 / L3 生命周期 / L4 器官）—— L0/L1 是正确性前提，L2+ 只是增强
+- schema 设计（[0009](briefs/0009-schema-redesign.md)）新增 L0 三件套：缺口 / 疤痕 / 时间感，都不依赖宿主能力
+- 文档：新增 [briefs/0005](briefs/0005-eval-harness.md)–[0009](briefs/0009-schema-redesign.md)
 - 工具：`scripts/health-check.mjs`（结构体检）、`scripts/field-audit.mjs`（字段审计）
 - 索引：[docs/README.md](README.md) 是文档地图，先看它再决定读哪份
-- 调研：Harness²（Google 递归 harness）的读数写在 [references.md](references.md)
+- 调研：[references.md](references.md) 里有 Harness²、OpenJudge/PawBench、Claw-Eval、digital-life-core 的读数
 
 ## 从哪看起
 
