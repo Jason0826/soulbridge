@@ -34,6 +34,33 @@
 
 ---
 
+## 2026-10 新增：Harness²（Google Cloud AI Research）
+
+- 论文：[arXiv 2610.14224](https://arxiv.org/abs/2610.14224)（2026-10-09）
+- 代码：[google-research/harness2](https://github.com/google-research/harness2)（Apache 2.0）
+- 前作：[Continual Harness](https://arxiv.org/abs/2605.09998)（2026-05，具身 agent，无重置、无人在回路）
+
+一句话：**Agent = Model + Harness**，权重冻结，让 agent 自己改自己的外壳；两层级递归——任务内改执行 harness，任务间更新"改进 harness"。
+
+| 来源 | 原则 | 用在哪 |
+|---|---|---|
+| **Harness²** | **没有 ground truth 也能改进**：提出候选 → 同条件探针 → 按**行为差异**组合（Propose–Probe–Compose），不判对错 | `briefs/0005` 的评估口径：把"找标准答案"换成"两臂受控对比" |
+| **Harness²** | 只有被**执行对比**支撑的教训才入库；证据不足就不写教训 | 印证 `briefs/0007` 的 `evidence` 字段；也是"推测永不记"的外部版本 |
+| **Harness²** | 跨任务只延续"改进库"，**执行 harness 每次重置回 H₀** | 确认 soulbridge 的空位：**没有人在做跨任务的"关于人"的连续性** |
+| **Harness² 的失败分析** | 自我改进会引入退化（9 个回归；selector 曾选 55 分丢掉 95 分） | 支持 RFC 0003 B 阶段的 `pending → 人工确认`，不是保守，是有证据 |
+| **成本公式（独立复核）** | 每个任务至少 `4k` 次执行（k 参考 + 2k 探针 + k 组合），不含编辑器/评判 | 我们的设计规则：**每次自我改进必须声明采样预算**；每轮注入这种高频决策不能照搬 |
+
+**必须防的误读**：Harness² 的 8 个组件里也有一个叫 `memory`，但它是**上下文构建**（类似 AGENTS.md / 项目记忆），
+不是跨会话的个人记忆。**同名不同物**，不能拿它论证"记忆层已被覆盖"。
+
+**数字（会过期，只作量级参考）**：WorkBuddy 平均分 Gemini 3.5 Flash/OpenCode 72.4 → 单步 77.5 → k=5 80.8；
+GLM-5/OpenCode 64.2 → 75.7。给 Gemini 调的 harness 原样交给 GLM-5，代码 58.5 → 75.8（跨模型迁移）。
+
+**局限（来自论文与独立复核）**：判分仍以 LLM judge 为主（WorkBuddy 由 Gemini 3.5 Flash 判，与执行器同族）；
+测试集小（WorkBuddy 用 100 条、JobBench 34 条）；不是处处赢（LAB 上 Meta-Harness 更强）；执行器网络不设限。
+
+---
+
 ## 使用规则
 
 1. **原则可以引用，数字不要引用。**
