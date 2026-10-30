@@ -148,11 +148,92 @@
 
 保留现状。`payload` 不含原文这一条继续守住（隐私底线）。
 
+### 4.5 字段说明（每列一句话）
+
+**规则：新增一个字段，必须同时给出这一句；写不出就是没想清楚。** 实施时这段原样搬进 `spec/storage.v0.md`。
+
+#### `memories`
+
+| 列 | 一句话 |
+|---|---|
+| `id` | 记忆的唯一标识，`mem_<时间前缀>_<随机>` |
+| `soul_id` | 这条记忆属于哪个灵魂 |
+| `user_id` | 谁的经历/事实；单用户时恒为 `local` |
+| `type` | 记忆分型，决定它怎么被使用（见 §4.1.1）|
+| `content` | 记忆正文，一句话陈述，也是注入时展示的唯一内容 |
+| `keywords` | 内容的中文 bigram + 英文词，用于词面相关性；可从 content 重建 |
+| `importance` | 1–10，值不值得占一个注入位 |
+| `evidence` | 证据来源：`correction` / `user` / `rule` / `llm`（新增）|
+| `source_ref` | 指回产生它的对话或纠正，用于审计（新增）|
+| `recall_count` | 被 `recall()` 命中的累计次数 |
+| `last_recalled_at` | 最近一次被召回的时间，供衰减派生使用 |
+| `valid_from` | 事实**开始成立**的时间，可能远早于写入时间 |
+| `valid_until` | 事实**不再成立**的时间，由取代路径写入 |
+| `superseded_by` | 取代它的新记忆 id；与 `valid_until` 同一次写入 |
+| `created_at` | 这条何时被写进库 |
+| `updated_at` | 最近一次修改时间，跨设备合并用 |
+| `deleted_at` | 墓碑时间；删除不物理删行 |
+| `device_id` | 写入它的设备，跨设备合并用 |
+
+#### `corrections`
+
+| 列 | 一句话 |
+|---|---|
+| `id` | 纠正证据的唯一标识 |
+| `soul_id` / `user_id` | 归属 |
+| `at` | 这条纠正被**识别**的时间（不是发生时间）|
+| `user_text` | 用户原话，证据本体，不做任何改写 |
+| `assistant_text` | 被纠正的那一轮回答 |
+| `layer` | 哪一层判出来的：`rule` / `structural` / `llm` |
+| `signal` | 具体信号：`explicit` / `negation` / `replacement` / `meta` |
+| `confidence` | 判定置信度 0–1 |
+| `target_memory_id` | 能定位时，指回被纠正的那条记忆 |
+| `marker` | 命中的词或模式，用来解释"为什么记这条" |
+| `device_id` | 写入设备 |
+
+#### `emotions`
+
+| 列 | 一句话 |
+|---|---|
+| `passion` | 热情：主动投入的程度 |
+| `bond` | 联结：关系亲近度 |
+| `tension` | 张力：紧张与谨慎程度；被纠正时推高 |
+| `self_regard` | 自我评价：对自己输出可靠性的判断 |
+| `curiosity` | 好奇：主动探索的倾向 |
+| `contentment` | 满足：倾向收敛、少确认的程度 |
+| `updated_at` | 最近一次更新的时间 |
+
+> 六维各 −2~+2，基线 0.3（`tension` 0.1）。它们不改"说什么"，只改"怎么说"（ADR 0017）。
+
+#### `affect_samples`
+
+| 列 | 一句话 |
+|---|---|
+| `soul_id` / `user_id` / `at` | 归属与采样时间 |
+| `analyzer` | 哪个分析器产出的（`lexicon` / `llm`）|
+| `dominant` | 主导**情绪族**（joy/anger/…），**不表示正负** |
+| `intensity` | 强度 1–9 |
+| `valence` | 极性加权值 −1~+1，负值代表负面 |
+| `arousal` | 唤醒度 0–1 |
+| `confidence` | 判定置信度 0–1；低于门槛不注入 |
+| `payload` | 完整信号 JSON，**不含用户原文**（隐私底线）|
+| `device_id` | 采样设备 |
+
+#### `souls` / `schema_meta`
+
+| 列 | 一句话 |
+|---|---|
+| `soul_id` | 灵魂标识，一个用户一个 |
+| `name` | 注入时使用的自称 |
+| `creator` | 创建者；目前无写入 |
+| `created_at` | 相识时间，用于"相处了 N 天" |
+| `k` / `v` | schema 版本号（当前 3）|
+
 ## 5. 需求
 
 | 级别 | 需求 | 验收 |
 |---|---|---|
-| **必须** | 每一列都写得出"谁写、谁读、决定什么" | 本文件 §4 的表格必须无空格 |
+| **必须** | 每一列都写得出"谁写、谁读、决定什么"，以及**一句语义说明** | 本文件 §4 的表格与 §4.5 无空格 |
 | **必须** | 没有任何列在真机上是"全 NULL 且无写入路径" | `field-audit` 输出无此项 |
 | **必须** | 迁移可回滚，迁移前后 `PRAGMA integrity_check` 通过 | 迁移测试 |
 | **应该** | `valid_until` / `superseded_by` 要么有写入路径，要么删掉 | 二选一并落地 |
