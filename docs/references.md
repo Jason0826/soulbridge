@@ -61,6 +61,30 @@ GLM-5/OpenCode 64.2 → 75.7。给 Gemini 调的 harness 原样交给 GLM-5，�
 
 ---
 
+## 2026-10 新增：OpenJudge / PawBench（AgentScope）
+
+- 框架：[agentscope-ai/openjudge](https://github.com/agentscope-ai/openjudge)（Apache 2.0，Python）
+- 基准：[PawBench](https://github.com/agentscope-ai/PawBench)（Model × Harness 协同评测）
+- 论文：[Voting with the Graph（TCR）](https://arxiv.org/abs/2510.15514)
+
+一句话：**OpenJudge 讲怎么评，Harness² 讲怎么改。** 它提供 50+ 生产级评分器，包括智能体维度的 `Memory` / `Plan` / `Trajectory`，
+评的不只是最终答案，还有轨迹和记忆。
+
+| 来源 | 原则 | 用在哪 |
+|---|---|---|
+| **OpenJudge** | **评分器必须自带基准集与测试**，50+ 个 grader 靠这个保证可信 | `briefs/0005` 需求：每个 grader 配 fixture + 单测 |
+| **OpenJudge** | 没有金标准也能评：从标注样本**自动学出 rubric**（`IterativeRubricsGenerator`） | `briefs/0005` §3.1 的第三条路——"说不清标准，但能标 20 条" |
+| **PawBench** | **Model × Harness × 评分器**三分 + 切片诊断，定位回归来自哪一层 | `briefs/0005` 开放问题 6；将来做归因 |
+| **PawBench v1.0** | 仅 harness 设计就能让**同一模型**分数差 10+ 分，堪比一次模型升级 | 与 Harness² **独立印证**"外壳比模型重要"；对外表述可用 |
+| **Voting with the Graph** | LLM judge 的**偏好环率 5–9%**；CIR 指标可量化噪声，传递性可去噪 | `briefs/0005` 开放问题 2：judge 可信度按 CIR 量化，超标就不许当兜底 |
+
+**边界**：Python 生态、需要模型调用、50+ 评分器大半（多模态、代码语法）与我们无关。**借方法，不引入依赖。**
+
+**顺带看到的一处文档腐烂**：OpenJudge README 里那篇论文的标题还是旧名 *"Taming the Judge"*，arXiv 上已经改成
+*Voting with the Graph*。连一个大项目的 README 都会滞后——所以本仓库的那几条检查（断链 / 索引 / 时间炸弹）方向是对的。
+
+---
+
 ## 使用规则
 
 1. **原则可以引用，数字不要引用。**

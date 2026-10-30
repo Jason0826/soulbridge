@@ -60,6 +60,7 @@ Google 的 Harness²（见 [references.md](../references.md) 的"2026-10 新增"
 | **必须** | 每次改进声明**采样预算**（参考 Harness²：k 个候选 ≈ 4k 次执行） | 预算写进 case 元数据；超预算的配置不跑 |
 | **必须** | 归因口径：只有 `ON 过且 OFF 挂` 才算记忆的功劳 | 与 soulkernel 的 `ablation` 语义一致 |
 | **必须** | 断言分层：字符串断言优先，judge 只做兜底 | 每条 case 标注用了哪一层 |
+| **必须** | **每个评分器自带基准集与测试**：自己先可信，才配去评别人 | 每个 grader 有 fixture + 单测；判错的 case 进基准集 |
 | **必须** | 可复现：同 commit 连跑两次，归因方向一致 | 记录两次的差异，写进 README |
 | **应该** | 复用 soulkernel 的 case schema（`seed/probe/assert/ablation`） | 能直接读同一份 JSON 结构 |
 | **应该** | case 的终态**不可猜**（防止 OFF 臂靠默认值蒙对） | 每个 case 有 note 说明为什么猜不到 |
@@ -95,10 +96,11 @@ npm test                          → 现有单测全绿，一条不降
 ## 9. 开放问题
 
 1. **消费者选哪个**：stub 模型（可控、便宜、但测不到模型实际怎么用注入）vs 真实模型（真实、贵、不可复现）？
-2. **judge 的可信度**：soulkernel 记过"judge 对多条件/否定判不稳"。要不要先做 judge 与人工标注的一致性验证？
+2. **judge 的可信度**：soulkernel 记过"judge 对多条件/否定判不稳"。**量化方法已定**：用 OpenJudge 那篇 *Voting with the Graph*（TCR）的 **CIR（Cycle Incidence Rate）** —— 同一批样本让 judge 两两比，统计出现 A>B>C>A 这种偏好环的比例（SOTA 模型是 5–9%）。**CIR 高于阈值就不许把 judge 当兜底。**
 3. **case 数量**：先跑多少条算有意义？soulkernel 的经验是 52 条 × N=3，抖动仍明显。
 4. **两臂怎么隔离**：soulbridge 是单用户，ON/OFF 需要两个独立 DB 文件还是两个 `soulId`？后者更接近"同一用户的空白版"。
 5. **要不要先做"注入内容断言"这一层**：它测的是 soulbridge 自己的职责（注入对不对），比回答断言便宜一个数量级，但证明不了"有用"。
+6. **回归归因怎么分**：借 PawBench 的三分法，把一次变化归到 **模型 / 注入策略 / 评分器** 三者之一，而不是笼统说"变差了"。
 
 ## 10. 附：soulkernel case 结构（供设计时参考）
 
