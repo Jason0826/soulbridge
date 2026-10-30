@@ -12,7 +12,7 @@
  * 可迁移的是检查项清单，不是这个文件——见 ADR 0019 关于"经验 vs 工具"的边界。
  */
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
-import { join, relative, dirname } from 'node:path';
+import { join, relative, dirname, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
@@ -191,6 +191,70 @@ if (!existsSync(storageSpecPath)) {
   } else {
     add('PASS', '文档', `spec 覆盖全部 ${columns.size} 列`);
   }
+}
+
+// ---------- 4.6 文档链接 / 索引 / 时间炸弹 ----------
+// 文档不会自己红，所以要给它制造失败点：断链、没进索引、测试里的固定日期过期。
+const docsRoot = join(ROOT, 'docs');
+const docFiles2 = walk(docsRoot, '.md');
+const missingLinks = [];
+const linksByFile = new Map();
+
+for (const file of docFiles2) {
+  // 先剥掉代码块，里面的 [x](y) 不是链接
+  const raw = readFileSync(file, 'utf8').replace(/```[\s\S]*?```/g, '');
+  const targets = [];
+  for (const m of raw.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
+    const rawTarget = m[1].trim();
+    if (!rawTarget || /^(https?:|mailto:)/i.test(rawTarget)) continue;
+    let target = rawTarget.split('#')[0].split('?')[0];
+    if (!target) continue; // 纯锚点
+    try {
+      target = decodeURI(target);
+    } catch {
+      /* 保持原样 */
+    }
+    const abs = resolve(dirname(file), target);
+    targets.push(abs);
+    if (!existsSync(abs)) missingLinks.push(`${relative(ROOT, file)} → ${rawTarget}`);
+  }
+  linksByFile.set(file, targets);
+}
+
+if (missingLinks.length > 0) {
+  add('FAIL', '文档', `${missingLinks.length} 个断链`, missingLinks.slice(0, 8).join('; '));
+} else {
+  add('PASS', '文档', `文档内链全部有效（${docFiles2.length} 份）`);
+}
+
+// 索引覆盖：docs/ 顶层的文档必须能从 README 点到
+const readmePath = join(docsRoot, 'README.md');
+if (!existsSync(readmePath)) {
+  add('WARN', '文档', '缺少 docs/README.md，无法检查索引覆盖');
+} else {
+  const indexed = new Set(linksByFile.get(readmePath) ?? []);
+  const topLevelDocs = docFiles2.filter((f) => dirname(f) === docsRoot && basename(f) !== 'README.md');
+  const unindexed = topLevelDocs.filter((f) => !indexed.has(f)).map((f) => basename(f));
+  if (unindexed.length > 0) add('WARN', '文档', `顶层文档未进 README 索引：${unindexed.join(', ')}`);
+  else add('PASS', '文档', `顶层文档均已进索引（${topLevelDocs.length} 份）`);
+}
+
+// 时间炸弹：测试里写死的日期，超过 30 天就会变成"过去"
+const FIXTURE_MAX_AGE_MS = 30 * 86_400_000;
+const staleFixtures = [];
+for (const f of walk(join(ROOT, 'packages/core/test'), '.test.ts')) {
+  const text = readFileSync(f, 'utf8');
+  for (const m of text.matchAll(/Date\.parse\('(\d{4}-\d{2}-\d{2})/g)) {
+    const at = Date.parse(m[1]);
+    if (Number.isFinite(at) && Date.now() - at > FIXTURE_MAX_AGE_MS) {
+      staleFixtures.push(`${relative(ROOT, f)}: ${m[1]}`);
+    }
+  }
+}
+if (staleFixtures.length > 0) {
+  add('WARN', '测试', `${staleFixtures.length} 处写死的日期已超过 30 天，确认是否仍在断言"未来"`, staleFixtures.join('; '));
+} else {
+  add('PASS', '测试', '测试里没有过期 30 天以上的固定日期');
 }
 
 // ---------- 5. 工作区 ----------

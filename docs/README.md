@@ -18,6 +18,8 @@
 | 怎么发版、出问题怎么处理 | [runbook.md](runbook.md) |
 | 质量红线、设计交付四问 | [quality.md](quality.md) |
 | 架构总览 | [architecture.md](architecture.md) |
+| 外部证据与阅读笔记 | [references.md](references.md) |
+| [protocol.md](protocol.md) | 占位文件，只为不让旧链接 404；协议内容在 [spec/protocol.v0.md](spec/protocol.v0.md) |
 | 新会话从哪开始 | [handoff.md](handoff.md) |
 
 ## 两个"锚"的分工
