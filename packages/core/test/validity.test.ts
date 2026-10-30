@@ -42,7 +42,9 @@ test('过期记忆：不进 context，但仍在 list 里', () => {
 test('未过期记忆正常注入', () => {
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 'xiaoling', userId: 'u1' });
-  store.put(memory({ id: 'valid', content: '发布窗口是周三', validUntil: NOW + 86_400_000 }));
+  // 过期判定用的是真实的 Date.now()，所以这条必须相对真实时间取未来。
+  // 用固定的 NOW 会让它在 NOW+1 天之后自己失效（2026-10-30 已经发生过一次）。
+  store.put(memory({ id: 'valid', content: '发布窗口是周三', validUntil: Date.now() + 86_400_000 }));
   assert.ok(soul.context({ track: false }).text.includes('发布窗口是周三'));
   store.close();
 });
