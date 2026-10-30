@@ -1,6 +1,6 @@
 # 需求说明：纠正检测（规则 / 结构 / LLM 三层）
 
-- 状态：Draft
+- 状态：**部分实现**（2026-10-30）—— core 已落地 `detectCorrection`（L1+L2，黄金集 3/6、精度 100%）；**插件未更新，真机 `corrections` 仍为 0 行**；L3 未做
 - 日期：2026-10-30
 - 后续：RFC 0003（自我提炼 A/B 阶段）、ADR 0018（repeatCorrection 主指标）、`briefs/0005`（harness）
 - 起因：`corrections` 表在真实使用中一直是 0 行

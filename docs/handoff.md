@@ -42,6 +42,19 @@
 - **没有"证据等级"**：不知道一条记忆是用户原话、规则抽的，还是模型归纳的（[briefs/0007](briefs/0007-retrieval-scoring.md)）
 - **schema 有死字段**：`visibility` 恒为 private、`vividness` 永不变化、`valid_until`/`superseded_by` 全 NULL。重设计见 [briefs/0009](briefs/0009-schema-redesign.md)
 
+## 设计债（2026-10-30 盘点）
+
+**设计已经跑在实现前面**：`briefs/0005`–`0009` 共 **607 行设计**，对应落地约 **80 行**（`detectCorrection`）。
+其余全部是 Draft，没有一行实现。这不是问题，但要记着——**声明多于能力时，最容易高估自己**。
+
+| 设计 | 状态 | 前置条件 |
+|---|---|---|
+| 0005 评估 harness | Draft | 需要消费者；S1 收尾后 |
+| 0006 情绪动力学 | Draft | 先修状态饱和（bug 级） |
+| 0007 检索骨架 | Draft | 需要 `evidence` 写入路径 |
+| 0008 纠正检测 | **部分实现**（core 有、插件未更新） | 插件重装 + 重启 |
+| 0009 schema 重设计 | Draft | 先定 `valid_until` 写入路径 |
+
 ## 约定（必须遵守）
 
 1. 改动前解释：为什么、怎么做、影响
