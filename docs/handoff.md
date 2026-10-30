@@ -66,6 +66,7 @@
 | 回滚插件 | `dsh-plugin-soulbridge/scripts/rollback.ps1`；profile 清单工具 `profile-manifest.ps1` |
 | 结构体检 | `soulbridge/scripts/health-check.mjs` |
 | 字段审计 | `soulbridge/scripts/field-audit.mjs` |
+| **观察报告** | `soulbridge/scripts/observation-report.mjs`（只读，算 S1 四条判据的数据）|
 | 真实数据 | `~/.soulbridge/soul.db`、`plugin.log`、`restart.log` |
 
 **重启脚本的关键约束**：
