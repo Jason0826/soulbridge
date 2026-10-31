@@ -46,6 +46,7 @@ import type {
   ReflectResult,
   ScoredMemory,
   Turn,
+  TurnPair,
   Visibility,
 } from './types.ts';
 import type { SoulStore } from './store.ts';
@@ -182,6 +183,48 @@ export class Soul {
 
   corrections(limit = 20): Correction[] {
     return this.store.recentCorrections(this.soulId, this.userId, limit);
+  }
+
+  /**
+   * Store one exchange (RFC 0007). Idempotent on `(sessionId, turn)`: a repeat is
+   * ignored by the store, so this returns nothing — there is no id worth handing
+   * back that would also be correct on a repeat.
+   */
+  recordTurnPair(input: {
+    sessionId: string;
+    turn: number;
+    userText: string;
+    assistantText: string;
+    at?: number;
+    metadata?: Record<string, unknown>;
+  }): void {
+    const at = input.at ?? Date.now();
+    this.store.putTurnPair({
+      id: `tp_${at.toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+      soulId: this.soulId,
+      userId: this.userId,
+      sessionId: input.sessionId,
+      turn: input.turn,
+      at,
+      userText: input.userText,
+      assistantText: input.assistantText,
+      metadata: input.metadata ?? {},
+      createdAt: at,
+    });
+  }
+
+  /** Recall exchanges, scored against `query` when it is non-empty. */
+  recallTurnPairs(query: string, limit = 5): TurnPair[] {
+    return this.store.recallTurnPairs({
+      soulId: this.soulId,
+      userId: this.userId,
+      query,
+      limit,
+    });
+  }
+
+  countTurnPairs(): number {
+    return this.store.countTurnPairs(this.soulId, this.userId);
   }
 
   /** Verb 3: on demand. */
