@@ -84,6 +84,30 @@ export interface TurnPairSpec {
   since?: number;
 }
 
+/**
+ * One conversation, derived from `turn_pairs` (briefs/0011). It is a boundary,
+ * not a stored entity: the same data regrouped, so nothing new to migrate.
+ */
+export interface SessionSummary {
+  sessionId: string;
+  /** First and last exchange times in this session. */
+  start: number;
+  end: number;
+  /** Number of exchanges recorded for this session. */
+  turns: number;
+}
+
+/**
+ * What a new session inherits from the previous one: when it happened, and the
+ * first plus last exchanges. Boundaries and the tail are what recall hangs on
+ * (event segmentation), not the middle.
+ */
+export interface SessionHandoff {
+  session: SessionSummary;
+  first: TurnPair;
+  last: TurnPair[];
+}
+
 /** Six dimensions, each -2..+2. Baseline is slightly positive. */
 export interface Emotion {
   passion: number;

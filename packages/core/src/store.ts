@@ -9,6 +9,7 @@ import type {
   Identity,
   Memory,
   QuerySpec,
+  SessionSummary,
   TurnPair,
   TurnPairSpec,
 } from './types.ts';
@@ -31,7 +32,13 @@ export interface SoulStore {
   putTurnPair(pair: TurnPair): void;
   /** Exchanges visible to `userId`; scored against `spec.query` when given. */
   recallTurnPairs(spec: TurnPairSpec): TurnPair[];
-  countTurnPairs(soulId: string, userId: string): number;
+  countTurnPairs(soulId: string, userId: string, sessionId?: string): number;
+  /** Conversations derived from pairs, most recent first. */
+  listSessions(soulId: string, userId: string, limit: number): SessionSummary[];
+  /** Exchanges of one conversation, oldest first. */
+  sessionPairs(sessionId: string, soulId: string, userId: string, limit: number): TurnPair[];
+  /** Last exchanges of one conversation, oldest first. */
+  sessionTail(sessionId: string, soulId: string, userId: string, limit: number): TurnPair[];
 
   /** Recall bookkeeping: recallCount++, lastRecalledAt = now. */
   touch(ids: string[], now?: number): void;

@@ -16,6 +16,7 @@ import type {
   Identity,
   Memory,
   QuerySpec,
+  SessionSummary,
   TurnPair,
   TurnPairSpec,
 } from './types.ts';
@@ -542,11 +543,53 @@ export function openSqlite(file: string): SoulStore {
         .map((scored) => scored.pair);
     },
 
-    countTurnPairs(soulId: string, userId: string): number {
-      const row = db
-        .prepare('SELECT COUNT(*) AS n FROM turn_pairs WHERE soul_id = ? AND user_id = ?')
-        .get(soulId, userId) as Row;
+    countTurnPairs(soulId: string, userId: string, sessionId?: string): number {
+      const row = sessionId
+        ? (db
+            .prepare('SELECT COUNT(*) AS n FROM turn_pairs WHERE soul_id = ? AND user_id = ? AND session_id = ?')
+            .get(soulId, userId, sessionId) as Row)
+        : (db
+            .prepare('SELECT COUNT(*) AS n FROM turn_pairs WHERE soul_id = ? AND user_id = ?')
+            .get(soulId, userId) as Row);
       return Number(row.n);
+    },
+
+    listSessions(soulId: string, userId: string, limit: number): SessionSummary[] {
+      const rows = db
+        .prepare(
+          `SELECT session_id, MIN(at) AS start, MAX(at) AS end, COUNT(*) AS turns
+           FROM turn_pairs WHERE soul_id = ? AND user_id = ?
+           GROUP BY session_id ORDER BY MAX(at) DESC LIMIT ?`,
+        )
+        .all(soulId, userId, limit) as Row[];
+      return rows.map((row) => ({
+        sessionId: String(row.session_id),
+        start: Number(row.start),
+        end: Number(row.end),
+        turns: Number(row.turns),
+      }));
+    },
+
+    sessionPairs(sessionId: string, soulId: string, userId: string, limit: number): TurnPair[] {
+      const rows = db
+        .prepare(
+          `SELECT * FROM turn_pairs
+           WHERE soul_id = ? AND user_id = ? AND session_id = ?
+           ORDER BY at ASC LIMIT ?`,
+        )
+        .all(soulId, userId, sessionId, limit) as Row[];
+      return rows.map(rowToTurnPair);
+    },
+
+    sessionTail(sessionId: string, soulId: string, userId: string, limit: number): TurnPair[] {
+      const rows = db
+        .prepare(
+          `SELECT * FROM turn_pairs
+           WHERE soul_id = ? AND user_id = ? AND session_id = ?
+           ORDER BY at DESC LIMIT ?`,
+        )
+        .all(soulId, userId, sessionId, limit) as Row[];
+      return rows.map(rowToTurnPair).reverse();
     },
 
     close(): void {

@@ -46,6 +46,8 @@ import type {
   ReflectResult,
   ScoredMemory,
   Turn,
+  SessionHandoff,
+  SessionSummary,
   TurnPair,
   Visibility,
 } from './types.ts';
@@ -225,6 +227,33 @@ export class Soul {
 
   countTurnPairs(): number {
     return this.store.countTurnPairs(this.soulId, this.userId);
+  }
+
+  /** Conversations, most recent first, derived from the recorded exchanges. */
+  sessions(limit = 5): SessionSummary[] {
+    return this.store.listSessions(this.soulId, this.userId, limit);
+  }
+
+  /**
+   * What a new session inherits from the previous conversation.
+   *
+   * Measured: naive first/last picked "ok" and "停" — boundaries are not the
+   * same as signals. So the topic is the longest user message of that session
+   * (shortest messages carry no topic), and the tail is the last few exchanges
+   * whose user message has substance.
+   */
+  handoff(currentSessionId: string, tail = 2): SessionHandoff | null {
+    const sessions = this.store.listSessions(this.soulId, this.userId, 20);
+    const previous = sessions.find((s) => s.sessionId !== currentSessionId);
+    if (!previous) return null;
+    const pairs = this.store.sessionPairs(previous.sessionId, this.soulId, this.userId, 500);
+    if (pairs.length === 0) return null;
+
+    const SUBSTANTIVE = 4;
+    const substantial = pairs.filter((p) => p.userText.trim().length >= SUBSTANTIVE);
+    const topic = [...substantial].sort((a, b) => b.userText.length - a.userText.length)[0] ?? pairs[0];
+    const last = (substantial.length > 0 ? substantial : pairs).slice(-tail);
+    return { session: previous, first: topic, last };
   }
 
   /** Verb 3: on demand. */
