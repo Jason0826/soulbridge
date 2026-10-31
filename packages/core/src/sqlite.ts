@@ -515,7 +515,9 @@ export function openSqlite(file: string): SoulStore {
     },
 
     recallTurnPairs(spec: TurnPairSpec): TurnPair[] {
-      const limit = spec.limit ?? 20;
+      // No cap by default: every related exchange is returned (bounded only by
+      // RECALL_CANDIDATES, which limits rows read, not rows injected).
+      const limit = spec.limit ?? RECALL_CANDIDATES;
       const rows = db
         .prepare(
           `SELECT * FROM turn_pairs
