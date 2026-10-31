@@ -187,6 +187,155 @@ export interface TurnFindResult {
   truncated: boolean;
 }
 
+/* ------------------------------------------------------------------ *
+ * Entities, facts, slots, gaps (spec/model.v0.md)
+ *
+ * A fact is the connection between things; a slot is one of its ends. Slots
+ * hold an entity, a number, a piece of text, or another fact — the last one is
+ * how replies and causes stay connected without a new table.
+ * ------------------------------------------------------------------ */
+
+export type EntityType = 'person' | 'thing' | 'place' | 'self';
+
+export interface Entity {
+  id: string;
+  soulId: string;
+  userId: string;
+  /** person / thing / place / self. `self` is the soul itself. */
+  type: EntityType;
+  name: string;
+  aliases: string[];
+  /** Open container: whatever the events taught us, no fixed columns (0010 §8). */
+  attrs: Record<string, unknown>;
+  firstSeenAt: number;
+  lastMentionedAt: number;
+  createdAt: number;
+}
+
+export interface EntitySpec {
+  id?: string;
+  soulId: string;
+  userId: string;
+  type: EntityType;
+  name: string;
+  aliases?: string[];
+  attrs?: Record<string, unknown>;
+  /** When it was mentioned; defaults to now. Updates lastMentionedAt. */
+  seenAt?: number;
+}
+
+export interface EntityQuery {
+  soulId: string;
+  userId: string;
+  /** Substring over name and aliases. */
+  name?: string;
+  type?: EntityType;
+  limit?: number;
+}
+
+export type SlotValue =
+  | { kind: 'entity'; entityId: string }
+  | { kind: 'number'; value: number }
+  | { kind: 'text'; value: string }
+  | { kind: 'fact'; factId: string };
+
+/** One named end of a fact, e.g. `离职者` → 小林, `裁员人数` → 300. */
+export interface FactSlot {
+  slot: string;
+  value: SlotValue;
+}
+
+export type FactStatus = 'open' | 'kept' | 'broken' | 'superseded' | 'none';
+export type FactSource = 'experienced' | 'told' | 'inferred';
+
+export interface Fact {
+  id: string;
+  soulId: string;
+  userId: string;
+  statement: string;
+  /** Free text ("裁员" / "道歉" / "请求"); code never branches on it. */
+  typeName?: string;
+  /** Where it holds: `world`, `self`, or an entity id (in someone's mind). */
+  holder: string;
+  /** Event time. Optional: a preference is a standing fact without one. */
+  at?: number;
+  /** The fuzzy time expression as said ("上周三"), when `at` is approximate. */
+  atText?: string;
+  atEnd?: number;
+  placeId?: string;
+  status: FactStatus;
+  confidence: number;
+  source: FactSource;
+  sourceTurnId?: string;
+  supersededBy?: string;
+  createdAt: number;
+  slots: FactSlot[];
+}
+
+export interface FactSpec {
+  id?: string;
+  soulId: string;
+  userId: string;
+  statement: string;
+  typeName?: string;
+  holder?: string;
+  at?: number;
+  atText?: string;
+  atEnd?: number;
+  placeId?: string;
+  status?: FactStatus;
+  confidence?: number;
+  source?: FactSource;
+  sourceTurnId?: string;
+  supersededBy?: string;
+  slots?: FactSlot[];
+}
+
+export interface FactQuery {
+  soulId: string;
+  userId: string;
+  /** Only facts that have a slot pointing at this entity. */
+  entityId?: string;
+  since?: number;
+  until?: number;
+  status?: FactStatus;
+  /** Only facts whose holder is this (world / self / entity id). */
+  holder?: string;
+  limit?: number;
+}
+
+export type GapStatus = 'open' | 'closed' | 'dropped';
+
+/** Something the soul wants to know and does not (0009 §4.6.1). */
+export interface Gap {
+  id: string;
+  soulId: string;
+  userId: string;
+  aboutEntityId?: string;
+  aboutFactId?: string;
+  topic: string;
+  /** Grows with time; the highest one is the one worth asking about. */
+  tension: number;
+  status: GapStatus;
+  openedAt: number;
+  closedAt?: number;
+  closedByFactId?: string;
+}
+
+export interface GapSpec {
+  id?: string;
+  soulId: string;
+  userId: string;
+  aboutEntityId?: string;
+  aboutFactId?: string;
+  topic: string;
+  tension?: number;
+  status?: GapStatus;
+  openedAt?: number;
+  closedAt?: number;
+  closedByFactId?: string;
+}
+
 /** Six dimensions, each -2..+2. Baseline is slightly positive. */
 export interface Emotion {
   passion: number;

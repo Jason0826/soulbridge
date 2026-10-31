@@ -19,6 +19,15 @@ import type {
   SessionSummary,
   TurnPair,
   TurnPairSpec,
+  Entity,
+  EntityQuery,
+  EntitySpec,
+  Fact,
+  FactQuery,
+  FactSlot,
+  FactSpec,
+  Gap,
+  GapSpec,
   TurnFindResult,
   TurnFindSpec,
   TurnSpec,
@@ -27,7 +36,7 @@ import type {
 import type { SoulStore } from './store.ts';
 import { bm25, buildCorpusStats, tokenize } from './scoring.ts';
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 /** How many recent pairs are considered before scoring. Bounded so recall stays O(candidates). */
 const RECALL_CANDIDATES = 500;
 export const AFFECT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -160,6 +169,74 @@ CREATE TABLE IF NOT EXISTS steps (
   at                INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_steps_turn ON steps(turn_id, idx);
+
+-- v6: the model proper (spec/model.v0.md). A fact is a connection; slots are
+-- its ends; gaps are the connections that have not happened yet.
+CREATE TABLE IF NOT EXISTS entities (
+  id                TEXT PRIMARY KEY,
+  soul_id           TEXT NOT NULL,
+  user_id           TEXT NOT NULL,
+  type              TEXT NOT NULL,
+  name              TEXT NOT NULL,
+  aliases           TEXT NOT NULL DEFAULT '[]',
+  attrs             TEXT NOT NULL DEFAULT '{}',
+  first_seen_at     INTEGER NOT NULL,
+  last_mentioned_at INTEGER NOT NULL,
+  created_at        INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_entities_name
+  ON entities(soul_id, user_id, type, name);
+CREATE INDEX IF NOT EXISTS idx_entities_recent
+  ON entities(soul_id, user_id, last_mentioned_at DESC);
+
+CREATE TABLE IF NOT EXISTS facts (
+  id             TEXT PRIMARY KEY,
+  soul_id        TEXT NOT NULL,
+  user_id        TEXT NOT NULL,
+  statement      TEXT NOT NULL,
+  type_name      TEXT,
+  holder         TEXT NOT NULL DEFAULT 'world',
+  at             INTEGER,
+  at_text        TEXT,
+  at_end         INTEGER,
+  place_id       TEXT,
+  status         TEXT NOT NULL DEFAULT 'none',
+  confidence     REAL NOT NULL DEFAULT 1,
+  source         TEXT NOT NULL DEFAULT 'experienced',
+  source_turn_id TEXT,
+  superseded_by  TEXT,
+  created_at     INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_facts_scope ON facts(soul_id, user_id, at DESC);
+CREATE INDEX IF NOT EXISTS idx_facts_status ON facts(soul_id, user_id, status);
+
+CREATE TABLE IF NOT EXISTS fact_slots (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  fact_id     TEXT NOT NULL,
+  slot        TEXT NOT NULL,
+  value_type  TEXT NOT NULL,
+  entity_id   TEXT,
+  value_num   REAL,
+  value_text  TEXT,
+  ref_fact_id TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_fact_slots_fact ON fact_slots(fact_id);
+CREATE INDEX IF NOT EXISTS idx_fact_slots_entity ON fact_slots(entity_id);
+
+CREATE TABLE IF NOT EXISTS gaps (
+  id                TEXT PRIMARY KEY,
+  soul_id           TEXT NOT NULL,
+  user_id           TEXT NOT NULL,
+  about_entity_id   TEXT,
+  about_fact_id     TEXT,
+  topic             TEXT NOT NULL,
+  tension           REAL NOT NULL DEFAULT 0,
+  status            TEXT NOT NULL DEFAULT 'open',
+  opened_at         INTEGER NOT NULL,
+  closed_at         INTEGER,
+  closed_by_fact_id TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_gaps_open ON gaps(soul_id, user_id, status, tension DESC);
 `;
 
 type Row = Record<string, unknown>;
@@ -298,6 +375,7 @@ export function openSqlite(file: string): SoulStore {
     if (version < 2) upgradeToV2(db);
     if (version < 3) upgradeToV3(db);
     if (version < 5) upgradeToV5(db);
+    // v6 adds tables only; SCHEMA creates them on every open, nothing to copy.
     setVersion(db, SCHEMA_VERSION);
   }
 
@@ -655,6 +733,214 @@ export function openSqlite(file: string): SoulStore {
         .all(...args, limit) as Row[];
       return { turns: rows.map(rowToTurnPair), total, truncated: total > limit };
     },
+
+    /* ---------------- entities ---------------- */
+
+    putEntity(spec: EntitySpec): Entity {
+      const now = spec.seenAt ?? Date.now();
+      const id = spec.id ?? `en_${spec.type}_${encodeURIComponent(spec.name)}`;
+      withRetry(() =>
+        db
+          .prepare(
+            `INSERT INTO entities
+               (id, soul_id, user_id, type, name, aliases, attrs,
+                first_seen_at, last_mentioned_at, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(soul_id, user_id, type, name) DO UPDATE SET
+               last_mentioned_at = excluded.last_mentioned_at,
+               aliases = excluded.aliases,
+               attrs = excluded.attrs`,
+          )
+          .run(
+            id,
+            spec.soulId,
+            spec.userId,
+            spec.type,
+            spec.name,
+            JSON.stringify(spec.aliases ?? []),
+            JSON.stringify(spec.attrs ?? {}),
+            now,
+            now,
+            now,
+          ),
+      );
+      const row = db
+        .prepare('SELECT * FROM entities WHERE soul_id = ? AND user_id = ? AND type = ? AND name = ?')
+        .get(spec.soulId, spec.userId, spec.type, spec.name) as Row;
+      return rowToEntity(row);
+    },
+
+    entity(id: string): Entity | null {
+      const row = db.prepare('SELECT * FROM entities WHERE id = ?').get(id) as Row | undefined;
+      return row ? rowToEntity(row) : null;
+    },
+
+    findEntities(query: EntityQuery): Entity[] {
+      const where = ['soul_id = ?', 'user_id = ?'];
+      const args: Array<string | number> = [query.soulId, query.userId];
+      if (query.type) {
+        where.push('type = ?');
+        args.push(query.type);
+      }
+      if (query.name) {
+        where.push("(name LIKE ? ESCAPE '\\' OR aliases LIKE ? ESCAPE '\\')");
+        const needle = `%${query.name.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+        args.push(needle, needle);
+      }
+      const rows = db
+        .prepare(
+          `SELECT * FROM entities WHERE ${where.join(' AND ')}
+           ORDER BY last_mentioned_at DESC LIMIT ?`,
+        )
+        .all(...args, query.limit ?? 20) as Row[];
+      return rows.map(rowToEntity);
+    },
+
+    /* ---------------- facts ---------------- */
+
+    putFact(spec: FactSpec): Fact {
+      const id = spec.id ?? `fc_${Date.now().toString(36)}_${(factSeq += 1).toString(36)}`;
+      const createdAt = Date.now();
+      withRetry(() => {
+        const inserted = db
+          .prepare(
+            `INSERT OR IGNORE INTO facts
+               (id, soul_id, user_id, statement, type_name, holder, at, at_text, at_end,
+                place_id, status, confidence, source, source_turn_id, superseded_by, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            id,
+            spec.soulId,
+            spec.userId,
+            spec.statement,
+            spec.typeName ?? null,
+            spec.holder ?? 'world',
+            spec.at ?? null,
+            spec.atText ?? null,
+            spec.atEnd ?? null,
+            spec.placeId ?? null,
+            spec.status ?? 'none',
+            spec.confidence ?? 1,
+            spec.source ?? 'experienced',
+            spec.sourceTurnId ?? null,
+            spec.supersededBy ?? null,
+            createdAt,
+          );
+        if (Number(inserted.changes) > 0) {
+          const insertSlot = db.prepare(
+            `INSERT INTO fact_slots (fact_id, slot, value_type, entity_id, value_num, value_text, ref_fact_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          );
+          for (const s of spec.slots ?? []) {
+            insertSlot.run(
+              id,
+              s.slot,
+              s.value.kind,
+              s.value.kind === 'entity' ? s.value.entityId : null,
+              s.value.kind === 'number' ? s.value.value : null,
+              s.value.kind === 'text' ? s.value.value : null,
+              s.value.kind === 'fact' ? s.value.factId : null,
+            );
+          }
+        }
+      });
+      const fact = this.fact(id);
+      if (!fact) throw new Error(`fact ${id} disappeared right after writing`);
+      return fact;
+    },
+
+    fact(id: string): Fact | null {
+      const row = db.prepare('SELECT * FROM facts WHERE id = ?').get(id) as Row | undefined;
+      if (!row) return null;
+      return rowToFact(row, slotsOfRows(db, [id]));
+    },
+
+    facts(query: FactQuery): Fact[] {
+      const where = ['f.soul_id = ?', 'f.user_id = ?'];
+      const args: Array<string | number> = [query.soulId, query.userId];
+      if (query.entityId) {
+        where.push('EXISTS (SELECT 1 FROM fact_slots s WHERE s.fact_id = f.id AND s.entity_id = ?)');
+        args.push(query.entityId);
+      }
+      if (query.since !== undefined) {
+        where.push('f.at >= ?');
+        args.push(query.since);
+      }
+      if (query.until !== undefined) {
+        where.push('f.at <= ?');
+        args.push(query.until);
+      }
+      if (query.status) {
+        where.push('f.status = ?');
+        args.push(query.status);
+      }
+      if (query.holder) {
+        where.push('f.holder = ?');
+        args.push(query.holder);
+      }
+      const rows = db
+        .prepare(
+          `SELECT f.* FROM facts f WHERE ${where.join(' AND ')}
+           ORDER BY COALESCE(f.at, f.created_at) DESC LIMIT ?`,
+        )
+        .all(...args, query.limit ?? 200) as Row[];
+      const ids = rows.map((r) => String(r.id));
+      const slots = slotsOfRows(db, ids);
+      return rows.map((row) => rowToFact(row, slots));
+    },
+
+    /* ---------------- gaps ---------------- */
+
+    putGap(spec: GapSpec): Gap {
+      const id = spec.id ?? `gp_${Date.now().toString(36)}_${(gapSeq += 1).toString(36)}`;
+      withRetry(() =>
+        db
+          .prepare(
+            `INSERT OR IGNORE INTO gaps
+               (id, soul_id, user_id, about_entity_id, about_fact_id, topic,
+                tension, status, opened_at, closed_at, closed_by_fact_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            id,
+            spec.soulId,
+            spec.userId,
+            spec.aboutEntityId ?? null,
+            spec.aboutFactId ?? null,
+            spec.topic,
+            spec.tension ?? 0,
+            spec.status ?? 'open',
+            spec.openedAt ?? Date.now(),
+            spec.closedAt ?? null,
+            spec.closedByFactId ?? null,
+          ),
+      );
+      const row = db.prepare('SELECT * FROM gaps WHERE id = ?').get(id) as Row;
+      return rowToGap(row);
+    },
+
+    openGaps(soulId: string, userId: string, limit = 20): Gap[] {
+      const rows = db
+        .prepare(
+          `SELECT * FROM gaps WHERE soul_id = ? AND user_id = ? AND status = 'open'
+           ORDER BY tension DESC, opened_at ASC LIMIT ?`,
+        )
+        .all(soulId, userId, limit) as Row[];
+      return rows.map(rowToGap);
+    },
+
+    closeGap(id: string, closedByFactId?: string, at = Date.now()): void {
+      withRetry(() =>
+        db
+          .prepare(
+            `UPDATE gaps SET status = 'closed', closed_at = ?, closed_by_fact_id = ?
+             WHERE id = ?`,
+          )
+          .run(at, closedByFactId ?? null, id),
+      );
+    },
+
     stepsOf(turnId: string): TurnStep[] {
       const rows = db
         .prepare('SELECT * FROM steps WHERE turn_id = ? ORDER BY idx ASC')
@@ -776,6 +1062,98 @@ function pairTokens(pair: TurnPair): string[] {
   return [...tokenize(pair.userText), ...tokenize(pair.assistantText)];
 }
 
+
+/** Id counters keep fact/gap ids unique within a process without extra deps. */
+let factSeq = 0;
+let gapSeq = 0;
+
+function parseJson<T>(raw: unknown, fallback: T): T {
+  try {
+    return raw ? (JSON.parse(String(raw)) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function rowToEntity(row: Row): Entity {
+  return {
+    id: String(row.id),
+    soulId: String(row.soul_id),
+    userId: String(row.user_id),
+    type: String(row.type) as Entity['type'],
+    name: String(row.name),
+    aliases: parseJson<string[]>(row.aliases, []),
+    attrs: parseJson<Record<string, unknown>>(row.attrs, {}),
+    firstSeenAt: Number(row.first_seen_at),
+    lastMentionedAt: Number(row.last_mentioned_at),
+    createdAt: Number(row.created_at),
+  };
+}
+
+/** Slots of many facts in one query, grouped by fact id. */
+function slotsOfRows(db: DatabaseSync, factIds: string[]): Map<string, FactSlot[]> {
+  const map = new Map<string, FactSlot[]>();
+  if (factIds.length === 0) return map;
+  const placeholders = factIds.map(() => '?').join(',');
+  const rows = db
+    .prepare(`SELECT * FROM fact_slots WHERE fact_id IN (${placeholders}) ORDER BY id ASC`)
+    .all(...factIds) as Row[];
+  for (const row of rows) {
+    const factId = String(row.fact_id);
+    const list = map.get(factId) ?? [];
+    const valueType = String(row.value_type);
+    const value: FactSlot['value'] =
+      valueType === 'entity'
+        ? { kind: 'entity', entityId: String(row.entity_id) }
+        : valueType === 'number'
+          ? { kind: 'number', value: Number(row.value_num) }
+          : valueType === 'fact'
+            ? { kind: 'fact', factId: String(row.ref_fact_id) }
+            : { kind: 'text', value: String(row.value_text ?? '') };
+    list.push({ slot: String(row.slot), value });
+    map.set(factId, list);
+  }
+  return map;
+}
+
+function rowToFact(row: Row, slots: Map<string, FactSlot[]>): Fact {
+  const id = String(row.id);
+  return {
+    id,
+    soulId: String(row.soul_id),
+    userId: String(row.user_id),
+    statement: String(row.statement),
+    typeName: row.type_name === null ? undefined : String(row.type_name),
+    holder: String(row.holder),
+    at: row.at === null ? undefined : Number(row.at),
+    atText: row.at_text === null ? undefined : String(row.at_text),
+    atEnd: row.at_end === null ? undefined : Number(row.at_end),
+    placeId: row.place_id === null ? undefined : String(row.place_id),
+    status: String(row.status) as Fact['status'],
+    confidence: Number(row.confidence),
+    source: String(row.source) as Fact['source'],
+    sourceTurnId: row.source_turn_id === null ? undefined : String(row.source_turn_id),
+    supersededBy: row.superseded_by === null ? undefined : String(row.superseded_by),
+    createdAt: Number(row.created_at),
+    slots: slots.get(id) ?? [],
+  };
+}
+
+function rowToGap(row: Row): Gap {
+  return {
+    id: String(row.id),
+    soulId: String(row.soul_id),
+    userId: String(row.user_id),
+    aboutEntityId: row.about_entity_id === null ? undefined : String(row.about_entity_id),
+    aboutFactId: row.about_fact_id === null ? undefined : String(row.about_fact_id),
+    topic: String(row.topic),
+    tension: Number(row.tension),
+    status: String(row.status) as Gap['status'],
+    openedAt: Number(row.opened_at),
+    closedAt: row.closed_at === null ? undefined : Number(row.closed_at),
+    closedByFactId: row.closed_by_fact_id === null ? undefined : String(row.closed_by_fact_id),
+  };
+}
 function rowToTurnPair(row: Row): TurnPair {
   let metadata: Record<string, unknown> = {};
   try {

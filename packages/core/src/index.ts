@@ -46,6 +46,11 @@ import type {
   ReflectResult,
   ScoredMemory,
   Turn,
+  Entity,
+  Fact,
+  FactSpec,
+  Gap,
+  GapSpec,
   SessionHandoff,
   TurnFindResult,
   SessionSummary,
@@ -236,6 +241,59 @@ export class Soul {
    * model does the counting (ADR 0027). `truncated` tells the caller the answer
    * would be incomplete.
    */
+  /* ---------------- the model proper (spec/model.v0.md) ---------------- */
+
+  /** Remember a person/thing/place; calling again just refreshes "last mentioned". */
+  rememberEntity(
+    name: string,
+    type: Entity['type'] = 'person',
+    options: { aliases?: string[]; attrs?: Record<string, unknown>; seenAt?: number } = {},
+  ): Entity {
+    return this.store.putEntity({
+      soulId: this.soulId,
+      userId: this.userId,
+      type,
+      name,
+      aliases: options.aliases,
+      attrs: options.attrs,
+      seenAt: options.seenAt,
+    });
+  }
+
+  findEntities(name: string, limit = 20): Entity[] {
+    return this.store.findEntities({ soulId: this.soulId, userId: this.userId, name, limit });
+  }
+
+  /** Write one connection between things. */
+  recordFact(spec: Omit<FactSpec, 'soulId' | 'userId'>): Fact {
+    return this.store.putFact({ ...spec, soulId: this.soulId, userId: this.userId });
+  }
+
+  /** Everything that happened to or around one entity — the "about her" path. */
+  factsAbout(entityId: string, options: { since?: number; until?: number; limit?: number } = {}): Fact[] {
+    return this.store.facts({
+      soulId: this.soulId,
+      userId: this.userId,
+      entityId,
+      since: options.since,
+      until: options.until,
+      limit: options.limit,
+    });
+  }
+
+  /** Open questions, highest tension first. */
+  openGaps(limit = 20): Gap[] {
+    return this.store.openGaps(this.soulId, this.userId, limit);
+  }
+
+  recordGap(spec: Omit<GapSpec, 'soulId' | 'userId'>): Gap {
+    return this.store.putGap({ ...spec, soulId: this.soulId, userId: this.userId });
+  }
+
+  closeGap(id: string, closedByFactId?: string): void {
+    this.store.closeGap(id, closedByFactId);
+  }
+
   findTurns(
     text: string,
     options: { sessionId?: string; since?: number; until?: number; limit?: number } = {},

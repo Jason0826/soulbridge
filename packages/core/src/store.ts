@@ -6,6 +6,14 @@ import type {
   AffectSignal,
   Correction,
   Emotion,
+  Entity,
+  EntityQuery,
+  EntitySpec,
+  Fact,
+  FactQuery,
+  FactSpec,
+  Gap,
+  GapSpec,
   Identity,
   Memory,
   QuerySpec,
@@ -40,6 +48,18 @@ export interface SoulStore {
   stepsOf(turnId: string): TurnStep[];
   /** Exhaustive fetch by substring/filters — for counts and overviews. */
   findTurns(spec: TurnFindSpec): TurnFindResult;
+  /** Create or refresh a person/thing/place/self; keys on name within a type. */
+  putEntity(spec: EntitySpec): Entity;
+  entity(id: string): Entity | null;
+  findEntities(query: EntityQuery): Entity[];
+  /** One connection between things, with its ends. */
+  putFact(spec: FactSpec): Fact;
+  fact(id: string): Fact | null;
+  facts(query: FactQuery): Fact[];
+  /** Something wanted but not known; the highest tension is worth asking about. */
+  putGap(spec: GapSpec): Gap;
+  openGaps(soulId: string, userId: string, limit?: number): Gap[];
+  closeGap(id: string, closedByFactId?: string, at?: number): void;
   /** Exchanges visible to `userId`; scored against `spec.query` when given. */
   recallTurnPairs(spec: TurnPairSpec): TurnPair[];
   countTurnPairs(soulId: string, userId: string, sessionId?: string): number;
