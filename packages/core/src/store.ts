@@ -12,6 +12,8 @@ import type {
   SessionSummary,
   TurnPair,
   TurnPairSpec,
+  TurnSpec,
+  TurnStep,
 } from './types.ts';
 
 export interface SoulStore {
@@ -30,6 +32,10 @@ export interface SoulStore {
    * ignored, never merged — the original text is immutable (RFC 0007).
    */
   putTurnPair(pair: TurnPair): void;
+  /** Write one turn with its ordered steps (briefs/0014). */
+  putTurn(spec: TurnSpec): void;
+  /** Steps of one turn, in order. */
+  stepsOf(turnId: string): TurnStep[];
   /** Exchanges visible to `userId`; scored against `spec.query` when given. */
   recallTurnPairs(spec: TurnPairSpec): TurnPair[];
   countTurnPairs(soulId: string, userId: string, sessionId?: string): number;

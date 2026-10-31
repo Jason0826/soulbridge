@@ -19,11 +19,13 @@ import type {
   SessionSummary,
   TurnPair,
   TurnPairSpec,
+  TurnSpec,
+  TurnStep,
 } from './types.ts';
 import type { SoulStore } from './store.ts';
 import { bm25, buildCorpusStats, tokenize } from './scoring.ts';
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 /** How many recent pairs are considered before scoring. Bounded so recall stays O(candidates). */
 const RECALL_CANDIDATES = 500;
 export const AFFECT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -122,6 +124,40 @@ CREATE INDEX IF NOT EXISTS idx_turn_pairs_scope ON turn_pairs(soul_id, user_id, 
 -- Idempotency: one exchange per (session, turn). A repeat is ignored, not merged.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_turn_pairs_turn
   ON turn_pairs(soul_id, user_id, session_id, turn);
+
+-- v5: a turn is the unit of memory; its steps are the shape (briefs/0014).
+-- assistant_text stays denormalized so recall keeps one row per turn.
+CREATE TABLE IF NOT EXISTS turns (
+  id             TEXT PRIMARY KEY,
+  soul_id        TEXT NOT NULL,
+  user_id        TEXT NOT NULL,
+  session_id     TEXT NOT NULL,
+  turn_no        INTEGER NOT NULL,
+  started_at     INTEGER NOT NULL,
+  ended_at       INTEGER,
+  user_text      TEXT NOT NULL,
+  assistant_text TEXT NOT NULL DEFAULT '',
+  outcome        TEXT,
+  status         TEXT NOT NULL DEFAULT 'closed',
+  created_at     INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_turns_scope ON turns(soul_id, user_id, started_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_turns_turn
+  ON turns(soul_id, user_id, session_id, turn_no);
+
+CREATE TABLE IF NOT EXISTS steps (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  turn_id           TEXT NOT NULL,
+  idx               INTEGER NOT NULL,
+  kind              TEXT NOT NULL,
+  text              TEXT,
+  tool_name         TEXT,
+  tool_args_chars   INTEGER,
+  tool_result_chars INTEGER,
+  ok                INTEGER,
+  at                INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_steps_turn ON steps(turn_id, idx);
 `;
 
 type Row = Record<string, unknown>;
@@ -190,6 +226,45 @@ function upgradeToV3(db: DatabaseSync): void {
 }
 
 /**
+ * v3/v4 → v5: turns become the unit of memory (briefs/0014). Existing exchanges
+ * are copied across as turns with a single text step, so nothing is lost; the
+ * old table stays as a read-only legacy copy.
+ */
+export function upgradeToV5(db: DatabaseSync): void {
+  const hasLegacy = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'turn_pairs'")
+    .get() as Row | undefined;
+  if (!hasLegacy) return;
+  const rows = db.prepare('SELECT * FROM turn_pairs').all() as Row[];
+  const insertTurn = db.prepare(
+    `INSERT OR IGNORE INTO turns
+       (id, soul_id, user_id, session_id, turn_no, started_at, ended_at,
+        user_text, assistant_text, outcome, status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'closed', ?)`,
+  );
+  const insertStep = db.prepare(
+    "INSERT INTO steps (turn_id, idx, kind, text, at) VALUES (?, 0, 'text', ?, ?)",
+  );
+  for (const row of rows) {
+    const id = String(row.id);
+    const assistant = String(row.assistant_text ?? '');
+    insertTurn.run(
+      id,
+      String(row.soul_id),
+      String(row.user_id),
+      String(row.session_id),
+      Number(row.turn),
+      Number(row.at),
+      Number(row.at),
+      String(row.user_text),
+      assistant,
+      Number(row.created_at),
+    );
+    if (assistant.length > 0) insertStep.run(id, assistant, Number(row.at));
+  }
+}
+
+/**
  * Copy the database aside before a schema upgrade.
  *
  * In WAL mode the most recent commits can live in the `-wal` sidecar, so a copy
@@ -220,6 +295,7 @@ export function openSqlite(file: string): SoulStore {
     backupBeforeUpgrade(db, file, version);
     if (version < 2) upgradeToV2(db);
     if (version < 3) upgradeToV3(db);
+    if (version < 5) upgradeToV5(db);
     setVersion(db, SCHEMA_VERSION);
   }
 
@@ -489,30 +565,93 @@ export function openSqlite(file: string): SoulStore {
       return Number(row.n);
     },
 
-    putTurnPair(pair: TurnPair): void {
+    putTurn(spec: TurnSpec): void {
       // INSERT OR IGNORE + the unique index is the whole idempotency story:
-      // one exchange per (session, turn), repeats are dropped, never merged.
-      withRetry(() =>
-        db
+      // one turn per (session, turn_no); repeats are dropped, never merged.
+      const id = spec.id ?? `tn_${spec.sessionId}_${spec.turnNo}`;
+      const createdAt = spec.createdAt ?? spec.startedAt;
+      const assistantText = spec.steps
+        .filter((step) => step.kind === 'text' && typeof step.text === 'string')
+        .map((step) => step.text as string)
+        .join('\n');
+      withRetry(() => {
+        const inserted = db
           .prepare(
-            `INSERT OR IGNORE INTO turn_pairs
-               (id, soul_id, user_id, session_id, turn, at, user_text, assistant_text,
-                metadata_json, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT OR IGNORE INTO turns
+               (id, soul_id, user_id, session_id, turn_no, started_at, ended_at,
+                user_text, assistant_text, outcome, status, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
-            pair.id,
-            pair.soulId,
-            pair.userId,
-            pair.sessionId,
-            pair.turn,
-            pair.at,
-            pair.userText,
-            pair.assistantText,
-            JSON.stringify(pair.metadata),
-            pair.createdAt,
-          ),
-      );
+            id,
+            spec.soulId,
+            spec.userId,
+            spec.sessionId,
+            spec.turnNo,
+            spec.startedAt,
+            spec.endedAt ?? spec.startedAt,
+            spec.userText,
+            assistantText,
+            spec.outcome ?? null,
+            spec.status ?? 'closed',
+            createdAt,
+          );
+        // Steps are rewritten whenever the turn is written, so a retry after a
+        // partial write converges on the same shape instead of duplicating.
+        if (Number(inserted.changes) > 0) {
+          const insertStep = db.prepare(
+            `INSERT INTO steps (turn_id, idx, kind, text, tool_name, tool_args_chars,
+                                tool_result_chars, ok, at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          );
+          for (const step of spec.steps) {
+            insertStep.run(
+              id,
+              step.idx,
+              step.kind,
+              step.text ?? null,
+              step.toolName ?? null,
+              step.toolArgsChars ?? null,
+              step.toolResultChars ?? null,
+              step.ok === undefined ? null : step.ok ? 1 : 0,
+              step.at,
+            );
+          }
+        }
+      });
+    },
+
+    stepsOf(turnId: string): TurnStep[] {
+      const rows = db
+        .prepare('SELECT * FROM steps WHERE turn_id = ? ORDER BY idx ASC')
+        .all(turnId) as Row[];
+      return rows.map((row) => ({
+        idx: Number(row.idx),
+        kind: String(row.kind) as TurnStep['kind'],
+        text: row.text === null ? undefined : String(row.text),
+        toolName: row.tool_name === null ? undefined : String(row.tool_name),
+        toolArgsChars: row.tool_args_chars === null ? undefined : Number(row.tool_args_chars),
+        toolResultChars: row.tool_result_chars === null ? undefined : Number(row.tool_result_chars),
+        ok: row.ok === null ? undefined : Number(row.ok) === 1,
+        at: Number(row.at),
+      }));
+    },
+    putTurnPair(pair: TurnPair): void {
+      this.putTurn({
+        id: pair.id,
+        soulId: pair.soulId,
+        userId: pair.userId,
+        sessionId: pair.sessionId,
+        turnNo: pair.turn,
+        startedAt: pair.at,
+        endedAt: pair.at,
+        userText: pair.userText,
+        status: 'closed',
+        createdAt: pair.createdAt,
+        steps: pair.assistantText
+          ? [{ idx: 0, kind: 'text', text: pair.assistantText, at: pair.at }]
+          : [],
+      });
     },
 
     recallTurnPairs(spec: TurnPairSpec): TurnPair[] {
@@ -521,9 +660,9 @@ export function openSqlite(file: string): SoulStore {
       const limit = spec.limit ?? RECALL_CANDIDATES;
       const rows = db
         .prepare(
-          `SELECT * FROM turn_pairs
-           WHERE soul_id = ? AND user_id = ? AND at >= ?
-           ORDER BY at DESC LIMIT ?`,
+          `SELECT * FROM turns
+           WHERE soul_id = ? AND user_id = ? AND started_at >= ?
+           ORDER BY started_at DESC LIMIT ?`,
         )
         .all(spec.soulId, spec.userId, spec.since ?? 0, Math.max(limit, RECALL_CANDIDATES)) as Row[];
       const pairs = rows.map(rowToTurnPair);
@@ -546,10 +685,10 @@ export function openSqlite(file: string): SoulStore {
     countTurnPairs(soulId: string, userId: string, sessionId?: string): number {
       const row = sessionId
         ? (db
-            .prepare('SELECT COUNT(*) AS n FROM turn_pairs WHERE soul_id = ? AND user_id = ? AND session_id = ?')
+            .prepare('SELECT COUNT(*) AS n FROM turns WHERE soul_id = ? AND user_id = ? AND session_id = ?')
             .get(soulId, userId, sessionId) as Row)
         : (db
-            .prepare('SELECT COUNT(*) AS n FROM turn_pairs WHERE soul_id = ? AND user_id = ?')
+            .prepare('SELECT COUNT(*) AS n FROM turns WHERE soul_id = ? AND user_id = ?')
             .get(soulId, userId) as Row);
       return Number(row.n);
     },
@@ -557,9 +696,9 @@ export function openSqlite(file: string): SoulStore {
     listSessions(soulId: string, userId: string, limit: number): SessionSummary[] {
       const rows = db
         .prepare(
-          `SELECT session_id, MIN(at) AS start, MAX(at) AS end, COUNT(*) AS turns
-           FROM turn_pairs WHERE soul_id = ? AND user_id = ?
-           GROUP BY session_id ORDER BY MAX(at) DESC LIMIT ?`,
+          `SELECT session_id, MIN(started_at) AS start, MAX(started_at) AS end, COUNT(*) AS turns
+           FROM turns WHERE soul_id = ? AND user_id = ?
+           GROUP BY session_id ORDER BY MAX(started_at) DESC LIMIT ?`,
         )
         .all(soulId, userId, limit) as Row[];
       return rows.map((row) => ({
@@ -573,9 +712,9 @@ export function openSqlite(file: string): SoulStore {
     sessionPairs(sessionId: string, soulId: string, userId: string, limit: number): TurnPair[] {
       const rows = db
         .prepare(
-          `SELECT * FROM turn_pairs
+          `SELECT * FROM turns
            WHERE soul_id = ? AND user_id = ? AND session_id = ?
-           ORDER BY at ASC LIMIT ?`,
+           ORDER BY started_at ASC LIMIT ?`,
         )
         .all(soulId, userId, sessionId, limit) as Row[];
       return rows.map(rowToTurnPair);
@@ -584,9 +723,9 @@ export function openSqlite(file: string): SoulStore {
     sessionTail(sessionId: string, soulId: string, userId: string, limit: number): TurnPair[] {
       const rows = db
         .prepare(
-          `SELECT * FROM turn_pairs
+          `SELECT * FROM turns
            WHERE soul_id = ? AND user_id = ? AND session_id = ?
-           ORDER BY at DESC LIMIT ?`,
+           ORDER BY started_at DESC LIMIT ?`,
         )
         .all(soulId, userId, sessionId, limit) as Row[];
       return rows.map(rowToTurnPair).reverse();
@@ -615,8 +754,8 @@ function rowToTurnPair(row: Row): TurnPair {
     soulId: String(row.soul_id),
     userId: String(row.user_id),
     sessionId: String(row.session_id),
-    turn: Number(row.turn),
-    at: Number(row.at),
+    turn: Number(row.turn ?? row.turn_no),
+    at: Number(row.at ?? row.started_at),
     userText: String(row.user_text),
     assistantText: String(row.assistant_text),
     metadata,

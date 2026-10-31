@@ -88,8 +88,7 @@ export interface TurnPairSpec {
  * One conversation, derived from `turn_pairs` (briefs/0011). It is a boundary,
  * not a stored entity: the same data regrouped, so nothing new to migrate.
  */
-export interface SessionSummary {
-  sessionId: string;
+export interface SessionSummary {  sessionId: string;
   /** First and last exchange times in this session. */
   start: number;
   end: number;
@@ -106,6 +105,61 @@ export interface SessionHandoff {
   session: SessionSummary;
   first: TurnPair;
   last: TurnPair[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Turns and steps (briefs/0014): a turn is the unit, its steps the shape
+ * ------------------------------------------------------------------ */
+
+/**
+ * What happened inside one turn, in order. A DSH turn averages 5.2 steps and
+ * 70% of them call tools, so `user + assistant text` is the outline, not the
+ * turn. Steps keep the shape without keeping the reasoning text.
+ */
+export interface TurnStep {
+  idx: number;
+  kind: 'reasoning' | 'text' | 'tool';
+  /** Text for `text` steps; never the reasoning content (only its size). */
+  text?: string;
+  toolName?: string;
+  toolArgsChars?: number;
+  toolResultChars?: number;
+  ok?: boolean;
+  at: number;
+}
+
+export interface TurnSpec {
+  id?: string;
+  soulId: string;
+  userId: string;
+  sessionId: string;
+  turnNo: number;
+  startedAt: number;
+  endedAt?: number;
+  userText: string;
+  /** What changed by the end of the turn (decision, artifact, open item). */
+  outcome?: string;
+  status?: 'open' | 'closed';
+  steps: TurnStep[];
+  createdAt?: number;
+}
+
+/** A turn read back with its steps. */
+export interface TurnRecord {
+  id: string;
+  soulId: string;
+  userId: string;
+  sessionId: string;
+  turnNo: number;
+  startedAt: number;
+  endedAt?: number;
+  userText: string;
+  /** Concatenated text steps, kept for search and back-compat. */
+  assistantText: string;
+  outcome?: string;
+  status: 'open' | 'closed';
+  steps: TurnStep[];
+  createdAt: number;
 }
 
 /** Six dimensions, each -2..+2. Baseline is slightly positive. */
