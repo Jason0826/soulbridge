@@ -57,14 +57,18 @@ gaps         不知道但想知道
 |---|---|---|---|
 | `id` | INTEGER PK | | — |
 | `fact_id` | TEXT | → facts.id | — |
-| `slot` | TEXT | **事件类型自带的槽名**：出售方 / 离职者 / 涨价幅度 / 方式 / 原因 | 1、8、9 |
-| `core_role` | TEXT NULL | `agent` / `patient` / `beneficiary` / `witness`（跨类型通用查询） | 9、11 |
-| `value_type` | TEXT | `entity` / `number` / `text` | — |
+| `slot` | TEXT | **事件自带的槽名**（自由文本）：出售方 / 离职者 / 涨价幅度 / 方式 / 原因 / 内容 | 1、8、9 |
+| `value_type` | TEXT | `entity` / `number` / `text` / **`fact`** | — |
 | `entity_id` | TEXT NULL | value_type=entity 时指向实体 | 1、2、9 |
 | `value_num` | REAL NULL | 人数、金额、幅度、刑期 | 3、12 |
-| `value_text` | TEXT NULL | 名字、模糊值（"3 人左右"） | 6 |
+| `value_text` | TEXT NULL | 名字、模糊值（"3 人左右"）、命题内容 | 6 |
+| `ref_fact_id` | TEXT NULL | value_type=fact 时指向另一条事实（回应、原因、反驳） | 8、15、18 |
 
-**为什么合一**：91% 的角色名只出现一次，且 `死亡人数`/`涨价幅度` 这类不是实体。两张表结构相同（一个槽要么指实体要么是值），合成一张少一个概念。
+**为什么合一**：91% 的角色名只出现一次，且 `死亡人数`/`涨价幅度` 这类不是实体。三种值（实体、数值、事实）结构相同，合成一张少两个概念。
+
+**为什么没有 `core_role`**：它是让代码给角色分类，违反 ADR 0027。按实体查只用 `entity_id` 索引，不看槽名。
+
+**为什么槽位能指向事实**：对话里大量是"对前一条的回应"——提问→回答、主张→反对、事件→原因。这同时补上了 ACE/DuEE 缺的事实间关系，而且不需要新表。
 
 ## 5. gaps
 
@@ -72,21 +76,24 @@ gaps         不知道但想知道
 |---|---|---|---|
 | `id` | TEXT PK | | — |
 | `soul_id` | TEXT | | — |
-| `about_entity_id` | TEXT NULL | 关于谁 | 1、3、13、14 |
-| `topic` | TEXT | 想知道什么（"她后来有着落吗"） | 1、13 |
+| `about_entity_id` | TEXT NULL | 关于谁（"她最近怎么样"） | 1、3、13、14 |
+| `about_fact_id` | TEXT NULL | 关于哪件事（"那个项目黄了吗"） | 4、14 |
+| `topic` | TEXT | 想知道什么 | 1、13 |
 | `tension` | REAL | 张力，随时间增长 | 1、3 |
 | `status` | TEXT | `open` / `closed` / `dropped` | 1、13 |
 | `opened_at` | INTEGER | | 1 |
 | `closed_at` | INTEGER NULL | | 1 |
-| `closed_by` | TEXT NULL | 哪条事实回答了它 | 1、13 |
+| `closed_by_fact_id` | TEXT NULL | 哪条事实回答了它 | 1、13 |
 
 **为什么缺口独立成表**：缺席需要**张力**（越久越想知道），事实不需要。它不是一种事实，是另一类东西。
 
-## 6. 三条硬规则
+## 6. 三条规则
 
-1. **每条 fact 至少有一个 slot**——挂不上实体的，是对话片段，不是记忆。
+1. **事实可以有零个实体槽**（"今天下雨了"没有实体，也是事实）；有实体的，按 `entity_id` 可查。
 2. **`at` 必填**，不知道精确时间就记模糊串（`at_text`），不能留空。
 3. **不物理删除**：状态变化用 `superseded_by`；忘记用 `deleted_at`。
+
+> 规则 1 改过一次：原稿要求"每条事实至少一个槽"，太强——那会逼着给"下雨"造一个"天气"实体，是造假。
 
 ## 7. 与旧 schema 的差异
 
