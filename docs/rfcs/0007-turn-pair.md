@@ -155,6 +155,12 @@ block = turnPairs.map(tp => `- [Q] ${tp.userText}\n  [A] ${tp.assistantText}`).j
 2. **`memories` 什么时候淘汰？** MVP1 阶段并存；MVP2（画像）上线后再决定。
 3. **要不要给 `turn_pair` 也算 importance？** 现在没有，排序只靠 BM25 + 时间。可能不够，等数据。
 4. **跨会话的 turn 序号会重复吗？** 不会——唯一索引里带了 `session_id`。
+5. **推理过程要不要入 `metadata`？** 现在不存：`assistant/message.content` 是 `[reasoning, text]` 两段，只取 `text`。
+   推理里有正文没有的东西（我对用户的判断、放弃的选项、自我纠正），但它是**过程**不是**交流**——用户看不到，
+   体积是正文的 5–10 倍，且质量不稳定（走弯路、试错）。
+   **改用条件**：如果出现"上次说 A、这次说 B 且用户没有改口"这类缺少自身立场的现象，
+   再考虑往 `metadata.reasoning_summary` 放**摘要**（不是全文）。那属于"对自己判断的记忆"，
+   比"交流记忆"晚一层，不在 MVP1。
 
 ## 8. 路线图
 
