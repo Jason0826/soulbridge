@@ -248,16 +248,27 @@ export class Soul {
   /* ---------------- the model proper (spec/model.v0.md) ---------------- */
 
   /**
-   * Turn text → drafts. Rules run first; the model is only asked when the rules
-   * found nothing and a model is available. Nothing is written here.
+   * Turn text → drafts.
+   *
+   * Extraction is the model's job (ADR 0029: Generative Agents, Mem0 and
+   * Graphiti all extract with an LLM and keep code for validation and storage).
+   * The rules are a floor, not a ceiling: they matter when no model is
+   * configured and they cross-check the answer when one is. A model answer with
+   * no usable draft falls back to the rules instead of losing the turn.
    */
   async extract(
     text: string,
-    options: { at?: number; llm?: (prompt: string) => Promise<string> | string } = {},
+    options: {
+      at?: number;
+      llm?: (prompt: string) => Promise<string> | string;
+      /** 'auto' (default) uses the model then falls back; 'rules' forces rules. */
+      mode?: 'auto' | 'rules';
+    } = {},
   ): Promise<ExtractDraft> {
     const at = options.at ?? Date.now();
     const byRules = extractByRules(text, at);
-    if (byRules.facts.length > 0 || !options.llm) return byRules;
+    // Pre-filter: "好的" / "嗯" cannot carry a fact, so it is not worth a call.
+    if (options.mode === 'rules' || !options.llm || text.trim().length < 4) return byRules;
     const result = await extractWithModel(text, options.llm, at);
     return result.draft ?? byRules;
   }

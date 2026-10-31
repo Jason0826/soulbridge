@@ -40,6 +40,48 @@ test('rules: across turns a bare pronoun is not attached to anyone', () => {
   assert.equal(draft.facts.length, 0);
 });
 
+test('extract: the model goes first even when the rules would match', async () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  const llm = () =>
+    '{"entities":[{"name":"小林","type":"person"}],"facts":[{"statement":"模型抽取的结果","slots":[{"slot":"当事人","entity":"小林"}]}],"gaps":[]}';
+  const draft = await soul.extract('我同事小林上周被裁员了', { at: NOW, llm });
+  assert.equal(draft.by, 'llm', 'model answer wins over the rule draft');
+  assert.equal(draft.facts[0].statement, '模型抽取的结果');
+  store.close();
+});
+
+test('extract: a broken model falls back to the rules instead of losing the turn', async () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  const draft = await soul.extract('我同事小林上周被裁员了', {
+    at: NOW,
+    llm: () => {
+      throw new Error('model down');
+    },
+  });
+  assert.equal(draft.by, 'rules');
+  assert.equal(draft.entities[0].name, '小林');
+  store.close();
+});
+
+test('extract: rules mode never calls the model', async () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  let called = false;
+  const draft = await soul.extract('我同事小林上周被裁员了', {
+    at: NOW,
+    mode: 'rules',
+    llm: () => {
+      called = true;
+      return '{}';
+    },
+  });
+  assert.equal(called, false);
+  assert.equal(draft.by, 'rules');
+  store.close();
+});
+
 test('rules: uncertainty opens a gap instead of asserting', () => {
   const draft = extractByRules('我同事小林被裁员之后就没消息了，不知道她后来怎么样了', NOW);
   assert.equal(draft.gaps.length, 1);
