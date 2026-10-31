@@ -24,7 +24,7 @@ export {
   isQuestion,
 } from './reflect.ts';
 export type { CorrectionLayer, CorrectionSignal, CorrectionVerdict } from './reflect.ts';
-export { rank, scoreMemory, tokenize, relevance } from './scoring.ts';
+export { rank, scoreMemory, tokenize, relevance, bm25, buildCorpusStats } from './scoring.ts';
 export * from './affect/index.ts';
 export { measureStyle } from './style/measure.ts';
 export type { StyleMetrics } from './style/measure.ts';
