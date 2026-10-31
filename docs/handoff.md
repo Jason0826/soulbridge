@@ -23,8 +23,10 @@
 
 | 组件 | 版本 | 状态 |
 |---|---|---|
-| core | 0.0.24 | BM25 检索（IDF + 长度归一化）；已 overlay 进 profile，**待重启生效** |
-| dsh-plugin | 0.0.33 | 注入日志记 `ids`；已 overlay 进 profile，**待重启生效** |
+| core | 0.0.25 | `turn_pairs` 存储（schema v4）；已 overlay 进 profile |
+| dsh-plugin | 0.0.37 | 配对写入 `turn_pairs`（`turn/end` 为主，2s 静默兜底）；已 overlay 进 profile |
+
+> `turn_pairs` 已在写（真机 2 行起），但 **pre-step 还在读 `memories`**——召回切换是下一步，也是唯一的行为切换点。
 
 > 2026-10-31 overlay 前的旧版本备份在 `profiles/desktop/soulbridge-overlay-bak-20261031-150143`。
 

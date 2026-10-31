@@ -116,6 +116,20 @@ v1 → v2：memories.updated_at / memories.deleted_at / emotions.updated_at
 | `updated_at` | 最近一次修改时间，跨设备合并用 |
 | `deleted_at` | 墓碑时间；删除不物理删行 |
 
+`turn_pairs`
+
+| 列 | 一句话 |
+|---|---|
+| `id` | 交流唯一标识 |
+| `soul_id` / `user_id` | 归属 |
+| `session_id` | 宿主会话 id；与 `turn` 一起构成幂等键 |
+| `turn` | 宿主轮次序号；同一 `(session, turn)` 只写一次 |
+| `at` | 用户消息到达的时间 |
+| `user_text` | 用户原话，不截断 |
+| `assistant_text` | 助手回复，不截断；空串不允许（宁可整对不写）|
+| `metadata_json` | 开放容器；未定字段先放这里（0010 §8）|
+| `created_at` | 落库时间 |
+
 `affect_samples`
 
 | 列 | 一句话 |
