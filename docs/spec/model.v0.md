@@ -37,8 +37,8 @@ gaps         不知道但想知道
 |---|---|---|---|
 | `id` | TEXT PK | | — |
 | `soul_id` | TEXT | | — |
-| `kind` | TEXT | `event` / `state` / `preference` / `promise` / `decision` / `lesson` / `mention` / `relationship` | 2、4、7、8、14、16、17 |
-| `type_name` | TEXT NULL | 25 类个人生活事件之一（辞/离职、裁员、道歉…），可空 | 1、2、11 |
+| `kind` | —— | **已删除**（ADR 0027：分类是语义，归模型） | —— |
+| `type_name` | TEXT NULL | **自由文本**（"裁员""道歉""请求"…），可空；代码不分支，只用于显示与检索 | 1、2、11 |
 | `statement` | TEXT | 一句话，人类可读 | 全部 |
 | `holder` | TEXT | `world` / `self` / `<entity_id>`（在某人心里成立） | 13、16、20、23、30 |
 | `at` | INTEGER | 事件时间（可模糊，模糊程度记 `at_text`） | 5、6、12 |
@@ -105,4 +105,4 @@ gaps         不知道但想知道
 
 - **事实之间的时间关系**（before / after / 起因）——DuEE 不含这一层，TimeBank 才标注
 - **群体实体**（"周围人家"、"他的员工"）
-- **一般性陈述**（"所有乌鸦都是黑的"）——目前的 `kind` 装不下
+- **一般性陈述**（"所有乌鸦都是黑的"）——`type_name` + 槽位装得下文字，但"它是否成立"要模型判断
