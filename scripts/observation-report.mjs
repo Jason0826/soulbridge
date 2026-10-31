@@ -121,13 +121,17 @@ say('## 四、判据 3「没记岔」（数据源：纠正证据）');
 say();
 say(`- 近 ${days} 天记录的纠正：**${corrections}** 条（日志）`);
 if (db) {
-  const c = one('SELECT COUNT(*) AS n FROM corrections');
-  say(`- 库里的纠正证据：**${c.n}** 行`);
-  const byLayer = all("SELECT rule, COUNT(*) AS n FROM corrections GROUP BY rule ORDER BY n DESC LIMIT 5");
-  for (const r of byLayer) say(`  - ${r.rule ?? '(无标记)'}：${r.n}`);
+  const total = one('SELECT COUNT(*) AS n FROM corrections');
+  const strict = one("SELECT COUNT(*) AS n FROM corrections WHERE rule LIKE 'rule:%'");
+  say(`- 库里的纠正证据：**${total.n}** 行；其中显式纠正（\`rule:\` 层）**${strict.n}** 行`);
+  say(`- \`structural:\` 层不计入判据 3。2026-10-31 抽查 28 行：25 行是句子含"不/没/不是"的正常提问，精度约 11%`);
+  const byRule = all(
+    "SELECT rule, COUNT(*) AS n FROM corrections WHERE rule LIKE 'rule:%' GROUP BY rule ORDER BY n DESC",
+  );
+  for (const r of byRule) say(`  - ${r.rule}：${r.n}`);
 }
 say();
-say('> "记岔了几次"仍要你判；纠正表只是它的证据来源。');
+say('> "记岔了几次"仍要你判；上面只统计显式纠正，结构层噪声不计入。');
 say();
 
 say('## 五、判据 4「可查证」（能自动算）');

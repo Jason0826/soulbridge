@@ -23,8 +23,10 @@
 
 | 组件 | 版本 | 状态 |
 |---|---|---|
-| core | 0.0.23 | 本地构建（**未发布 npm**），已 overlay 进 profile |
-| dsh-plugin | 0.0.32 | 已 overlay 进 profile，**待重启生效** |
+| core | 0.0.24 | BM25 检索（IDF + 长度归一化）；已 overlay 进 profile，**待重启生效** |
+| dsh-plugin | 0.0.33 | 注入日志记 `ids`；已 overlay 进 profile，**待重启生效** |
+
+> 2026-10-31 overlay 前的旧版本备份在 `profiles/desktop/soulbridge-overlay-bak-20261031-150143`。
 
 ## 机制速览（都在跑）
 
