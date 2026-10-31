@@ -233,6 +233,55 @@ export interface EntityQuery {
   limit?: number;
 }
 
+/* ------------------------------------------------------------------ *
+ * Extraction drafts (extract.ts): candidates, not writes
+ * ------------------------------------------------------------------ */
+
+export interface EntityDraft {
+  name: string;
+  type: EntityType;
+  aliases?: string[];
+  attrs?: Record<string, unknown>;
+}
+
+/** A slot as drafted: it can name an entity that may not exist yet. */
+export type DraftSlotValue =
+  | { kind: 'entity'; entityName: string; entityType?: EntityType }
+  | { kind: 'number'; value: number }
+  | { kind: 'text'; value: string };
+
+export interface FactDraft {
+  statement: string;
+  typeName?: string;
+  at?: number;
+  atText?: string;
+  source: FactSource;
+  confidence: number;
+  slots: Array<{ slot: string; value: DraftSlotValue }>;
+}
+
+export interface GapDraft {
+  topic: string;
+  aboutEntityName?: string;
+  tension: number;
+}
+
+export interface ExtractDraft {
+  entities: EntityDraft[];
+  facts: FactDraft[];
+  gaps: GapDraft[];
+  by: 'rules' | 'llm';
+}
+
+/** What a commit actually created or merged. */
+export interface CommitResult {
+  entities: Entity[];
+  facts: Fact[];
+  gaps: Gap[];
+  /** Drafts refused by the gate, with the reason. */
+  skipped: Array<{ what: string; reason: string }>;
+}
+
 export type SlotValue =
   | { kind: 'entity'; entityId: string }
   | { kind: 'number'; value: number }

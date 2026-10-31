@@ -46,7 +46,10 @@ import type {
   ReflectResult,
   ScoredMemory,
   Turn,
+  CommitResult,
   Entity,
+  EntityDraft,
+  ExtractDraft,
   Fact,
   FactSpec,
   Gap,
@@ -64,6 +67,7 @@ import { reflect, ruleExtract, nextEmotion } from './reflect.ts';
 import { rank, tokenize } from './scoring.ts';
 import { analyzeAffect, emptyAffect, lexiconAnalyzer } from './affect/analyze.ts';
 import { gateDrafts, llmExtractTurn } from './reflect.ts';
+import { extractByRules, extractWithModel } from './extract.ts';
 export { gateDrafts } from './reflect.ts';
 
 export interface SoulOptions {
@@ -242,6 +246,119 @@ export class Soul {
    * would be incomplete.
    */
   /* ---------------- the model proper (spec/model.v0.md) ---------------- */
+
+  /**
+   * Turn text → drafts. Rules run first; the model is only asked when the rules
+   * found nothing and a model is available. Nothing is written here.
+   */
+  async extract(
+    text: string,
+    options: { at?: number; llm?: (prompt: string) => Promise<string> | string } = {},
+  ): Promise<ExtractDraft> {
+    const at = options.at ?? Date.now();
+    const byRules = extractByRules(text, at);
+    if (byRules.facts.length > 0 || !options.llm) return byRules;
+    const result = await extractWithModel(text, options.llm, at);
+    return result.draft ?? byRules;
+  }
+
+  /**
+   * Drafts → database, through the gate.
+   *
+   * Entities are resolved by (type, name) and never guessed; a fact without a
+   * statement is refused; a repeated statement with the same time expression is
+   * treated as the same fact. Everything refused is reported, not swallowed.
+   */
+  commitDrafts(draft: ExtractDraft, options: { turnId?: string; at?: number } = {}): CommitResult {
+    const entities = new Map<string, Entity>();
+    const skipped: CommitResult['skipped'] = [];
+    const at = options.at ?? Date.now();
+
+    const ensureEntity = (name: string, type: EntityDraft['type'] = 'person'): Entity => {
+      const key = `${type}:${name}`;
+      const existing = entities.get(key);
+      if (existing) return existing;
+      const written = this.store.putEntity({
+        soulId: this.soulId,
+        userId: this.userId,
+        type,
+        name,
+        seenAt: at,
+        attrs: draft.entities.find((e) => e.name === name)?.attrs,
+        aliases: draft.entities.find((e) => e.name === name)?.aliases,
+      });
+      entities.set(key, written);
+      return written;
+    };
+
+    for (const draftEntity of draft.entities) ensureEntity(draftEntity.name, draftEntity.type);
+
+    const facts: Fact[] = [];
+    const recent = this.store.facts({ soulId: this.soulId, userId: this.userId, limit: 50 });
+    for (const factDraft of draft.facts) {
+      const statement = factDraft.statement.trim();
+      if (!statement) {
+        skipped.push({ what: 'fact', reason: 'empty statement' });
+        continue;
+      }
+      if (factDraft.slots.length === 0 && factDraft.at === undefined && factDraft.atText === undefined) {
+        skipped.push({ what: statement, reason: 'no slots and no time' });
+        continue;
+      }
+      const duplicate = recent.some(
+        (f) =>
+          f.statement === statement &&
+          (f.atText ?? '') === (factDraft.atText ?? '') &&
+          Math.abs((f.at ?? f.createdAt) - (factDraft.at ?? at)) < 86400000,
+      );
+      if (duplicate) {
+        skipped.push({ what: statement, reason: 'duplicate' });
+        continue;
+      }
+
+      const slots = factDraft.slots.map((s) => {
+        if (s.value.kind === 'entity') {
+          const entity = ensureEntity(s.value.entityName, s.value.entityType ?? 'person');
+          return { slot: s.slot, value: { kind: 'entity' as const, entityId: entity.id } };
+        }
+        return { slot: s.slot, value: s.value };
+      });
+
+      const written = this.store.putFact({
+        soulId: this.soulId,
+        userId: this.userId,
+        statement,
+        typeName: factDraft.typeName,
+        at: factDraft.at,
+        atText: factDraft.atText,
+        source: factDraft.source,
+        confidence: factDraft.confidence,
+        sourceTurnId: options.turnId,
+        slots,
+      });
+      facts.push(written);
+    }
+
+    const gaps: Gap[] = [];
+    for (const gapDraft of draft.gaps) {
+      const about = gapDraft.aboutEntityName
+        ? ensureEntity(gapDraft.aboutEntityName)
+        : undefined;
+      gaps.push(
+        this.store.putGap({
+          soulId: this.soulId,
+          userId: this.userId,
+          aboutEntityId: about?.id,
+          aboutFactId: facts.length === 1 ? facts[0].id : undefined,
+          topic: gapDraft.topic,
+          tension: gapDraft.tension,
+          openedAt: at,
+        }),
+      );
+    }
+
+    return { entities: [...entities.values()], facts, gaps, skipped };
+  }
 
   /** Remember a person/thing/place; calling again just refreshes "last mentioned". */
   rememberEntity(
