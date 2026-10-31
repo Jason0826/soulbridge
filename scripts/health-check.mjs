@@ -268,6 +268,54 @@ if (git.status === 0) {
   }
 }
 
+// 代码/文档同步：改了 packages/ 却没改 docs/ 的 commit。
+// 2026-10-31 加：连续两天出现"代码改完、文档还停在旧结论"，靠记性防不住。
+// WARN 而非 FAIL：纯重构确实可以不碰文档，但漂移必须可见。
+function runGit(args) {
+  const r = spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
+  return r.status === 0 ? r.stdout : null;
+}
+
+const LOG_DEPTH = 10;
+const logOut = runGit(['log', `-${LOG_DEPTH}`, '--name-only', '--pretty=format:%x01']);
+if (logOut) {
+  const commits = [];
+  let cur = null;
+  for (const line of logOut.split('\n')) {
+    if (line.includes('\x01')) {
+      cur = [];
+      commits.push(cur);
+    } else if (cur && line.trim()) {
+      cur.push(line.trim());
+    }
+  }
+  const drifted = commits.filter((files) => {
+    const hasCode = files.some((f) => f.startsWith('packages/'));
+    const hasDocs = files.some((f) => f.startsWith('docs/'));
+    return hasCode && !hasDocs;
+  });
+  if (drifted.length > 0) {
+    add(
+      'WARN',
+      '同步',
+      `最近 ${commits.length} 个 commit 里有 ${drifted.length} 个改了 packages/ 但没改 docs/`,
+      '文档和代码放同一个 commit，别事后补',
+    );
+  } else {
+    add('PASS', '同步', `最近 ${commits.length} 个 commit 的代码与文档改动同步`);
+  }
+}
+
+// 提交前就能看到：工作区里代码动了、文档没动
+if (git.status === 0) {
+  const dirty = git.stdout.trim().split('\n').filter(Boolean);
+  const dirtyCode = dirty.some((l) => l.includes('packages/'));
+  const dirtyDocs = dirty.some((l) => l.includes('docs/'));
+  if (dirtyCode && !dirtyDocs) {
+    add('WARN', '同步', '工作区里 packages/ 有改动，但 docs/ 没有——是不是该更新的文档还没更新？');
+  }
+}
+
 // ---------- 输出 ----------
 const order = { FAIL: 0, WARN: 1, PASS: 2 };
 const icon = { FAIL: '✗', WARN: '!', PASS: '✓' };
