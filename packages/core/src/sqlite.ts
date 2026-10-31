@@ -19,6 +19,8 @@ import type {
   SessionSummary,
   TurnPair,
   TurnPairSpec,
+  TurnFindResult,
+  TurnFindSpec,
   TurnSpec,
   TurnStep,
 } from './types.ts';
@@ -621,6 +623,38 @@ export function openSqlite(file: string): SoulStore {
       });
     },
 
+    findTurns(spec: TurnFindSpec): TurnFindResult {
+      // Substring match, deliberately not the tokenizer: an exhaustive fetch is
+      // a filter, and CJK bigrams would miss short needle text (eval-boundary-0027).
+      const where = ['soul_id = ?', 'user_id = ?'];
+      const args: Array<string | number> = [spec.soulId, spec.userId];
+      if (spec.text) {
+        const needle = `%${spec.text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+        where.push("(user_text LIKE ? ESCAPE '\\' OR assistant_text LIKE ? ESCAPE '\\')");
+        args.push(needle, needle);
+      }
+      if (spec.sessionId) {
+        where.push('session_id = ?');
+        args.push(spec.sessionId);
+      }
+      if (spec.since !== undefined) {
+        where.push('started_at >= ?');
+        args.push(spec.since);
+      }
+      if (spec.until !== undefined) {
+        where.push('started_at <= ?');
+        args.push(spec.until);
+      }
+      const clause = where.join(' AND ');
+      const total = Number(
+        (db.prepare(`SELECT COUNT(*) AS n FROM turns WHERE ${clause}`).get(...args) as Row).n,
+      );
+      const limit = spec.limit ?? 200;
+      const rows = db
+        .prepare(`SELECT * FROM turns WHERE ${clause} ORDER BY started_at DESC LIMIT ?`)
+        .all(...args, limit) as Row[];
+      return { turns: rows.map(rowToTurnPair), total, truncated: total > limit };
+    },
     stepsOf(turnId: string): TurnStep[] {
       const rows = db
         .prepare('SELECT * FROM steps WHERE turn_id = ? ORDER BY idx ASC')

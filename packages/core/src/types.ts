@@ -162,6 +162,31 @@ export interface TurnRecord {
   createdAt: number;
 }
 
+/**
+ * Exhaustive fetch (ADR 0027 + eval-boundary-0027): for questions whose answer
+ * is a count or an overview, ranking is the wrong tool — the caller needs every
+ * row that matches, and the model does the counting.
+ */
+export interface TurnFindSpec {
+  soulId: string;
+  userId: string;
+  /** Substring over user and assistant text. No tokenizer, no ranking. */
+  text?: string;
+  sessionId?: string;
+  since?: number;
+  until?: number;
+  /** Hard cap, so a broad filter cannot return the whole history. */
+  limit?: number;
+}
+
+export interface TurnFindResult {
+  turns: TurnPair[];
+  /** How many rows match, before the cap. */
+  total: number;
+  /** True when `total` exceeded the cap. */
+  truncated: boolean;
+}
+
 /** Six dimensions, each -2..+2. Baseline is slightly positive. */
 export interface Emotion {
   passion: number;

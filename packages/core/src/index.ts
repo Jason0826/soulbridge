@@ -47,6 +47,7 @@ import type {
   ScoredMemory,
   Turn,
   SessionHandoff,
+  TurnFindResult,
   SessionSummary,
   TurnPair,
   Visibility,
@@ -227,6 +228,27 @@ export class Soul {
 
   countTurnPairs(): number {
     return this.store.countTurnPairs(this.soulId, this.userId);
+  }
+
+  /**
+   * Every turn that matches, not the best few: for "how many times" and "what
+   * did we decide overall" the count matters more than the ranking, and the
+   * model does the counting (ADR 0027). `truncated` tells the caller the answer
+   * would be incomplete.
+   */
+  findTurns(
+    text: string,
+    options: { sessionId?: string; since?: number; until?: number; limit?: number } = {},
+  ): TurnFindResult {
+    return this.store.findTurns({
+      soulId: this.soulId,
+      userId: this.userId,
+      text,
+      sessionId: options.sessionId,
+      since: options.since,
+      until: options.until,
+      limit: options.limit,
+    });
   }
 
   /** Conversations, most recent first, derived from the recorded exchanges. */

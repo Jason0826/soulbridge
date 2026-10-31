@@ -159,4 +159,27 @@ for (const k of ks) {
   console.log(`  k=${String(k).padStart(2)} → ${((hits.get(k) / Math.max(1, cases)) * 100).toFixed(1)}%`);
 }
 
+// E4：穷举取数 vs 真值（ADR 0027 的"筛得全"）
+const { Soul } = await import(`${core}index.ts`);
+const store = openSqlite(DB_PATH);
+const soul = new Soul({ store, soulId: 'xiaoling', userId: 'local' });
+console.log('\n[E4] 穷举取数：接口返回 vs 真值（上限 500）');
+for (const topic of topics) {
+  const truth = db
+    .prepare('SELECT COUNT(*) AS n FROM turns WHERE user_text LIKE ? OR assistant_text LIKE ?')
+    .get(`%${topic}%`, `%${topic}%`).n;
+  if (truth === 0) {
+    console.log(`  「${topic}」真值 0（跳过）`);
+    continue;
+  }
+  const started = Date.now();
+  const res = soul.findTurns(topic, { limit: 500 });
+  const ms = Date.now() - started;
+  const full = res.turns.filter((t) => `${t.userText}${t.assistantText}`.includes(topic)).length;
+  console.log(
+    `  「${topic}」真值 ${truth} → 接口 total ${res.total}，返回 ${res.turns.length} 条，其中含词 ${full}，${ms}ms`,
+  );
+}
+store.close();
+
 db.close();

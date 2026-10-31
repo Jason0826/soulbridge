@@ -12,6 +12,8 @@ import type {
   SessionSummary,
   TurnPair,
   TurnPairSpec,
+  TurnFindResult,
+  TurnFindSpec,
   TurnSpec,
   TurnStep,
 } from './types.ts';
@@ -36,6 +38,8 @@ export interface SoulStore {
   putTurn(spec: TurnSpec): void;
   /** Steps of one turn, in order. */
   stepsOf(turnId: string): TurnStep[];
+  /** Exhaustive fetch by substring/filters — for counts and overviews. */
+  findTurns(spec: TurnFindSpec): TurnFindResult;
   /** Exchanges visible to `userId`; scored against `spec.query` when given. */
   recallTurnPairs(spec: TurnPairSpec): TurnPair[];
   countTurnPairs(soulId: string, userId: string, sessionId?: string): number;
