@@ -9,10 +9,22 @@
 import { copyFileSync, existsSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { DEFAULT_EMOTION } from './types.ts';
-import type { AffectSignal, Correction, Emotion, Identity, Memory, QuerySpec } from './types.ts';
+import type {
+  AffectSignal,
+  Correction,
+  Emotion,
+  Identity,
+  Memory,
+  QuerySpec,
+  TurnPair,
+  TurnPairSpec,
+} from './types.ts';
 import type { SoulStore } from './store.ts';
+import { bm25, buildCorpusStats, tokenize } from './scoring.ts';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 4;
+/** How many recent pairs are considered before scoring. Bounded so recall stays O(candidates). */
+const RECALL_CANDIDATES = 500;
 export const AFFECT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const BUSY_TIMEOUT_MS = 5000;
 const WRITE_ATTEMPTS = 3;
@@ -93,6 +105,22 @@ CREATE TABLE IF NOT EXISTS corrections (
   device_id      TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_corrections ON corrections(soul_id, user_id, at DESC);
+CREATE TABLE IF NOT EXISTS turn_pairs (
+  id             TEXT PRIMARY KEY,
+  soul_id        TEXT NOT NULL,
+  user_id        TEXT NOT NULL,
+  session_id     TEXT NOT NULL,
+  turn           INTEGER NOT NULL,
+  at             INTEGER NOT NULL,
+  user_text      TEXT NOT NULL,
+  assistant_text TEXT NOT NULL,
+  metadata_json  TEXT NOT NULL DEFAULT '{}',
+  created_at     INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_turn_pairs_scope ON turn_pairs(soul_id, user_id, at DESC);
+-- Idempotency: one exchange per (session, turn). A repeat is ignored, not merged.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_turn_pairs_turn
+  ON turn_pairs(soul_id, user_id, session_id, turn);
 `;
 
 type Row = Record<string, unknown>;
@@ -460,9 +488,94 @@ export function openSqlite(file: string): SoulStore {
       return Number(row.n);
     },
 
+    putTurnPair(pair: TurnPair): void {
+      // INSERT OR IGNORE + the unique index is the whole idempotency story:
+      // one exchange per (session, turn), repeats are dropped, never merged.
+      withRetry(() =>
+        db
+          .prepare(
+            `INSERT OR IGNORE INTO turn_pairs
+               (id, soul_id, user_id, session_id, turn, at, user_text, assistant_text,
+                metadata_json, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            pair.id,
+            pair.soulId,
+            pair.userId,
+            pair.sessionId,
+            pair.turn,
+            pair.at,
+            pair.userText,
+            pair.assistantText,
+            JSON.stringify(pair.metadata),
+            pair.createdAt,
+          ),
+      );
+    },
+
+    recallTurnPairs(spec: TurnPairSpec): TurnPair[] {
+      const limit = spec.limit ?? 20;
+      const rows = db
+        .prepare(
+          `SELECT * FROM turn_pairs
+           WHERE soul_id = ? AND user_id = ? AND at >= ?
+           ORDER BY at DESC LIMIT ?`,
+        )
+        .all(spec.soulId, spec.userId, spec.since ?? 0, Math.max(limit, RECALL_CANDIDATES)) as Row[];
+      const pairs = rows.map(rowToTurnPair);
+
+      const query = spec.query?.trim();
+      if (!query) return pairs.slice(0, limit);
+      const qTokens = tokenize(query);
+      if (qTokens.length === 0) return pairs.slice(0, limit);
+
+      const docTokens = pairs.map(pairTokens);
+      const stats = buildCorpusStats(docTokens);
+      return pairs
+        .map((pair, i) => ({ pair, score: bm25(qTokens, docTokens[i], stats) }))
+        .filter((scored) => scored.score > 0)
+        .sort((a, b) => b.score - a.score || b.pair.at - a.pair.at)
+        .slice(0, limit)
+        .map((scored) => scored.pair);
+    },
+
+    countTurnPairs(soulId: string, userId: string): number {
+      const row = db
+        .prepare('SELECT COUNT(*) AS n FROM turn_pairs WHERE soul_id = ? AND user_id = ?')
+        .get(soulId, userId) as Row;
+      return Number(row.n);
+    },
+
     close(): void {
       db.close();
     },
+  };
+}
+
+/** Tokens of one exchange. Both sides are searchable; neither is weighted. */
+function pairTokens(pair: TurnPair): string[] {
+  return [...tokenize(pair.userText), ...tokenize(pair.assistantText)];
+}
+
+function rowToTurnPair(row: Row): TurnPair {
+  let metadata: Record<string, unknown> = {};
+  try {
+    metadata = JSON.parse(String(row.metadata_json ?? '{}')) as Record<string, unknown>;
+  } catch {
+    metadata = {};
+  }
+  return {
+    id: String(row.id),
+    soulId: String(row.soul_id),
+    userId: String(row.user_id),
+    sessionId: String(row.session_id),
+    turn: Number(row.turn),
+    at: Number(row.at),
+    userText: String(row.user_text),
+    assistantText: String(row.assistant_text),
+    metadata,
+    createdAt: Number(row.created_at),
   };
 }
 

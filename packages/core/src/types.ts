@@ -52,6 +52,38 @@ export interface Identity {
   createdAt: number;
 }
 
+/**
+ * One exchange: what the user said and what the assistant answered.
+ * The unit of memory (RFC 0007). Both sides are original text, never truncated
+ * here — injection drops a whole pair rather than cutting one in half.
+ */
+export interface TurnPair {
+  id: string;
+  soulId: string;
+  userId: string;
+  /** Host session id. Together with `turn` it makes writes idempotent. */
+  sessionId: string;
+  turn: number;
+  /** When the user message arrived. */
+  at: number;
+  userText: string;
+  assistantText: string;
+  /** Open container for fields not decided yet (briefs/0010 §8). */
+  metadata: Record<string, unknown>;
+  createdAt: number;
+}
+
+/** What a recall call may narrow by. Everything is optional. */
+export interface TurnPairSpec {
+  soulId: string;
+  userId: string;
+  /** Text to score against. Empty means "no query": rank by recency only. */
+  query?: string;
+  limit?: number;
+  /** Only pairs at or after this timestamp. */
+  since?: number;
+}
+
 /** Six dimensions, each -2..+2. Baseline is slightly positive. */
 export interface Emotion {
   passion: number;

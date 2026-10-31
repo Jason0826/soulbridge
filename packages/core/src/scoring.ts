@@ -75,16 +75,15 @@ export interface CorpusStats {
   avgdl: number;
 }
 
-/** Build idf / average length over a batch of memories. Call once per query. */
-export function buildCorpusStats(memories: Memory[]): CorpusStats {
+/** Build idf / average length over a batch of tokenized documents. Call once per query. */
+export function buildCorpusStats(docs: string[][]): CorpusStats {
   const df = new Map<string, number>();
   let totalLen = 0;
-  for (const memory of memories) {
-    const tokens = memoryTokens(memory);
+  for (const tokens of docs) {
     totalLen += tokens.length;
     for (const token of new Set(tokens)) df.set(token, (df.get(token) ?? 0) + 1);
   }
-  const n = Math.max(1, memories.length);
+  const n = Math.max(1, docs.length);
   const idf = new Map<string, number>();
   for (const [token, count] of df) {
     // +1 keeps idf positive so a shared rare token never becomes a penalty.
@@ -93,10 +92,9 @@ export function buildCorpusStats(memories: Memory[]): CorpusStats {
   return { idf, avgdl: totalLen / n };
 }
 
-/** BM25 score. Length normalization is the reason this replaced plain recall. */
-export function bm25(tokens: string[], memory: Memory, stats: CorpusStats): number {
+/** BM25 over pre-tokenized document tokens. Length normalization is why this replaced plain recall. */
+export function bm25(tokens: string[], docTokens: string[], stats: CorpusStats): number {
   if (tokens.length === 0) return 0;
-  const docTokens = memoryTokens(memory);
   if (docTokens.length === 0) return 0;
 
   const tf = new Map<string, number>();
@@ -158,8 +156,8 @@ export function rank(memories: Memory[], query: string, now: number): Array<{ me
       .sort((a, b) => b.score - a.score);
   }
 
-  const stats = buildCorpusStats(memories);
-  const scored = memories.map((memory) => ({ memory, raw: bm25(tokens, memory, stats) }));
+  const stats = buildCorpusStats(memories.map(memoryTokens));
+  const scored = memories.map((memory) => ({ memory, raw: bm25(tokens, memoryTokens(memory), stats) }));
   const best = scored.reduce((max, s) => Math.max(max, s.raw), 0);
   if (best <= 0) return [];
 

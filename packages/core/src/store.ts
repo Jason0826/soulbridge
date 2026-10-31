@@ -2,7 +2,16 @@
  * The only port. Every added method is a storage engine's opinion leaking into
  * the domain, so the surface stays deliberately small.
  */
-import type { AffectSignal, Correction, Emotion, Identity, Memory, QuerySpec } from './types.ts';
+import type {
+  AffectSignal,
+  Correction,
+  Emotion,
+  Identity,
+  Memory,
+  QuerySpec,
+  TurnPair,
+  TurnPairSpec,
+} from './types.ts';
 
 export interface SoulStore {
   ensureSoul(identity: Identity): void;
@@ -14,6 +23,16 @@ export interface SoulStore {
   put(memory: Memory): void;
   /** Active, non-deleted memories visible to `userId` (own private + shared). */
   query(spec: QuerySpec): Memory[];
+
+  /**
+   * Store one exchange. Idempotent on `(soul, user, session, turn)`: a repeat is
+   * ignored, never merged — the original text is immutable (RFC 0007).
+   */
+  putTurnPair(pair: TurnPair): void;
+  /** Exchanges visible to `userId`; scored against `spec.query` when given. */
+  recallTurnPairs(spec: TurnPairSpec): TurnPair[];
+  countTurnPairs(soulId: string, userId: string): number;
+
   /** Recall bookkeeping: recallCount++, lastRecalledAt = now. */
   touch(ids: string[], now?: number): void;
   /**
