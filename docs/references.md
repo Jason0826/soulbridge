@@ -113,7 +113,7 @@ GLM-5/OpenCode 64.2 → 75.7。给 Gemini 调的 harness 原样交给 GLM-5，�
 
 | 来源 | 结论 | 对我们的影响 |
 |---|---|---|
-| **Ebbinghaus（1885）遗忘曲线**；[Murre & Dros 2015 复核](https://www.sciencedirect.com/science/article/abs/pii/S0022249610001100) | 遗忘前快后慢，近似指数衰减；复核后曲线带一个很小的初始平台，不是纯指数 | 我们目前**没有衰减**：`vividness` 恒为 1，`recall_count` 不参与评分。要加衰减，起点应是**上次被召回的时间**，不是创建时间 |
+| **Ebbinghaus（1885）遗忘曲线**；[Murre & Dros 2015 复核](https://www.sciencedirect.com/science/article/abs/pii/S0022249610001100) | 遗忘前快后慢，近似指数衰减；复核后曲线带一个很小的初始平台，不是纯指数 | `scoring.ts` 已有 recency 半衰期（30 天，起点 `lastRecalledAt ?? createdAt`）。缺的是：`vividness` 恒定不动、`recall_count` 权重仅 0.05 几乎不影响排序 |
 | **间距效应 / 间隔重复**（SM-2、Anki；[spaced learning 综述](https://www.aorn.org/the-stitch/article/spaced-learning)） | 每次成功回忆会拉长下一次的间隔；失败则回退。回忆比重读更有效 | `touch()` 现在只做 `recall_count++`，没有"稳定性"概念。间距模型要求：召回 → 间隔变长 → 衰减更慢 |
 | **Generative Agents**（Park et al. 2023，[检索机制笔记](https://github.com/curiositech/windags-skills/blob/main/skills/park-2023-generative-agents/references/memory-retrieval-as-attention-mechanism.md)） | 检索分 = 新近度（约 0.995^小时）+ 重要度 + 相关性，三者加权 | 与 [briefs/0007](briefs/0007-retrieval-scoring.md) 的三因子方向一致。我们缺的是**新近度的指数衰减**和重要度的校准 |
 | **[写时重要度不等于未来有用](https://zenodo.org/records/22868532)** | 写时打的重要度只反映"当时显著"，不能当"未来会被需要"的先验 | 不要把 `importance` 当固定先验。我们的 `recall_count` / 纠正反馈应当能反过来调整它 |
