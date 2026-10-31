@@ -33,13 +33,13 @@
 | 机制 | 位置 | 说明 |
 |---|---|---|
 | 自动观察 | 插件 `session/event` | 每条用户消息 → `observe`：规则优先，漏了才问模型 |
-| 注入 | 两层 | `systemPrompt.section` 放锚点（importance ≥8）；`agent/pre-step` 按当前消息检索相关记忆，每轮一次 |
+| 注入 | 两层 | `systemPrompt.section` 放锚点（importance ≥8，≤3 条）；`agent/pre-step` **只注入 `<memories>`，无匹配则不注入**（0.0.34），日志带 `ids` |
 | 工具 | `soul_recall` / `soul_remember` | **只有新建会话才看得到**（工具集在会话创建时固定） |
 | 写入闸门 | core | shape → semantic → budget，`committed` 表示真的落库 |
-| 纠正证据 | core + 插件 | core 已有 `detectCorrection`（L1 规则 + L2 结构，黄金集 3/6、精度 100%）；**插件尚未更新，真机 `corrections` 仍为 0 行** |
+| 纠正证据 | core + 插件 | `detectCorrection`（L1 规则 + L2 结构）；真机已有 **29 行**，但 `structural:negation` 精度约 **11%**（25/28 是否定词误判）→ 判据 3 只数 `rule:` 层 |
 | 时效 | core | `validUntil` 过期不注入；`supersede` 是**手动 API**，没有业务调用者 |
 
-## 已知问题（都记在 backlog，观察期内不改）
+## 已知问题（记在 backlog，未修）
 
 - **affect 基本失灵**：`同事被裁员，内心空了一块` → `none`；`我不喜欢缩写` → `joy`（B4）。词表 75 词，真实句 7 个里 6 个零命中
 - **不记日常**：只看长期事实/偏好，当前兴趣和近期事件不记（B1）
@@ -48,18 +48,19 @@
 - **没有"证据等级"**：不知道一条记忆是用户原话、规则抽的，还是模型归纳的（[briefs/0007](briefs/0007-retrieval-scoring.md)）
 - **schema 有死字段**：`visibility` 恒为 private、`vividness` 永不变化、`valid_until`/`superseded_by` 全 NULL。重设计见 [briefs/0009](briefs/0009-schema-redesign.md)
 
-## 设计债（2026-10-30 盘点）
+## 设计债（2026-10-31 更新）
 
-**设计已经跑在实现前面**：`briefs/0005`–`0009` 共 **607 行设计**，对应落地约 **80 行**（`detectCorrection`）。
-其余全部是 Draft，没有一行实现。这不是问题，但要记着——**声明多于能力时，最容易高估自己**。
+**设计仍然跑在实现前面**：`briefs/0005`–`0010` 除 0008 外全是 Draft，没有一行实现。
+这不是问题，但要记着——**声明多于能力时，最容易高估自己**。
 
 | 设计 | 状态 | 前置条件 |
 |---|---|---|
 | 0005 评估 harness | Draft | 需要消费者；S1 收尾后 |
 | 0006 情绪动力学 | Draft | 先修状态饱和（bug 级） |
 | 0007 检索骨架 | Draft | 需要 `evidence` 写入路径 |
-| 0008 纠正检测 | **部分实现**（core 有、插件未更新） | 插件重装 + 重启 |
+| 0008 纠正检测 | **已实现**（core + 插件 0.0.33 起） | 精度待修：`structural` 仅约 11% |
 | 0009 schema 重设计 | Draft | 先定 `valid_until` 写入路径 |
+| 0010 记忆单元 | Draft | 先定 `turn_pair` 落地 + 归纳 |
 
 ## 环境与工具（新会话先看这一节）
 
@@ -93,24 +94,37 @@
 
 ## 下一步
 
-1. 观察一周，记录效果判据（判据 1 和 3 只有用户能判）
-2. **提前收口触发条件**：若到 2026-11-02 判据 2 的抽查样本仍 < 5 次，说明观察设计没产生可用数据 → 提前收口，把"观察设计失败"写进收尾记录
-3. 到期写 S1 收尾记录（完成/未完成/原因/下一阶段建议）
-4. 再决定 backlog 里哪项进入下一阶段
+**S2 未开工。** 按阶段规则 1，开工前先写阶段文件。
 
-## 最近变化（2026-10-30）
+当前状态：
 
-- 纠正检测：core 加 `detectCorrection`（规则 + 结构两层）+ 黄金集；插件 **0.0.32 已 overlay 并重启生效**，等第一次真实纠正落库
-- **ADR 0026：生命感分层与降级**（L0 数据 / L1 注入 / L2 采样 / L3 生命周期 / L4 器官）—— L0/L1 是正确性前提，L2+ 只是增强
-- schema 设计（[0009](briefs/0009-schema-redesign.md)）新增 L0 三件套：缺口 / 疤痕 / 时间感，都不依赖宿主能力
-- 文档：新增 [briefs/0005](briefs/0005-eval-harness.md)–[0009](briefs/0009-schema-redesign.md)
-- 工具：`scripts/health-check.mjs`（结构体检）、`scripts/field-audit.mjs`（字段审计）
-- 索引：[docs/README.md](README.md) 是文档地图，先看它再决定读哪份
-- 调研：[references.md](references.md) 里有 Harness²、OpenJudge/PawBench、Claw-Eval、digital-life-core 的读数
+1. core 0.0.24 / plugin 0.0.34 已 overlay 并重启生效——**全是 bug 修复，没有新功能**
+2. `prestep` 日志开始带 `ids`，判据 2 **第一次可回溯抽查**（等几天数据）
+3. [0010](briefs/0010-memory-unit.md) 定义了条目与注入分工，**未实现**
+
+候选 S2（未定）：
+
+| | 效果目标 | 代价 |
+|---|---|---|
+| A 重新观察 | "我能证明它记得我" | 不产出新能力 |
+| B 落地 `turn_pair` | "它能接上之前聊过的事" | 要写 RFC，改动大 |
+| C 先 A 后 B | —— | 时间拉长 |
+
+**建议 C**：如果 A 跑出来发现"记忆根本没被用上"，B 的设计就得重做。
+
+## 最近变化（2026-10-31）
+
+- **BM25 检索**（core 0.0.24）：`relevance` 从命中比例换成 IDF + 长度归一化。真机 60 条记忆 / 298 条 query：那条 18202 字的进入 top3 的比例 **85% → 15%**，top1 平均 12150 → 1099 字
+- **S1 提前收口**：判据 2 无法抽查、判据 3 数据源精度 11%。收尾记录见 [stages/s1-dsh-memory.md](stages/s1-dsh-memory.md)
+- **注入修复**（plugin 0.0.34）：无匹配不再注入 88 字符空块；只注入 `<memories>`，不再重复 `<soul>/<style>`；日志带 `ids`
+- **判据 3 统计口径**：只数 `rule:` 层（`structural:negation` 约 11% 精度）
+- **0010 记忆单元**：`turn_pair` + 三轴 + 注入分工（设计，未实现）
+- 本次之前的记录（2026-10-30）：纠正检测、ADR 0026、0009 schema、工具脚本
 
 ## 从哪看起
 
-- 现在该做什么 → [stages/s1-dsh-memory.md](stages/s1-dsh-memory.md)
+- 现在该做什么 → **S2 未定**，见上面"下一步"
+- 当前设计 → [briefs/0010](briefs/0010-memory-unit.md)
 - 为什么这么做 → `docs/adr/`、`docs/rfcs/`
 - 以后做什么 → [roadmap.md](roadmap.md)、[backlog.md](backlog.md)
 - 怎么发版 → [runbook.md](runbook.md)

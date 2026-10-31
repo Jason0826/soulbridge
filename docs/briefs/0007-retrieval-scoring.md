@@ -13,7 +13,16 @@
 
 ## 2. 现状与问题（实测）
 
-打分公式：`0.35·relevance + 0.25·importance + 0.20·recency + 0.15·vividness + 0.05·recall`
+> **2026-10-31 更新：`relevance` 已换成 BM25。** 本节以下的实测数据是 10-30 的记录，
+> 保留原样；公式应读作 `0.35·bm25 + 0.25·importance + 0.20·recency + 0.15·vividness + 0.05·recall`。
+> 权重未变，所以下面的敏感性结论仍然适用。
+>
+> 换算法的理由：旧 `relevance` 是纯命中比例（无 IDF、无长度归一化），而库中文档长度从 7 字到 18202 字。
+> 真机 60 条记忆 / 298 条 query 实测：那条 18202 字的记忆进入 **85%** 查询的 top3、top1 平均 12150 字；
+> 换 BM25 后降到 **15%**、top1 1099 字。空召回次数不变（22），不是靠少给赢的。
+> 数据与复现见 [eval-longmemeval-baseline](../eval-longmemeval-baseline.md) 和 core 0.0.24。
+
+打分公式（10-30 记录）：`0.35·relevance + 0.25·importance + 0.20·recency + 0.15·vividness + 0.05·recall`
 
 真机 30 条活跃记忆上的实测：
 

@@ -100,6 +100,11 @@ block = soul.context({ query, types: ['strategy','fact','trait'], minImportance:
 
 ## 6. 开放问题
 
+> **2026-10-31 更新**（[0010 §10](../briefs/0010-memory-unit.md)）：
+> - 问题 3：**不需要去重**。两者应放不同的东西——system prompt 放画像（结论），pre-step 放交流片段（原文）。
+>   现在的重叠是因为两者从同一个池子取同一种东西。
+> - 实现修正：pre-step **只注入 `<memories>`**，不再重复 `<soul>/<style>`；无匹配则不注入（plugin 0.0.34）。
+
 1. 追加消息会不会显示在 GUI 的对话记录里？探针期间我没在界面上确认。
 2. 对 prompt 缓存的影响：每轮内容不同，可能使系统提示词缓存失效率上升。
 3. 锚点与相关层要不要互相去重（同一条既在锚点又在相关里）？
