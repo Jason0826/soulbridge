@@ -16,6 +16,7 @@
 | 具体公式、字段、阈值 | [spec/](spec/) |
 | 某个需求从哪来、消费者是谁 | [briefs/](briefs/) |
 | 检索层现在多少分、怎么复现 | [eval-longmemeval-baseline.md](eval-longmemeval-baseline.md) |
+| 用户能当场验证的最小能力是什么 | [mvp.md](mvp.md) |
 | 怎么发版、出问题怎么处理 | [runbook.md](runbook.md) |
 | 质量红线、设计交付四问 | [quality.md](quality.md) |
 | 架构总览 | [architecture.md](architecture.md) |
