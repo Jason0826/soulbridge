@@ -107,6 +107,33 @@ GLM-5/OpenCode 64.2 → 75.7。给 Gemini 调的 harness 原样交给 GLM-5，�
 
 ---
 
+## 2026-11 新增：遗忘曲线与检索（对我们"怎么忘、怎么想起来"的直接输入）
+
+用户提出：先看文献再设计 soul 的记忆。以下四条是结论、来源，以及**对我们哪一列有影响**。
+
+| 来源 | 结论 | 对我们的影响 |
+|---|---|---|
+| **Ebbinghaus（1885）遗忘曲线**；[Murre & Dros 2015 复核](https://www.sciencedirect.com/science/article/abs/pii/S0022249610001100) | 遗忘前快后慢，近似指数衰减；复核后曲线带一个很小的初始平台，不是纯指数 | 我们目前**没有衰减**：`vividness` 恒为 1，`recall_count` 不参与评分。要加衰减，起点应是**上次被召回的时间**，不是创建时间 |
+| **间距效应 / 间隔重复**（SM-2、Anki；[spaced learning 综述](https://www.aorn.org/the-stitch/article/spaced-learning)） | 每次成功回忆会拉长下一次的间隔；失败则回退。回忆比重读更有效 | `touch()` 现在只做 `recall_count++`，没有"稳定性"概念。间距模型要求：召回 → 间隔变长 → 衰减更慢 |
+| **Generative Agents**（Park et al. 2023，[检索机制笔记](https://github.com/curiositech/windags-skills/blob/main/skills/park-2023-generative-agents/references/memory-retrieval-as-attention-mechanism.md)） | 检索分 = 新近度（约 0.995^小时）+ 重要度 + 相关性，三者加权 | 与 [briefs/0007](briefs/0007-retrieval-scoring.md) 的三因子方向一致。我们缺的是**新近度的指数衰减**和重要度的校准 |
+| **[写时重要度不等于未来有用](https://zenodo.org/records/22868532)** | 写时打的重要度只反映"当时显著"，不能当"未来会被需要"的先验 | 不要把 `importance` 当固定先验。我们的 `recall_count` / 纠正反馈应当能反过来调整它 |
+
+### 采纳 / 不采纳
+
+**采纳（MVP1 之后，S3）**
+1. 新近度用 `last_recalled_at` 的指数衰减（0.995/小时量级起步，可配）
+2. `touch()` 同时更新"间隔"，形成间距效应
+3. `importance` 允许被使用反馈修正
+
+**不采纳（现在）**
+- 检索诱发遗忘 / 多样性重排（MMR）：相似记忆互相抑制是真实效应，但会牺牲召回率，等有数据再说
+- 硬删除过期记忆：文献里的"遗忘"是**可及性下降**，不是删除。我们已有 `validUntil` 做失效，不做物理删
+
+**存疑**
+- 写时 `importance` 的权重：文献支持它，但也有批评（上表第四条）。先保留，用数据校准。
+
+---
+
 ## 使用规则
 
 1. **原则可以引用，数字不要引用。**
