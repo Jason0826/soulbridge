@@ -298,7 +298,16 @@ export class Soul {
     // The model has to know what is already stored, or it cannot reuse a name
     // and cannot tell that new information contradicts an old fact.
     const context = options.context ?? this.extractionContext();
-    const result = await extractWithModel(text, options.llm, at, context);
+    // A parse failure is unreadable without the text the model actually sent:
+    // "model-failed" alone hid a 54-character reply for an hour today.
+    const wrapped = this.onLlmRaw
+      ? async (prompt: string) => {
+          const raw = await options.llm!(prompt);
+          this.onLlmRaw!(raw);
+          return raw;
+        }
+      : options.llm;
+    const result = await extractWithModel(text, wrapped, at, context);
     return result.draft ?? { ...byRules, reason: `model-${result.error ? 'failed' : 'empty'}` };
   }
 
