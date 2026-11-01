@@ -228,6 +228,15 @@ export class Soul {
     return id;
   }
 
+  /**
+   * One turn by id, for adapters that only kept the id (extraction queue,
+   * handoff). Returns null when the row is gone, so callers can drop the item
+   * instead of retrying forever.
+   */
+  turn(id: string): TurnPair | null {
+    return this.store.turn(id);
+  }
+
   /** Recall exchanges, scored against `query` when it is non-empty. */
   recallTurnPairs(query: string, limit = 5): TurnPair[] {
     return this.store.recallTurnPairs({

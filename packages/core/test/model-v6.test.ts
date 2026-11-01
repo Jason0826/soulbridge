@@ -122,3 +122,25 @@ test('factDetail: a hook expands back to the conversation it came from', () => {
   assert.equal(soul.factDetail('fc_missing'), null);
   store.close();
 });
+test('recordTurnPair returns the id that factDetail can follow', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  const turnId = soul.recordTurnPair({
+    sessionId: 'sess',
+    turn: 7,
+    userText: '我们第一次见面吃了火锅',
+    assistantText: '记下了，是那家火锅店',
+    at: 1000,
+  });
+  assert.match(turnId, /^tp_/);
+
+  // The adapter passes this id to extraction; a hook must be able to follow it.
+  const turn = soul.turn(turnId);
+  assert.equal(turn?.userText, '我们第一次见面吃了火锅');
+
+  const fact = store.putFact({ ...S, statement: '第一次见面吃火锅', at: 1000, sourceTurnId: turnId });
+  const detail = soul.factDetail(fact.id);
+  assert.equal(detail?.turn?.id, turnId);
+  assert.match(detail?.turn?.assistantText ?? '', /火锅店/);
+  store.close();
+});
