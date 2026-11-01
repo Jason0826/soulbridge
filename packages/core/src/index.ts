@@ -208,10 +208,13 @@ export class Soul {
     assistantText: string;
     at?: number;
     metadata?: Record<string, unknown>;
-  }): void {
+  }): string {
     const at = input.at ?? Date.now();
+    // The generated id is the row id in `turns`; callers must use it for
+    // facts.source_turn_id, otherwise a hook cannot expand back to its turn.
+    const id = `tp_${at.toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
     this.store.putTurnPair({
-      id: `tp_${at.toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+      id,
       soulId: this.soulId,
       userId: this.userId,
       sessionId: input.sessionId,
@@ -222,6 +225,7 @@ export class Soul {
       metadata: input.metadata ?? {},
       createdAt: at,
     });
+    return id;
   }
 
   /** Recall exchanges, scored against `query` when it is non-empty. */
