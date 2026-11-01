@@ -283,6 +283,8 @@ export interface ExtractDraft {
   operations?: FactOperation[];
   gaps: GapDraft[];
   by: 'rules' | 'llm';
+  /** Why the rules path was used, so a silent fallback cannot hide. */
+  reason?: string;
 }
 
 /** What a commit actually created or merged. */

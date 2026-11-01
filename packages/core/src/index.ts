@@ -270,13 +270,16 @@ export class Soul {
   ): Promise<ExtractDraft> {
     const at = options.at ?? Date.now();
     const byRules = extractByRules(text, at);
-    // Pre-filter: "好的" / "嗯" cannot carry a fact, so it is not worth a call.
-    if (options.mode === 'rules' || !options.llm || text.trim().length < 4) return byRules;
+    // No length gate here: "做" and "重来" are one and two characters and are
+    // real decisions. The host decides what is worth a model call; core only
+    // reports which path it took.
+    if (options.mode === 'rules') return { ...byRules, reason: 'rules-mode' };
+    if (!options.llm) return { ...byRules, reason: 'no-model' };
     // The model has to know what is already stored, or it cannot reuse a name
     // and cannot tell that new information contradicts an old fact.
     const context = options.context ?? this.extractionContext();
     const result = await extractWithModel(text, options.llm, at, context);
-    return result.draft ?? byRules;
+    return result.draft ?? { ...byRules, reason: `model-${result.error ? 'failed' : 'empty'}` };
   }
 
   /** The slice of the store the extractor is allowed to know about. */
