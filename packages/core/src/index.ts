@@ -51,6 +51,7 @@ import type {
   EntityDraft,
   ExtractDraft,
   Fact,
+  FactDetail,
   FactSpec,
   Gap,
   GapSpec,
@@ -434,16 +435,38 @@ export class Soul {
     return this.store.putFact({ ...spec, soulId: this.soulId, userId: this.userId });
   }
 
-  /** Everything that happened to or around one entity — the "about her" path. */
-  factsAbout(entityId: string, options: { since?: number; until?: number; limit?: number } = {}): Fact[] {
+  /**
+   * Everything that happened to or around one entity — the "about her" path.
+   *
+   * `order: 'asc'` gives the earliest fact, which is how "when we first met"
+   * is answered without storing a special label: the model reads the timeline.
+   */
+  factsAbout(
+    entityId: string,
+    options: { since?: number; until?: number; limit?: number; order?: 'asc' | 'desc' } = {},
+  ): Fact[] {
     return this.store.facts({
       soulId: this.soulId,
       userId: this.userId,
       entityId,
       since: options.since,
       until: options.until,
+      order: options.order,
       limit: options.limit,
     });
+  }
+
+  /** A fact plus the conversation behind it: hook first, detail on demand. */
+  factDetail(factId: string): FactDetail | null {
+    const fact = this.store.fact(factId);
+    if (!fact) return null;
+    const turn = fact.sourceTurnId ? this.store.turn(fact.sourceTurnId) : null;
+    return {
+      fact,
+      turn: turn
+        ? { id: turn.id, userText: turn.userText, assistantText: turn.assistantText, at: turn.at }
+        : undefined,
+    };
   }
 
   /** Open questions, highest tension first. */

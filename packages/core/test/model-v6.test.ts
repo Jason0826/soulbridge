@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openSqlite } from '../src/sqlite.ts';
+import { Soul } from '../src/index.ts';
 
 const S = { soulId: 's1', userId: 'u1' };
 
@@ -82,5 +83,42 @@ test('gaps: ordered by tension, closable, and tied to a person', () => {
   const after = store.openGaps(S.soulId, S.userId);
   assert.equal(after.length, 1);
   assert.equal(after[0].topic, '她后来有着落吗');
+  store.close();
+});
+
+test('factsAbout: asc order returns the earliest fact about a person', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  const her = store.putEntity({ ...S, type: 'person', name: 'A' });
+  store.putFact({ ...S, statement: '2026-10-31 又见了一面', at: 3000, slots: [{ slot: '参与者', value: { kind: 'entity', entityId: her.id } }] });
+  store.putFact({ ...S, statement: '2025-03-14 第一次见面吃火锅', at: 1000, slots: [{ slot: '参与者', value: { kind: 'entity', entityId: her.id } }] });
+
+  const earliest = soul.factsAbout(her.id, { order: 'asc', limit: 1 });
+  assert.equal(earliest[0].statement, '2025-03-14 第一次见面吃火锅');
+  const newest = soul.factsAbout(her.id, { limit: 1 });
+  assert.equal(newest[0].statement, '2026-10-31 又见了一面');
+  store.close();
+});
+
+test('factDetail: a hook expands back to the conversation it came from', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  store.putTurn({
+    id: 'tn_s1_7',
+    soulId: 's1',
+    userId: 'u1',
+    sessionId: 'sess',
+    turnNo: 7,
+    startedAt: 1000,
+    userText: '我们第一次见面吃了火锅',
+    steps: [{ idx: 0, kind: 'text', text: '记下了，是那家火锅店', at: 1100 }],
+  });
+  const fact = store.putFact({ ...S, statement: '第一次见面吃火锅', at: 1000, sourceTurnId: 'tn_s1_7' });
+
+  const detail = soul.factDetail(fact.id);
+  assert.equal(detail?.fact.statement, '第一次见面吃火锅');
+  assert.equal(detail?.turn?.userText, '我们第一次见面吃了火锅');
+  assert.match(detail?.turn?.assistantText ?? '', /火锅店/);
+  assert.equal(soul.factDetail('fc_missing'), null);
   store.close();
 });

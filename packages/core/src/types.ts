@@ -354,6 +354,16 @@ export interface FactSpec {
   slots?: FactSlot[];
 }
 
+/**
+ * One fact plus the conversation it came from: the memory's hook on top, the
+ * detail underneath. The model reads hooks first and asks for this only when it
+ * needs the original words.
+ */
+export interface FactDetail {
+  fact: Fact;
+  turn?: { id: string; userText: string; assistantText: string; at: number };
+}
+
 export interface FactQuery {
   soulId: string;
   userId: string;
@@ -364,6 +374,8 @@ export interface FactQuery {
   status?: FactStatus;
   /** Only facts whose holder is this (world / self / entity id). */
   holder?: string;
+  /** Sort by event time. Default desc (newest first); asc gives the earliest. */
+  order?: 'asc' | 'desc';
   limit?: number;
 }
 

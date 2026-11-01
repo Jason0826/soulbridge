@@ -879,10 +879,11 @@ export function openSqlite(file: string): SoulStore {
         where.push('f.holder = ?');
         args.push(query.holder);
       }
+      const direction = query.order === 'asc' ? 'ASC' : 'DESC';
       const rows = db
         .prepare(
           `SELECT f.* FROM facts f WHERE ${where.join(' AND ')}
-           ORDER BY COALESCE(f.at, f.created_at) DESC LIMIT ?`,
+           ORDER BY COALESCE(f.at, f.created_at) ${direction} LIMIT ?`,
         )
         .all(...args, query.limit ?? 200) as Row[];
       const ids = rows.map((r) => String(r.id));
@@ -948,6 +949,10 @@ export function openSqlite(file: string): SoulStore {
       );
     },
 
+    turn(id: string): TurnPair | null {
+      const row = db.prepare('SELECT * FROM turns WHERE id = ?').get(id) as Row | undefined;
+      return row ? rowToTurnPair(row) : null;
+    },
     stepsOf(turnId: string): TurnStep[] {
       const rows = db
         .prepare('SELECT * FROM steps WHERE turn_id = ? ORDER BY idx ASC')

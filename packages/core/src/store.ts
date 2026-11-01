@@ -56,6 +56,8 @@ export interface SoulStore {
   putFact(spec: FactSpec): Fact;
   fact(id: string): Fact | null;
   facts(query: FactQuery): Fact[];
+  /** One turn by id, for expanding a fact back into its conversation. */
+  turn(id: string): TurnPair | null;
   /** Retire a fact: the new one replaces it, the old row stays for the record. */
   supersedeFact(oldId: string, newId: string): void;
   /** Something wanted but not known; the highest tension is worth asking about. */
