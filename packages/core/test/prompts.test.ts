@@ -49,6 +49,10 @@ test('extraction prompt: the entity rules that the old prompt lacked', () => {
   assert.match(prompt, /自包含/);
   assert.match(prompt, /换算成 YYYY-MM-DD/);
   assert.match(prompt, /不确定就省略字段/);
+  assert.match(prompt, /<when-to-write>/);
+  assert.match(prompt, /不要写/);
+  assert.match(prompt, /用户对我的要求、提问、催促、同意、否定/);
+  assert.match(prompt, /用户只是在问我一个问题时\*\*不要\*\*建缺口/);
 });
 
 test('extraction prompt: stays within a sane size', () => {

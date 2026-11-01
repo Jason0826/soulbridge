@@ -68,9 +68,30 @@ const EXTRACTION_RULES = `<rules>
 - 合并：与 <known-facts> 语义相同 → noop；互相矛盾 → supersede 并给 target；是补充 → update。
   相关但独立 → add。不要用 <known-facts> 里没有的新事实去 supersede。
 - 不确定就省略字段，绝不编造数字、日期、关系。
-- 问句、请求、同意、拒绝本身也是事件，要抽成 fact（type_name 用“提问/请求/同意/拒绝”）。
 - 不要抽助手对自己的描述，也不要重复用户刚落的话（回声不算新事实）。
-</rules>`;
+</rules>
+
+<when-to-write>
+只在这四种情况下写事实：
+1. 某个人或某件事的状态、经历（“小林换了工作”“那个项目黄了”）
+2. 一个决定，以及做这个决定的理由
+3. 用户表达的偏好、原则或习惯（“我讨厌反复讲同一件事”）
+4. 我给出的承诺（“我明天把表补上”）
+
+**不要写**（这是最常见的噪声）：
+- 用户对我的要求、提问、催促、同意、否定——这些是对话动作，对话原文已经保存，再写一份只会变成噪声
+- 我问用户的澄清问题
+- 寒暄、我的自我介绍、我对能力的说明
+- 用户正在问我的事，不是“关于用户的事实”
+</when-to-write>
+
+<gaps>
+只有两种情况建缺口：
+1. 用户说自己不知道、没消息、想知道某件事（“她后来怎么样了”“不知道还在不在”）
+2. 我说过要做、但状态仍未完成的事
+
+用户只是在问我一个问题时**不要**建缺口——那是他在提问，不是他缺信息。
+</gaps>`;
 
 const EXTRACTION_EXAMPLES = `<examples>
 <example>
@@ -89,6 +110,17 @@ const EXTRACTION_EXAMPLES = `<examples>
 <example>
 <source>好的，谢谢</source>
 <output>{"entities":[],"operations":[{"op":"noop"}],"gaps":[]}</output>
+</example>
+<example>
+<source>你帮我把那个表重新跑一遍</source>
+<output>{"entities":[],"operations":[{"op":"noop"}],"gaps":[]}</output>
+</example>
+<example>
+<source>我讨厌同一件事反复讲，换个工具又要重新说一遍</source>
+<output>{"entities":[],"operations":[{"op":"add","fact":{
+"statement":"用户讨厌同一件事反复讲，换工具也不想重复交代","type_name":"偏好",
+"source":"experienced","confidence":0.9,
+"slots":[{"slot":"偏好主体","entity":"用户"}]}}],"gaps":[]}</output>
 </example>
 </examples>`;
 
