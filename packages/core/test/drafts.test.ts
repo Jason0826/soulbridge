@@ -106,7 +106,7 @@ test('model: sees existing entities and facts in the prompt', async () => {
     NOW,
     { entities: [{ id: 'en_1', name: '小林', relation: '同事' }], facts: [{ id: 'fc_1', statement: '小林被裁员', atText: '上周' }] },
   );
-  assert.match(prompt, /已知人物/);
+  assert.match(prompt, /<known-entities>/);
   assert.match(prompt, /小林/);
   assert.match(prompt, /\[fc_1\]/);
   assert.equal(draft.draft, null, 'an empty answer is not a draft');

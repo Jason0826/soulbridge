@@ -16,6 +16,7 @@
  * Pure functions, no I/O, no dependencies.
  */
 import type { EntityDraft, ExtractDraft, FactDraft, FactOperation, GapDraft, SlotValue } from './types.ts';
+import { renderExtractionPrompt } from './prompts.ts';
 
 /** Relations a person is introduced with, longest first so 女同事 wins over 同事. */
 const RELATIONS = [
@@ -197,34 +198,6 @@ export function extractByRules(text: string, at = Date.now()): ExtractDraft {
   return { entities: [...unique.values()], facts, gaps, by: 'rules' };
 }
 
-const MODEL_INSTRUCTIONS = `你负责把一段对话变成记忆操作。只输出 JSON，不要解释。
-已知事实（可能为空）：见下方"已有信息"，用 id 指代。
-
-输出格式：
-{"entities":[{"name":"小林","type":"person","attrs":{"relation":"同事"}}],
- "operations":[
-   {"op":"add","fact":{"statement":"小林上周被裁员了","type_name":"裁员","at_text":"上周",
-      "source":"told","confidence":0.8,
-      "slots":[{"slot":"被裁员者","entity":"小林"},{"slot":"裁员人数","number":300}]}},
-   {"op":"supersede","target":"fc_ab12","fact":{"statement":"小林找到新工作了","at_text":"今天",
-      "source":"told","slots":[{"slot":"入职者","entity":"小林"}]}}
- ],
- "gaps":[{"topic":"她后来有着落吗","about":"小林","tension":0.6}]}
-
-op 的含义：
-- add        新的信息
-- supersede  新信息与已知事实冲突，旧事实作废（必须给 target=旧事实 id）
-- update     补充/修正已知事实（同样给 target）
-- noop       这句话没有值得记的东西
-
-规则：
-- 与"已有事实"冲突时必须用 supersede，不要叠加两条互相矛盾的记忆
-- type 只能是 person / thing / place / self
-- source 只能是 experienced（用户亲历）/ told（转述）/ inferred（推断）
-- 不知道的不要编；时间不确定只填 at_text
-- 闲聊、问句、指令也要抽：它们是"请求/提问/同意"，不是没发生的事
-- 没有可记的内容时 operations 返回 []`;
-
 interface ModelParseResult {
   draft: ExtractDraft | null;
   error?: string;
@@ -237,28 +210,6 @@ export interface ExtractionContext {
   previousUserText?: string;
 }
 
-/** Render the context into the prompt: names, ids, nothing else. */
-function renderContext(context?: ExtractionContext): string {
-  if (!context) return '（无）';
-  const lines: string[] = [];
-  if (context.entities.length > 0) {
-    lines.push('已知人物：');
-    for (const e of context.entities.slice(0, 30)) {
-      const aliases = e.aliases?.length ? `（别名：${e.aliases.join('、')}）` : '';
-      const relation = e.relation ? `，${e.relation}` : '';
-      lines.push(`- ${e.name}${aliases}${relation}`);
-    }
-  }
-  if (context.facts.length > 0) {
-    lines.push('已有事实：');
-    for (const f of context.facts.slice(0, 20)) {
-      lines.push(`- [${f.id}] ${f.statement}${f.atText ? `（${f.atText}）` : ''}`);
-    }
-  }
-  if (context.previousUserText) lines.push(`上一轮用户说：${context.previousUserText.slice(0, 200)}`);
-  return lines.length > 0 ? lines.join('\n') : '（无）';
-}
-
 /**
  * Model extraction: one call, strict JSON, validated afterwards.
  *
@@ -266,6 +217,8 @@ function renderContext(context?: ExtractionContext): string {
  * instead of inventing a duplicate and can supersede a fact that the new
  * sentence contradicts. That merge decision is the difference between "a log of
  * sentences" and memory (Mem0's ADD/UPDATE/DELETE, Graphiti's invalidation).
+ *
+ * The prompt itself is rendered from `prompts.ts`, not written here.
  */
 export async function extractWithModel(
   text: string,
@@ -273,7 +226,13 @@ export async function extractWithModel(
   at = Date.now(),
   context?: ExtractionContext,
 ): Promise<ModelParseResult> {
-  const prompt = `${MODEL_INSTRUCTIONS}\n\n已有信息：\n${renderContext(context)}\n\n本轮用户说：\n${text}`;
+  const prompt = renderExtractionPrompt({
+    text,
+    now: at,
+    entities: context?.entities,
+    facts: context?.facts,
+    previousUserText: context?.previousUserText,
+  });
   let raw: string;
   try {
     raw = await llm(prompt);
