@@ -25,6 +25,19 @@ export {
 } from './reflect.ts';
 export type { CorrectionLayer, CorrectionSignal, CorrectionVerdict } from './reflect.ts';
 export { rank, scoreMemory, tokenize, relevance, bm25, buildCorpusStats } from './scoring.ts';
+export {
+  renderConsolidationPrompt,
+  renderVerificationPrompt,
+  renderExtractionPrompt,
+} from './prompts.ts';
+export type { ConsolidationPromptInput, VerificationPromptInput, ExtractionPromptInput } from './prompts.ts';
+export {
+  gateConclusion,
+  conclusionSlots,
+  parseConclusionDraft,
+  parseVerificationDraft,
+} from './consolidate.ts';
+export type { VerificationDraft } from './consolidate.ts';
 export * from './affect/index.ts';
 export { measureStyle } from './style/measure.ts';
 export type { StyleMetrics } from './style/measure.ts';
@@ -510,6 +523,26 @@ export class Soul {
       .facts({ soulId: this.soulId, userId: this.userId, holder: 'self', limit: 200 })
       .filter((fact) => fact.typeName === '结论' && fact.status !== 'superseded')
       .slice(0, limit);
+  }
+
+  /**
+   * The newest facts, newest first — the input batch for consolidation.
+   *
+   * Observations only: conclusions share the same table, and feeding a conclusion
+   * back as evidence would let the model cite its own guess.
+   */
+  recentFacts(limit = 8): Fact[] {
+    return this.store
+      .facts({ soulId: this.soulId, userId: this.userId, limit: limit + 20 })
+      .filter((fact) => fact.typeName !== '结论')
+      .slice(0, limit);
+  }
+
+  /** How many observations exist; consolidation triggers on growth, not time. */
+  factTotal(): number {
+    return this.store
+      .facts({ soulId: this.soulId, userId: this.userId, limit: 100_000 })
+      .filter((fact) => fact.typeName !== '结论').length;
   }
 
   /**
