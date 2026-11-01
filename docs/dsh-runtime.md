@@ -154,7 +154,13 @@ inject(input)   { this.send(input, "next-step", false); }  // 插到下一位，
 | 用字符预算限制注入 | 不该有：压缩是宿主的职责 |
 | 插件模型调用失败无从重试 | 宿主给了 `agent/request-error`，但只覆盖主轮请求；我们的独立调用要自己的重试（已有队列） |
 
-### 待验证
+### 已验证（源码位置）
 
-- `agent.inject` 是否在插件 `ctx` 上可用（需要看 `Agent` 句柄暴露的接口，而不是 `send` 的内部实现）。
-- `agent/request-error` 的确切载荷与返回值约定（能否用于插件发起的调用）。
+- **`inject` / `steer` / `followup` 在公开 `Agent` 上**：`dsh-agent-loop/lib/index.js` 的 `ReactLoopAgent` 类实现了这三个方法，它们不是内部函数。
+- **`agent/request-error` 的约定**：waterfall 载荷 `{ turn, step, provider, failure, retryPolicy, signal }`，监听器返回 `{ kind: 'retry' }` 才重试；否则抛 `LlmError`。**它只覆盖主循环的请求**，不覆盖插件发起的独立调用。
+
+### 还没验证的
+
+- `inject` 进去的消息是否和 pre-step 替换批次一样受"冻结/提交"约束（应当一样，但没读提交路径）。
+- 压缩触发阈值的具体数值（在 `dsh-compaction-basic` 的策略里，未读）。
+
