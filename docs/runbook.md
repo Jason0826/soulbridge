@@ -31,6 +31,31 @@ cd ../dsh-plugin-soulbridge && node --test test/index.test.mjs   # 插件：期�
 这条是 2026-10-29 的教训：插件 0.0.26、0.0.27 在测试红着的情况下被发布，
 原因是「改测试被工具拒绝」被当成了「改好了」。**看到 `fail 0` 才算过。**
 
+### 第 0.5 步：装完必须用**安装后的产物**断言
+
+源码绿 + 版本号对，**不代表装上去的东西是对的**。2026-11-01 一天踩了四次：
+
+| 表面 | 实际 |
+|---|---|
+| 长度守卫改了 | core 里还有一份同源守卫 |
+| 插件装好了 | `dist/prompts.js` 没复制，import 失败，插件根本没加载 |
+| 版本号 0.0.34 | pnpm 用了缓存副本，dist 是旧的 |
+| 加了 `includeAnchors` 开关 | `Soul.context()` 手写字段清单把它吞了 |
+
+四条都没有被版本号或源码检查发现。所以装完 / 重启后**必须**跑：
+
+```bash
+node --experimental-strip-types scripts/verify-installed.mjs [profileDir]
+# 默认 profileDir = ~/.dsh/profiles/desktop
+# 期望最后一行：all checks passed against the installed artifacts
+```
+
+它断言的是安装副本自身的行为：core/plugin 版本、dist 入口存在、section 不含锚点、
+锚点可单独取、抽取 prompt 能渲染、插件能 `import` 出 `apply()`。
+
+> **验收口径**：不看"我改了什么"，看"装上的是什么"。任何一次改动，如果没有一条
+> 针对安装产物的断言，就当作没改。
+
 ```bash
 # 1. 升版本（不动 git tag）
 npm version patch --no-git-tag-version
