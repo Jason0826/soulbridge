@@ -41,7 +41,7 @@ export interface SoulStore {
    * Store one exchange. Idempotent on `(soul, user, session, turn)`: a repeat is
    * ignored, never merged — the original text is immutable (RFC 0007).
    */
-  putTurnPair(pair: TurnPair): void;
+  putTurnPair(pair: TurnPair, steps?: TurnStep[]): void;
   /** Write one turn with its ordered steps (briefs/0014). */
   putTurn(spec: TurnSpec): void;
   /** Steps of one turn, in order. */

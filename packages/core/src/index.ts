@@ -59,6 +59,7 @@ import type {
   TurnFindResult,
   SessionSummary,
   TurnPair,
+  TurnStep,
   Visibility,
 } from './types.ts';
 import type { SoulStore } from './store.ts';
@@ -208,6 +209,14 @@ export class Soul {
     assistantText: string;
     at?: number;
     metadata?: Record<string, unknown>;
+    /**
+     * The real shape of the reply: reasoning / text / tool steps in order.
+     *
+     * Stored, never injected. Reasoning is a draft, so recall and prompts read
+     * `kind === 'text'` only; it is kept because "why did you say that" and
+     * consolidation both need it.
+     */
+    steps?: TurnStep[];
   }): string {
     const at = input.at ?? Date.now();
     // The generated id is the row id in `turns`; callers must use it for
@@ -224,7 +233,7 @@ export class Soul {
       assistantText: input.assistantText,
       metadata: input.metadata ?? {},
       createdAt: at,
-    });
+    }, input.steps);
     return id;
   }
 

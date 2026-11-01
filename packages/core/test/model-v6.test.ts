@@ -144,3 +144,29 @@ test('recordTurnPair returns the id that factDetail can follow', () => {
   assert.match(detail?.turn?.assistantText ?? '', /火锅店/);
   store.close();
 });
+test('recordTurnPair keeps reasoning steps but recall reads text only', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  const id = soul.recordTurnPair({
+    sessionId: 'sess',
+    turn: 9,
+    userText: '跟 a 刚认识的时候吃了什么',
+    assistantText: '火锅',
+    at: 1000,
+    steps: [
+      { idx: 0, kind: 'reasoning', text: '先看 a 的最早事实', at: 1000 },
+      { idx: 1, kind: 'text', text: '火锅', at: 1000 },
+    ],
+  });
+
+  const steps = store.stepsOf(id);
+  assert.deepEqual(
+    steps.map((step) => step.kind),
+    ['reasoning', 'text'],
+    'the draft is stored with the answer',
+  );
+
+  const [pair] = soul.recallTurnPairs('火锅', 1);
+  assert.equal(pair.assistantText, '火锅', 'recall never surfaces reasoning');
+  store.close();
+});

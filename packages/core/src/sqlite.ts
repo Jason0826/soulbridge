@@ -968,7 +968,7 @@ export function openSqlite(file: string): SoulStore {
         at: Number(row.at),
       }));
     },
-    putTurnPair(pair: TurnPair): void {
+    putTurnPair(pair: TurnPair, steps?: TurnStep[]): void {
       this.putTurn({
         id: pair.id,
         soulId: pair.soulId,
@@ -980,9 +980,14 @@ export function openSqlite(file: string): SoulStore {
         userText: pair.userText,
         status: 'closed',
         createdAt: pair.createdAt,
-        steps: pair.assistantText
-          ? [{ idx: 0, kind: 'text', text: pair.assistantText, at: pair.at }]
-          : [],
+        // Adapters may hand over the real step list (reasoning, text, tool) so a
+        // turn keeps its shape; otherwise the reply collapses into one text step.
+        steps:
+          steps && steps.length > 0
+            ? steps
+            : pair.assistantText
+              ? [{ idx: 0, kind: 'text', text: pair.assistantText, at: pair.at }]
+              : [],
       });
     },
 
