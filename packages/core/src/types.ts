@@ -441,6 +441,18 @@ export interface ContextRequest {
   minImportance?: number;
   /** Cap the number of injected memory lines. */
   maxItems?: number;
+  /** Include the identity block. Defaults to true. */
+  includeSoul?: boolean;
+  /** Include the style block. Defaults to true. */
+  includeStyle?: boolean;
+  /**
+   * Include the anchor memories block. Defaults to true.
+   *
+   * Hosts put this in the system prompt, which DSH appends as a new prompt
+   * version whenever the text changes; anchors drift as recency shifts, so a
+   * long session accumulates versions. Passing false keeps the stable part only.
+   */
+  includeAnchors?: boolean;
 }
 
 export interface ContextResult {

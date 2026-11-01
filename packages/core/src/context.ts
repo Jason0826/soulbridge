@@ -47,10 +47,12 @@ export function buildContext(
 
   const sections: string[] = [];
 
-  const since = identity ? timeTogether(identity.createdAt, now) : '你刚开始认识这个用户';
-  sections.push(`<soul name="${name}">\n你是${name}，一个持续成长的伙伴。${since}。\n</soul>`);
+  if (request.includeSoul !== false) {
+    const since = identity ? timeTogether(identity.createdAt, now) : '你刚开始认识这个用户';
+    sections.push(`<soul name="${name}">\n你是${name}，一个持续成长的伙伴。${since}。\n</soul>`);
+  }
 
-  const styles = styleDirectives(emotion);
+  const styles = request.includeStyle === false ? [] : styleDirectives(emotion);
   if (styles.length > 0) {
     sections.push(`<style>\n${styles.map((s) => `- ${s}`).join('\n')}\n</style>`);
   }
@@ -103,7 +105,7 @@ export function buildContext(
     chars += cost;
   }
 
-  if (lines.length > 0) sections.push(`<memories>\n${lines.join('\n')}\n</memories>`);
+  if (request.includeAnchors !== false && lines.length > 0) sections.push(`<memories>\n${lines.join('\n')}\n</memories>`);
 
   const text = sections.join('\n\n');
   if (request.track !== false && used.length > 0) store.touch(used, now);
