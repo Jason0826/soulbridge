@@ -12,7 +12,7 @@ test('extraction prompt: every block is present, in order', () => {
     facts: [{ id: 'fc_9', statement: '小林在找工作', atText: '上周' }],
     previousUserText: '她最近有消息吗',
   });
-  for (const block of ['<role>', '<output-schema>', '<rules>', '<examples>', '<context>', '<source>', '<output>']) {
+  for (const block of ['<role>', '<output-format>', '<rules>', '<examples>', '<context>', '<source>', '<output>']) {
     assert.ok(prompt.includes(block), `missing ${block}`);
   }
   // Order matters: the data comes after the instructions, the output anchor last.

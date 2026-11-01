@@ -173,7 +173,8 @@ test('model: valid JSON becomes a draft; bad JSON is refused', async () => {
 
   const broken = await extractWithModel('文本', () => '我不知道', NOW);
   assert.equal(broken.draft, null);
-  assert.match(broken.error ?? '', /json/i);
+  // The line template is the primary path now, so the message names the raw text.
+  assert.match(broken.error ?? '', /unparseable/i);
 });
 
 test('validate: drops what cannot be trusted, keeps the rest', () => {

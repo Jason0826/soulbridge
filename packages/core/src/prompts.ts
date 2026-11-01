@@ -42,19 +42,25 @@ const EXTRACTION_ROLE = `<role>
 你的输出由一个确定性的程序消费，它不会读你的解释。
 </role>`;
 
-const EXTRACTION_SCHEMA = `<output-schema>
-{"entities":[{"name":"小林","type":"person","aliases":["小林姐"],"attrs":{"relation":"同事"}}],
- "operations":[
-   {"op":"add","fact":{"statement":"小林在 2026-10-24 那周被裁员","type_name":"裁员",
-      "at":"2026-10-24","at_text":"上周","source":"told","confidence":0.8,
-      "slots":[{"slot":"被裁员者","entity":"小林"},{"slot":"裁员人数","number":300}]}},
-   {"op":"supersede","target":"fc_ab12","fact":{"statement":"小林在 2026-10-31 找到新工作",
-      "at":"2026-10-31","at_text":"今天","source":"told","confidence":0.8,
-      "slots":[{"slot":"入职者","entity":"小林"}]}},
-   {"op":"noop"}
- ],
- "gaps":[{"topic":"她后来有着落吗","about":"小林","tension":0.6}]}
-</output-schema>`;
+const EXTRACTION_SCHEMA = `<output-format>
+不要输出 JSON。按下面的表格一行一条填写，字段之间用 | 分隔，没有内容的字段留空。
+可以只写其中几行；什么都记不住就只写：无
+
+实体: 名字 | 类型 | 关系
+事实: 陈述 | 类型名 | 日期(YYYY-MM-DD) | 时间原文 | 来源 | 置信(0-1) | 槽位
+缺口: 主题 | 张力(0-1) | 相关实体
+
+填写说明：
+- 类型只能是 person / thing / place / self；关系可空。
+- 陈述要自包含（15–80 字），把代词换成名字，保留数字和专有名词。
+- 日期换算不出来就留空，把原话写进"时间原文"。
+- 来源：experienced（亲历）/ told（听说的）/ inferred（推断的）。
+- 槽位写成 名称=值，多个用 ; 隔开；值是数字就写数字，是实体就写实体名。
+- 示例：
+实体: 小林 | person | 同事
+事实: 小林在 2026-10-24 那周被裁员 | 裁员 | 2026-10-24 | 上周 | told | 0.8 | 被裁员者=小林
+缺口: 小林后来有着落吗 | 0.6 | 小林
+</output-format>`;
 
 const EXTRACTION_RULES = `<rules>
 - op 只有三种值：add / supersede / update / noop。supersede 与 update 必须给 target（<known-facts> 里的 id）。
@@ -96,31 +102,24 @@ const EXTRACTION_RULES = `<rules>
 const EXTRACTION_EXAMPLES = `<examples>
 <example>
 <source>我同事小林上周被裁员了，挺难受的</source>
-<output>{"entities":[{"name":"小林","type":"person","attrs":{"relation":"同事"}}],
-"operations":[{"op":"add","fact":{"statement":"小林在 2026-10-24 那周被裁员",
-"type_name":"裁员","at":"2026-10-24","at_text":"上周","source":"told","confidence":0.8,
-"slots":[{"slot":"被裁员者","entity":"小林"}]}}],"gaps":[]}</output>
+<output>实体: 小林 | person | 同事
+事实: 小林在 2026-10-24 那周被裁员 | 裁员 | 2026-10-24 | 上周 | told | 0.8 | 被裁员者=小林</output>
 </example>
 <example>
 <source>这个 bug 我上周就修好了</source>
-<output>{"entities":[],"operations":[{"op":"add","fact":{
-"statement":"用户说他上周修好了这个 bug","at_text":"上周","source":"experienced","confidence":0.7,
-"slots":[{"slot":"修复者","entity":"用户"}]}}],"gaps":[]}</output>
+<output>事实: 用户说他在 2026-10-24 那周修好了这个 bug | 修复 | 2026-10-24 | 上周 | experienced | 0.7 | 修复者=用户</output>
 </example>
 <example>
 <source>好的，谢谢</source>
-<output>{"entities":[],"operations":[{"op":"noop"}],"gaps":[]}</output>
+<output>无</output>
 </example>
 <example>
 <source>你帮我把那个表重新跑一遍</source>
-<output>{"entities":[],"operations":[{"op":"noop"}],"gaps":[]}</output>
+<output>无</output>
 </example>
 <example>
 <source>我讨厌同一件事反复讲，换个工具又要重新说一遍</source>
-<output>{"entities":[],"operations":[{"op":"add","fact":{
-"statement":"用户讨厌同一件事反复讲，换工具也不想重复交代","type_name":"偏好",
-"source":"experienced","confidence":0.9,
-"slots":[{"slot":"偏好主体","entity":"用户"}]}}],"gaps":[]}</output>
+<output>事实: 用户讨厌同一件事反复讲，换工具也不想重复交代 | 偏好 | | | experienced | 0.9 | 偏好主体=用户</output>
 </example>
 </examples>`;
 

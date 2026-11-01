@@ -239,8 +239,12 @@ export async function extractWithModel(
   } catch (error) {
     return { draft: null, error: error instanceof Error ? error.message : String(error) };
   }
+  // Lines first: one bad record is one bad record. JSON is the fallback for a
+  // model that ignores the template and answers in JSON anyway.
+  const fromLines = parseLineDraft(raw);
+  if (fromLines) return validateDraft(fromLines, at, context);
   const json = extractJson(raw);
-  if (!json) return { draft: null, error: 'no json in model output' };
+  if (!json) return { draft: null, error: `unparseable output: ${String(raw).slice(0, 60)}` };
   return validateDraft(json, at, context);
 }
 
@@ -345,6 +349,9 @@ export function validateDraft(
       continue;
     }
     operations.push({ op: op as FactOperation['op'], targetId, fact: parsed });
+    // Keep `facts` as a flat view of the adds: older callers and the commit
+    // gate's skip report read it, and operations are the source of truth.
+    if (op === 'add') facts.push(parsed);
   }
 
   const gaps: GapDraft[] = [];
@@ -360,11 +367,98 @@ export function validateDraft(
   }
 
   const hasOps = operations.some((o) => o.op !== 'noop');
-  if (!hasOps && facts.length === 0 && entities.length === 0 && gaps.length === 0) {
+  // An explicit noop is an answer, not an empty one: the model looked and found
+  // nothing worth storing. Without this the caller falls back to rules and
+  // reports a failure that never happened.
+  const hasNoop = operations.some((o) => o.op === 'noop');
+  if (!hasOps && !hasNoop && facts.length === 0 && entities.length === 0 && gaps.length === 0) {
     return { draft: null, error: 'model returned nothing usable' };
   }
   void at;
   return { draft: { entities, facts, gaps, operations, by: 'llm' }, error: undefined };
+}
+
+/**
+ * Parse the line template the model is asked to fill in.
+ *
+ * Requiring valid JSON makes the whole extraction hinge on one character:
+ * a missing brace turns a correct answer into "model-failed". A line template
+ * fails per line instead, so one malformed record costs one record. The shape it
+ * builds is the same object `validateDraft` already checks, so there is one gate,
+ * not two.
+ *
+ *   实体: 小林 | person | 同事
+ *   事实: 陈述 | 类型名 | 2026-10-24 | 上周 | told | 0.8 | 被裁员者=小林
+ *   缺口: 怎么了 | 0.6 | 小林
+ *   无
+ */
+export function parseLineDraft(raw: string): Record<string, unknown> | null {
+  const entities: Record<string, unknown>[] = [];
+  const operations: Record<string, unknown>[] = [];
+  const gaps: Record<string, unknown>[] = [];
+  let sawRecord = false;
+
+  for (const line of String(raw ?? '').split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (/^(无|none|noop|无记录|没有)[。.]?$/i.test(trimmed)) {
+      operations.push({ op: 'noop' });
+      sawRecord = true;
+      continue;
+    }
+    const match = /^(实体|事实|缺口)\s*[:：]\s*(.+)$/.exec(trimmed);
+    if (!match) continue;
+    const [, kind, body] = match;
+    const parts = body.split('|').map((part) => part.trim());
+
+    if (kind === '实体') {
+      const [name, type, relation] = parts;
+      if (!name) continue;
+      entities.push({
+        name,
+        type: ENTITY_TYPES.has(type ?? '') ? type : 'person',
+        attrs: relation ? { relation } : {},
+      });
+      sawRecord = true;
+      continue;
+    }
+
+    if (kind === '事实') {
+      const [statement, typeName, at, atText, source, confidence, slotText] = parts;
+      if (!statement) continue;
+      const fact: Record<string, unknown> = { statement };
+      if (typeName) fact.type_name = typeName;
+      if (at && /^\d{4}-\d{2}-\d{2}$/.test(at)) fact.at = Date.parse(`${at}T00:00:00Z`);
+      if (atText) fact.at_text = atText;
+      if (source) fact.source = source;
+      const conf = Number(confidence);
+      if (Number.isFinite(conf)) fact.confidence = conf;
+      const slots: Record<string, unknown>[] = [];
+      for (const pair of (slotText ?? '').split(/[;；]/).map((item) => item.trim()).filter(Boolean)) {
+        const [slot, value] = pair.split(/[=＝]/).map((item) => item.trim());
+        if (!slot || !value) continue;
+        // Numbers stay numbers; everything else is a name the gate resolves.
+        slots.push(/^-?\d+(\.\d+)?$/.test(value) ? { slot, number: Number(value) } : { slot, entity: value });
+      }
+      if (slots.length > 0) fact.slots = slots;
+      operations.push({ op: 'add', fact });
+      sawRecord = true;
+      continue;
+    }
+
+    // 缺口
+    const [topic, tension, about] = parts;
+    if (!topic) continue;
+    const gap: Record<string, unknown> = { topic };
+    const value = Number(tension);
+    if (Number.isFinite(value)) gap.tension = value;
+    if (about) gap.about = about;
+    gaps.push(gap);
+    sawRecord = true;
+  }
+
+  if (!sawRecord) return null;
+  return { entities, operations, gaps };
 }
 
 function asArray(value: unknown): unknown[] {
