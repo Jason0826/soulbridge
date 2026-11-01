@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openSqlite, SCHEMA_VERSION } from '../src/sqlite.ts';
+import { Soul } from '../src/index.ts';
 
 const S = { soulId: 's1', userId: 'u1' };
 
@@ -67,5 +68,23 @@ test('threads: quiet threads close by turn distance, not by wall clock', () => {
 
   // Closing is idempotent: the same call finds nothing left to do.
   assert.deepEqual(store.closeIdleThreads(S.soulId, S.userId, 10, 6, 6000), []);
+  store.close();
+});
+test('threadContext: the chapter, in order, with the facts drawn from it', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  store.putTurn({ ...S, id: 't1', sessionId: 'sess', turnNo: 1, startedAt: 1000, userText: 'A1 记忆分三层', steps: [] });
+  store.putTurn({ ...S, id: 't2', sessionId: 'sess', turnNo: 2, startedAt: 2000, userText: 'B1 cookie 失效', steps: [] });
+  store.putTurn({ ...S, id: 't3', sessionId: 'sess', turnNo: 3, startedAt: 3000, userText: 'A2 回到三层', steps: [] });
+
+  const thread = store.openThread({ ...S, sessionId: 'sess', topic: '记忆分三层', openedAt: 1000, turnNo: 1 });
+  store.attachTurn('t1', thread.id);
+  store.attachTurn('t3', thread.id); // non-adjacent, back to A
+  store.putFact({ ...S, id: 'f1', statement: '用户想分三层', sourceTurnId: 't1' });
+  store.putFact({ ...S, id: 'f2', statement: '用户决定先做线索层', sourceTurnId: 't3' });
+
+  const context = soul.threadContext(thread.id);
+  assert.deepEqual(context?.turns.map((turn) => turn.userText), ['A1 记忆分三层', 'A2 回到三层']);
+  assert.deepEqual(context?.facts.map((fact) => fact.id), ['f1', 'f2']);
   store.close();
 });

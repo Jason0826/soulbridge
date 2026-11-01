@@ -218,6 +218,13 @@ function renderOpenThreads(threads: KnownThreadPrompt[], previousThreadId?: stri
 export interface ConsolidationPromptInput {
   facts: { id: string; statement: string; atText?: string }[];
   existing: { id: string; statement: string }[];
+  /**
+   * The thread being closed: its topic and its turns in order.
+   *
+   * Facts alone lose a resume (A B A) — the turns are what make this a chapter
+   * instead of a batch, and the rule below tells the model to read to the end.
+   */
+  thread?: { topic: string; turns: string[] };
 }
 
 export interface VerificationPromptInput {
@@ -275,16 +282,32 @@ export function renderConsolidationPrompt(input: ConsolidationPromptInput): stri
     input.existing.length > 0
       ? input.existing.map((fact) => `  ${fact.id} | ${fact.statement}`).join('\n')
       : '  （空）';
+  // The turns are given in order, with the resume marked, so "read to the end"
+  // is a rule the model can actually follow rather than one it has to infer.
+  const thread = input.thread
+    ? [
+        '<thread>',
+        `  主题：${input.thread.topic}`,
+        ...input.thread.turns.map((turn, index) => `  ${index + 1}. ${turn}`),
+        '</thread>',
+      ].join('\n')
+    : '';
   return [
     CONSOLIDATION_ROLE,
     '<task>判断 <facts> 是否共同指向一条判断；能就写一行结论，不能就写 无。</task>',
     CONSOLIDATION_RULES,
+    thread
+      ? '<thread-rule>这段话是一条完整的话题，可能中间被打断过又回来。<br>结论必须覆盖到最后一次回来时的内容，不能只总结开头。</thread-rule>'
+      : '',
     CONSOLIDATION_CONTRAST,
+    thread,
     ['<facts>', ...facts, '</facts>'].join('\n'),
     ['<existing>', existing, '</existing>'].join('\n'),
     '<output>',
     '结论: 陈述 | 证据=<id>,<id> | 置信=0.6',
-  ].join('\n\n');
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 }
 
 /**

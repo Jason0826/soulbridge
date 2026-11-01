@@ -67,6 +67,7 @@ import type {
   ConclusionDraft,
   Fact,
   ThreadAttribution,
+  TurnThread,
   FactDetail,
   FactSpec,
   Gap,
@@ -568,6 +569,28 @@ export class Soul {
    */
   closeIdleThreads(currentTurnNo: number, idleTurns = 6, at = Date.now()): string[] {
     return this.store.closeIdleThreads(this.soulId, this.userId, currentTurnNo, idleTurns, at);
+  }
+  /**
+   * Everything a closed thread needs for consolidation: the topic, the turns in
+   * order (as text), and the facts extracted from those turns.
+   *
+   * The turns are what makes this a chapter rather than a batch: A B A means the
+   * facts alone have lost the resume.
+   */
+  threadContext(threadId: string): {
+    thread: TurnThread;
+    turns: Array<{ turnNo: number; userText: string; assistantText: string }>;
+    facts: Fact[];
+  } | null {
+    const thread = this.store.thread(threadId);
+    if (!thread) return null;
+    const turns = this.store.threadTurns(threadId);
+    const facts = this.store.factsByTurns(turns.map((turn) => turn.id));
+    return {
+      thread,
+      turns: turns.map((turn) => ({ turnNo: turn.turn, userText: turn.userText, assistantText: turn.assistantText })),
+      facts,
+    };
   }
   /** Current conclusions, newest first. Superseded ones are history, not state. */
   conclusions(limit = 20): Fact[] {

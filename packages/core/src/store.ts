@@ -70,6 +70,10 @@ export interface SoulStore {
   closeThread(id: string, at: number, summaryFactId?: string): void;
   /** Close threads whose last turn is at least idleTurns behind now; returns the ids. */
   closeIdleThreads(soulId: string, userId: string, currentTurnNo: number, idleTurns: number, at: number): string[];
+  /** Every turn of a thread, in order — the chapter, not one page. */
+  threadTurns(threadId: string): TurnPair[];
+  /** Facts whose source turn belongs to the given turns. */
+  factsByTurns(turnIds: string[]): Fact[];
   /** One turn by id, for expanding a fact back into its conversation. */
   turn(id: string): TurnPair | null;
   /** Retire a fact: the new one replaces it, the old row stays for the record. */

@@ -142,3 +142,14 @@ test('prompts: draft and verification are separate, and the check never sees the
   assert.doesNotMatch(verify, /归纳器/);
   assert.doesNotMatch(verify, /置信/);
 });
+
+test('prompts: a threaded consolidation shows the turns and demands the ending', () => {
+  const prompt = renderConsolidationPrompt({
+    facts: [{ id: 'f1', statement: '用户想分三层' }, { id: 'f2', statement: '用户决定先做线索层' }],
+    existing: [],
+    thread: { topic: '记忆分三层', turns: ['用户：记忆分三层', '用户：cookie 失效', '用户：回到三层怎么落地'] },
+  });
+  assert.match(prompt, /<thread>/);
+  assert.match(prompt, /3\. 用户：回到三层怎么落地/);
+  assert.match(prompt, /覆盖到最后一次回来/);
+});

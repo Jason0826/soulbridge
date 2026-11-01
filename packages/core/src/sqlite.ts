@@ -1064,6 +1064,21 @@ export function openSqlite(file: string): SoulStore {
       for (const id of ids) withRetry(() => close.run(at, id));
       return ids;
     },
+    threadTurns(threadId: string): TurnPair[] {
+      const rows = db
+        .prepare('SELECT * FROM turns WHERE thread_id = ? ORDER BY turn_no ASC')
+        .all(threadId) as Row[];
+      return rows.map(rowToTurnPair);
+    },
+    factsByTurns(turnIds: string[]): Fact[] {
+      if (turnIds.length === 0) return [];
+      const placeholders = turnIds.map(() => '?').join(',');
+      const rows = db
+        .prepare(`SELECT f.* FROM facts f WHERE f.source_turn_id IN (${placeholders}) ORDER BY f.created_at ASC`)
+        .all(...turnIds) as Row[];
+      const slots = slotsOfRows(db, rows.map((row) => String(row.id)));
+      return rows.map((row) => rowToFact(row, slots));
+    },
     stepsOf(turnId: string): TurnStep[] {
       const rows = db
         .prepare('SELECT * FROM steps WHERE turn_id = ? ORDER BY idx ASC')
