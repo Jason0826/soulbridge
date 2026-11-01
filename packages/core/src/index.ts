@@ -138,15 +138,12 @@ export class Soul {
 
   /** Verb 1: session start. */
   context(request: Partial<ContextRequest> = {}): ContextResult {
+    // Spread, not a field list: an explicit list silently dropped every option
+    // added later (includeAnchors stayed dead for a whole release).
     return buildContext(this.store, {
+      ...request,
       soulId: this.soulId,
       userId: this.userId,
-      query: request.query,
-      maxChars: request.maxChars,
-      track: request.track,
-      types: request.types,
-      minImportance: request.minImportance,
-      maxItems: request.maxItems,
     });
   }
 
