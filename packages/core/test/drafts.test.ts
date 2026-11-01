@@ -95,6 +95,71 @@ test('rules: small talk yields nothing', () => {
   assert.equal(draft.entities.length, 0);
 });
 
+test('model: sees existing entities and facts in the prompt', async () => {
+  let prompt = '';
+  const draft = await extractWithModel(
+    '她找到新工作了',
+    (p) => {
+      prompt = p;
+      return '{"entities":[],"operations":[],"gaps":[]}';
+    },
+    NOW,
+    { entities: [{ id: 'en_1', name: '小林', relation: '同事' }], facts: [{ id: 'fc_1', statement: '小林被裁员', atText: '上周' }] },
+  );
+  assert.match(prompt, /已知人物/);
+  assert.match(prompt, /小林/);
+  assert.match(prompt, /\[fc_1\]/);
+  assert.equal(draft.draft, null, 'an empty answer is not a draft');
+});
+
+test('model: supersede retires the old fact and writes the new one', async () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  const first = soul.commitDrafts({
+    entities: [{ name: '小林', type: 'person' }],
+    facts: [{ statement: '小林在找工作', atText: '上周', source: 'told', confidence: 0.7, slots: [{ slot: '求职者', value: { kind: 'entity', entityName: '小林' } }] }],
+    gaps: [],
+    by: 'rules',
+  });
+  const oldFact = first.facts[0];
+
+  const llm = () =>
+    `{"entities":[],"operations":[{"op":"supersede","target":"${oldFact.id}",
+      "fact":{"statement":"小林找到新工作了","at_text":"今天","source":"told",
+              "slots":[{"slot":"入职者","entity":"小林"}]}}],"gaps":[]}`;
+  const draft = await soul.extract('小林找到新工作了', { llm, at: NOW });
+  const result = soul.commitDrafts(draft, { at: NOW });
+
+  assert.equal(result.facts.length, 1);
+  const all = store.facts({ soulId: 's1', userId: 'u1' });
+  const retired = all.find((f) => f.id === oldFact.id);
+  assert.equal(retired?.status, 'superseded');
+  assert.equal(retired?.supersededBy, result.facts[0].id, 'old fact points at its replacement');
+  store.close();
+});
+
+test('model: an unknown supersede target falls back to add instead of losing the news', async () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  const llm = () => '{"operations":[{"op":"supersede","target":"fc_nope","fact":{"statement":"小林搬走了","at_text":"昨天","slots":[{"slot":"搬家者","entity":"小林"}]}}],"entities":[],"gaps":[]}';
+  const draft = await soul.extract('小林搬走了', { llm, at: NOW });
+  assert.equal(draft.operations?.[0].op, 'add', 'unknown target degrades to add');
+  const result = soul.commitDrafts(draft, { at: NOW });
+  assert.equal(result.facts.length, 1);
+  store.close();
+});
+
+test('model: noop writes nothing', async () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  const llm = () => '{"operations":[{"op":"noop"}],"entities":[],"gaps":[]}';
+  const draft = await soul.extract('好的知道了', { llm, at: NOW });
+  const result = soul.commitDrafts(draft, { at: NOW });
+  assert.equal(result.facts.length, 0);
+  assert.equal(store.facts({ soulId: 's1', userId: 'u1' }).length, 0);
+  store.close();
+});
+
 test('model: valid JSON becomes a draft; bad JSON is refused', async () => {
   const answer = `好的，结果如下：
 {"entities":[{"name":"小林","type":"person","attrs":{"relation":"同事"}}],

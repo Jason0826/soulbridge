@@ -68,6 +68,7 @@ import { rank, tokenize } from './scoring.ts';
 import { analyzeAffect, emptyAffect, lexiconAnalyzer } from './affect/analyze.ts';
 import { gateDrafts, llmExtractTurn } from './reflect.ts';
 import { extractByRules, extractWithModel } from './extract.ts';
+import type { ExtractionContext } from './extract.ts';
 export { gateDrafts } from './reflect.ts';
 
 export interface SoulOptions {
@@ -263,14 +264,35 @@ export class Soul {
       llm?: (prompt: string) => Promise<string> | string;
       /** 'auto' (default) uses the model then falls back; 'rules' forces rules. */
       mode?: 'auto' | 'rules';
+      /** What the model may see; defaults to the recent store state. */
+      context?: ExtractionContext;
     } = {},
   ): Promise<ExtractDraft> {
     const at = options.at ?? Date.now();
     const byRules = extractByRules(text, at);
     // Pre-filter: "好的" / "嗯" cannot carry a fact, so it is not worth a call.
     if (options.mode === 'rules' || !options.llm || text.trim().length < 4) return byRules;
-    const result = await extractWithModel(text, options.llm, at);
+    // The model has to know what is already stored, or it cannot reuse a name
+    // and cannot tell that new information contradicts an old fact.
+    const context = options.context ?? this.extractionContext();
+    const result = await extractWithModel(text, options.llm, at, context);
     return result.draft ?? byRules;
+  }
+
+  /** The slice of the store the extractor is allowed to know about. */
+  extractionContext(limit = 20): ExtractionContext {
+    const entities = this.store
+      .findEntities({ soulId: this.soulId, userId: this.userId, limit })
+      .map((e) => ({
+        id: e.id,
+        name: e.name,
+        aliases: e.aliases,
+        relation: typeof e.attrs.relation === 'string' ? e.attrs.relation : undefined,
+      }));
+    const facts = this.store
+      .facts({ soulId: this.soulId, userId: this.userId, limit: 12 })
+      .map((f) => ({ id: f.id, statement: f.statement, atText: f.atText }));
+    return { entities, facts };
   }
 
   /**
@@ -306,15 +328,17 @@ export class Soul {
 
     const facts: Fact[] = [];
     const recent = this.store.facts({ soulId: this.soulId, userId: this.userId, limit: 50 });
-    for (const factDraft of draft.facts) {
+
+    /** One gate for every write path: legacy facts and operation payloads share it. */
+    const writeFact = (factDraft: ExtractDraft['facts'][number]): Fact | null => {
       const statement = factDraft.statement.trim();
       if (!statement) {
         skipped.push({ what: 'fact', reason: 'empty statement' });
-        continue;
+        return null;
       }
       if (factDraft.slots.length === 0 && factDraft.at === undefined && factDraft.atText === undefined) {
         skipped.push({ what: statement, reason: 'no slots and no time' });
-        continue;
+        return null;
       }
       const duplicate = recent.some(
         (f) =>
@@ -324,7 +348,7 @@ export class Soul {
       );
       if (duplicate) {
         skipped.push({ what: statement, reason: 'duplicate' });
-        continue;
+        return null;
       }
 
       const slots = factDraft.slots.map((s) => {
@@ -348,6 +372,19 @@ export class Soul {
         slots,
       });
       facts.push(written);
+      return written;
+    };
+
+    // Operations carry the merge decision (Mem0's ADD/UPDATE/DELETE); plain
+    // facts are the legacy shape and every one of them is an add.
+    const operations = draft.operations ?? draft.facts.map((fact) => ({ op: 'add' as const, fact }));
+    for (const operation of operations) {
+      if (operation.op === 'noop') continue;
+      const written = writeFact(operation.fact);
+      if (!written) continue;
+      if ((operation.op === 'supersede' || operation.op === 'update') && operation.targetId) {
+        this.store.supersedeFact(operation.targetId, written.id);
+      }
     }
 
     const gaps: Gap[] = [];

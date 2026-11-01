@@ -15,7 +15,7 @@
  *
  * Pure functions, no I/O, no dependencies.
  */
-import type { EntityDraft, ExtractDraft, FactDraft, GapDraft, SlotValue } from './types.ts';
+import type { EntityDraft, ExtractDraft, FactDraft, FactOperation, GapDraft, SlotValue } from './types.ts';
 
 /** Relations a person is introduced with, longest first so 女同事 wins over 同事. */
 const RELATIONS = [
@@ -197,46 +197,92 @@ export function extractByRules(text: string, at = Date.now()): ExtractDraft {
   return { entities: [...unique.values()], facts, gaps, by: 'rules' };
 }
 
-const MODEL_INSTRUCTIONS = `从这段对话里抽出事实。只输出 JSON，不要解释。格式：
+const MODEL_INSTRUCTIONS = `你负责把一段对话变成记忆操作。只输出 JSON，不要解释。
+已知事实（可能为空）：见下方"已有信息"，用 id 指代。
+
+输出格式：
 {"entities":[{"name":"小林","type":"person","attrs":{"relation":"同事"}}],
- "facts":[{"statement":"小林上周被裁员了","type_name":"裁员","at_text":"上周",
-           "source":"told","confidence":0.8,
-           "slots":[{"slot":"被裁员者","entity":"小林"},
-                    {"slot":"裁员人数","number":300},
-                    {"slot":"内容","text":"整个部门"}]}],
+ "operations":[
+   {"op":"add","fact":{"statement":"小林上周被裁员了","type_name":"裁员","at_text":"上周",
+      "source":"told","confidence":0.8,
+      "slots":[{"slot":"被裁员者","entity":"小林"},{"slot":"裁员人数","number":300}]}},
+   {"op":"supersede","target":"fc_ab12","fact":{"statement":"小林找到新工作了","at_text":"今天",
+      "source":"told","slots":[{"slot":"入职者","entity":"小林"}]}}
+ ],
  "gaps":[{"topic":"她后来有着落吗","about":"小林","tension":0.6}]}
+
+op 的含义：
+- add        新的信息
+- supersede  新信息与已知事实冲突，旧事实作废（必须给 target=旧事实 id）
+- update     补充/修正已知事实（同样给 target）
+- noop       这句话没有值得记的东西
+
 规则：
+- 与"已有事实"冲突时必须用 supersede，不要叠加两条互相矛盾的记忆
 - type 只能是 person / thing / place / self
 - source 只能是 experienced（用户亲历）/ told（转述）/ inferred（推断）
-- 不知道的不要编，时间不确定只填 at_text
-- 没有人物或事件的闲聊，返回空数组`;
+- 不知道的不要编；时间不确定只填 at_text
+- 闲聊、问句、指令也要抽：它们是"请求/提问/同意"，不是没发生的事
+- 没有可记的内容时 operations 返回 []`;
 
 interface ModelParseResult {
   draft: ExtractDraft | null;
   error?: string;
 }
 
+/** What the model is allowed to know about the store before extracting. */
+export interface ExtractionContext {
+  entities: Array<{ id: string; name: string; aliases?: string[]; relation?: string }>;
+  facts: Array<{ id: string; statement: string; atText?: string }>;
+  previousUserText?: string;
+}
+
+/** Render the context into the prompt: names, ids, nothing else. */
+function renderContext(context?: ExtractionContext): string {
+  if (!context) return '（无）';
+  const lines: string[] = [];
+  if (context.entities.length > 0) {
+    lines.push('已知人物：');
+    for (const e of context.entities.slice(0, 30)) {
+      const aliases = e.aliases?.length ? `（别名：${e.aliases.join('、')}）` : '';
+      const relation = e.relation ? `，${e.relation}` : '';
+      lines.push(`- ${e.name}${aliases}${relation}`);
+    }
+  }
+  if (context.facts.length > 0) {
+    lines.push('已有事实：');
+    for (const f of context.facts.slice(0, 20)) {
+      lines.push(`- [${f.id}] ${f.statement}${f.atText ? `（${f.atText}）` : ''}`);
+    }
+  }
+  if (context.previousUserText) lines.push(`上一轮用户说：${context.previousUserText.slice(0, 200)}`);
+  return lines.length > 0 ? lines.join('\n') : '（无）';
+}
+
 /**
  * Model extraction: one call, strict JSON, validated afterwards.
  *
- * The model is better at slots and implicit relations than a rule can be, but
- * it also hallucinates, so its answer is a draft like any other — the caller
- * still commits through the gate.
+ * The model sees the entities and facts already stored, so it can reuse a name
+ * instead of inventing a duplicate and can supersede a fact that the new
+ * sentence contradicts. That merge decision is the difference between "a log of
+ * sentences" and memory (Mem0's ADD/UPDATE/DELETE, Graphiti's invalidation).
  */
 export async function extractWithModel(
   text: string,
   llm: (prompt: string) => Promise<string> | string,
   at = Date.now(),
+  context?: ExtractionContext,
 ): Promise<ModelParseResult> {
+  const prompt = `${MODEL_INSTRUCTIONS}\n\n已有信息：\n${renderContext(context)}\n\n本轮用户说：\n${text}`;
   let raw: string;
   try {
-    raw = await llm(`${MODEL_INSTRUCTIONS}\n\n对话/句子：\n${text}`);
+    raw = await llm(prompt);
   } catch (error) {
     return { draft: null, error: error instanceof Error ? error.message : String(error) };
   }
   const json = extractJson(raw);
   if (!json) return { draft: null, error: 'no json in model output' };
-  return validateDraft(json, at);
+  return validateDraft(json, at, context);
 }
 
 /** Models wrap JSON in prose or fences; take the outermost object. */
@@ -253,15 +299,53 @@ function extractJson(raw: string): unknown {
 
 const ENTITY_TYPES = new Set(['person', 'thing', 'place', 'self']);
 const SOURCES = new Set(['experienced', 'told', 'inferred']);
+const OPS = new Set(['add', 'supersede', 'update', 'noop']);
+
+/** One fact payload, shared by the legacy `facts` array and the operations. */
+function parseFactDraft(obj: Record<string, unknown>): FactDraft | null {
+  const statement = String(obj?.statement ?? '').trim();
+  if (!statement) return null;
+  const slots: FactDraft['slots'] = [];
+  for (const rawSlot of asArray(obj.slots)) {
+    const s = rawSlot as Record<string, unknown>;
+    const slot = String(s?.slot ?? '').trim();
+    if (!slot) continue;
+    if (typeof s.entity === 'string' && s.entity.trim()) {
+      slots.push({ slot, value: { kind: 'entity', entityName: s.entity.trim(), entityType: 'person' } });
+    } else if (typeof s.number === 'number' && Number.isFinite(s.number)) {
+      slots.push({ slot, value: { kind: 'number', value: s.number } });
+    } else if (typeof s.text === 'string' && s.text.trim()) {
+      slots.push({ slot, value: { kind: 'text', value: s.text.trim() } });
+    }
+  }
+  const source = String(obj.source ?? 'told');
+  return {
+    statement,
+    typeName: typeof obj.type_name === 'string' ? obj.type_name : undefined,
+    at: typeof obj.at === 'number' ? obj.at : undefined,
+    atText: typeof obj.at_text === 'string' ? obj.at_text : undefined,
+    source: (SOURCES.has(source) ? source : 'told') as FactDraft['source'],
+    confidence: typeof obj.confidence === 'number' ? Math.min(1, Math.max(0, obj.confidence)) : 0.6,
+    slots,
+  };
+}
 
 /**
  * Validate and normalise a model answer. Anything malformed is dropped rather
  * than repaired: a missing statement cannot be invented, and a bad entity type
  * would poison retrieval later.
+ *
+ * `supersede` / `update` must point at a fact the model was actually shown —
+ * otherwise it could retire a memory it never read.
  */
-export function validateDraft(json: unknown, at = Date.now()): ModelParseResult {
+export function validateDraft(
+  json: unknown,
+  at = Date.now(),
+  context?: ExtractionContext,
+): ModelParseResult {
   if (!json || typeof json !== 'object') return { draft: null, error: 'not an object' };
   const input = json as Record<string, unknown>;
+  const knownFactIds = new Set((context?.facts ?? []).map((f) => f.id));
 
   const entities: EntityDraft[] = [];
   for (const item of asArray(input.entities)) {
@@ -279,32 +363,29 @@ export function validateDraft(json: unknown, at = Date.now()): ModelParseResult 
 
   const facts: FactDraft[] = [];
   for (const item of asArray(input.facts)) {
+    const parsed = parseFactDraft(item as Record<string, unknown>);
+    if (parsed) facts.push(parsed);
+  }
+
+  const operations: FactOperation[] = [];
+  for (const item of asArray(input.operations)) {
     const obj = item as Record<string, unknown>;
-    const statement = String(obj?.statement ?? '').trim();
-    if (!statement) continue;
-    const slots: FactDraft['slots'] = [];
-    for (const rawSlot of asArray(obj.slots)) {
-      const s = rawSlot as Record<string, unknown>;
-      const slot = String(s?.slot ?? '').trim();
-      if (!slot) continue;
-      if (typeof s.entity === 'string' && s.entity.trim()) {
-        slots.push({ slot, value: { kind: 'entity', entityName: s.entity.trim(), entityType: 'person' } });
-      } else if (typeof s.number === 'number' && Number.isFinite(s.number)) {
-        slots.push({ slot, value: { kind: 'number', value: s.number } });
-      } else if (typeof s.text === 'string' && s.text.trim()) {
-        slots.push({ slot, value: { kind: 'text', value: s.text.trim() } });
-      }
+    const op = String(obj?.op ?? '').trim();
+    if (!OPS.has(op)) continue;
+    const parsed = parseFactDraft((obj.fact ?? {}) as Record<string, unknown>);
+    const targetId = typeof obj.target === 'string' ? obj.target.trim() : undefined;
+    if (op === 'noop') {
+      // A noop carries no fact; keep it so the trace can show "nothing to store".
+      operations.push({ op: 'noop', targetId, fact: parsed ?? { statement: '', source: 'told', confidence: 0, slots: [] } });
+      continue;
     }
-    const source = String(obj.source ?? 'told');
-    facts.push({
-      statement,
-      typeName: typeof obj.type_name === 'string' ? obj.type_name : undefined,
-      at: typeof obj.at === 'number' ? obj.at : undefined,
-      atText: typeof obj.at_text === 'string' ? obj.at_text : undefined,
-      source: (SOURCES.has(source) ? source : 'told') as FactDraft['source'],
-      confidence: typeof obj.confidence === 'number' ? Math.min(1, Math.max(0, obj.confidence)) : 0.6,
-      slots,
-    });
+    if (!parsed) continue;
+    if ((op === 'supersede' || op === 'update') && (!targetId || !knownFactIds.has(targetId))) {
+      // Unknown target: fall back to add rather than silently dropping the news.
+      operations.push({ op: 'add', fact: parsed });
+      continue;
+    }
+    operations.push({ op: op as FactOperation['op'], targetId, fact: parsed });
   }
 
   const gaps: GapDraft[] = [];
@@ -319,11 +400,12 @@ export function validateDraft(json: unknown, at = Date.now()): ModelParseResult 
     });
   }
 
-  if (facts.length === 0 && entities.length === 0 && gaps.length === 0) {
+  const hasOps = operations.some((o) => o.op !== 'noop');
+  if (!hasOps && facts.length === 0 && entities.length === 0 && gaps.length === 0) {
     return { draft: null, error: 'model returned nothing usable' };
   }
   void at;
-  return { draft: { entities, facts, gaps, by: 'llm' }, error: undefined };
+  return { draft: { entities, facts, gaps, operations, by: 'llm' }, error: undefined };
 }
 
 function asArray(value: unknown): unknown[] {

@@ -266,9 +266,21 @@ export interface GapDraft {
   tension: number;
 }
 
+/** What the model decided to do with one piece of information. */
+export type FactOpKind = 'add' | 'supersede' | 'update' | 'noop';
+
+export interface FactOperation {
+  op: FactOpKind;
+  /** The existing fact this operation acts on (supersede / update). */
+  targetId?: string;
+  fact: FactDraft;
+}
+
 export interface ExtractDraft {
   entities: EntityDraft[];
   facts: FactDraft[];
+  /** Model output: operations instead of raw facts, so merging is explicit. */
+  operations?: FactOperation[];
   gaps: GapDraft[];
   by: 'rules' | 'llm';
 }

@@ -890,6 +890,13 @@ export function openSqlite(file: string): SoulStore {
       return rows.map((row) => rowToFact(row, slots));
     },
 
+    supersedeFact(oldId: string, newId: string): void {
+      withRetry(() =>
+        db
+          .prepare("UPDATE facts SET status = 'superseded', superseded_by = ? WHERE id = ?")
+          .run(newId, oldId),
+      );
+    },
     /* ---------------- gaps ---------------- */
 
     putGap(spec: GapSpec): Gap {
