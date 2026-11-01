@@ -50,6 +50,7 @@ import type {
   Entity,
   EntityDraft,
   ExtractDraft,
+  ConclusionDraft,
   Fact,
   FactDetail,
   FactSpec,
@@ -64,6 +65,7 @@ import type {
 } from './types.ts';
 import type { SoulStore } from './store.ts';
 import type { AffectAnalyzer } from './affect/port.ts';
+import { gateConclusion, conclusionSlots } from './consolidate.ts';
 import { buildContext } from './context.ts';
 import { reflect, ruleExtract, nextEmotion } from './reflect.ts';
 import { rank, tokenize } from './scoring.ts';
@@ -464,6 +466,50 @@ export class Soul {
   /** Write one connection between things. */
   recordFact(spec: Omit<FactSpec, 'soulId' | 'userId'>): Fact {
     return this.store.putFact({ ...spec, soulId: this.soulId, userId: this.userId });
+  }
+
+  /**
+   * Store one conclusion if the deterministic gate accepts it.
+   *
+   * A conclusion is not a new kind of record: it is a fact whose type is 结论,
+   * held by the soul itself, with one `fact` slot per citation. That way recall,
+   * export and supersede keep working, and the evidence can be followed back to
+   * the observation that produced it.
+   */
+  recordConclusion(
+    draft: ConclusionDraft,
+    options: { allowed: string[] },
+  ): { ok: boolean; reason?: string; fact?: Fact; superseded?: string } {
+    const allowed = new Set(options.allowed);
+    const old = draft.supersedes ? this.store.fact(draft.supersedes) : null;
+    const gate = gateConclusion({ draft, allowed, existing: old });
+    if (!gate.ok) return { ok: false, reason: gate.reason };
+
+    const fact = this.store.putFact({
+      soulId: this.soulId,
+      userId: this.userId,
+      statement: gate.statement,
+      typeName: '结论',
+      holder: 'self',
+      confidence: gate.confidence,
+      slots: conclusionSlots(gate.evidence),
+    });
+    // Superseding an unknown row would silently claim a revision that never
+    // happened; the gate already checked the target is a conclusion we hold.
+    let superseded: string | undefined;
+    if (old?.typeName === '结论') {
+      this.store.supersedeFact(old.id, fact.id);
+      superseded = old.id;
+    }
+    return { ok: true, fact, superseded };
+  }
+
+  /** Current conclusions, newest first. Superseded ones are history, not state. */
+  conclusions(limit = 20): Fact[] {
+    return this.store
+      .facts({ soulId: this.soulId, userId: this.userId, holder: 'self', limit: 200 })
+      .filter((fact) => fact.typeName === '结论' && fact.status !== 'superseded')
+      .slice(0, limit);
   }
 
   /**

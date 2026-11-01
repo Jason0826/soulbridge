@@ -173,3 +173,98 @@ export function renderExtractionPrompt(input: ExtractionPromptInput): string {
     '<output>',
   ].join('\n\n');
 }
+
+/* ------------------------------------------------------------------ *
+ * Consolidation: facts → one conclusion, then an independent check
+ * ------------------------------------------------------------------ */
+
+export interface ConsolidationPromptInput {
+  facts: { id: string; statement: string; atText?: string }[];
+  existing: { id: string; statement: string }[];
+}
+
+export interface VerificationPromptInput {
+  conclusion: string;
+  facts: { id: string; statement: string }[];
+}
+
+const CONSOLIDATION_ROLE = `<role>
+你是归纳器。你把若干条关于同一对象的事实，压成一条能被这些事实直接支持的判断。
+你不总结对话，不做心理分析，不写建议。你的输出由一个确定性程序消费。
+</role>`;
+
+const CONSOLIDATION_RULES = `<rules>
+- 一条结论至少要两条证据支持。只有一条证据的，那是事实，不是结论。
+- 保留具体对象和情境；不许放大成"一切 / 所有 / 总是 / 从不"。
+- 不许引入事实里没有的信息，也不许把两条不同意见合并成"用户有时A有时B"这种废话。
+- 与 <existing> 里某条冲突时，用 取代=<id>；只是补充就不要取代。
+- 置信按证据条数给：两条 0.6，三条 0.7，五条以上 0.85。不要凭感觉给高分。
+- 这组事实撑不起一条判断，就只写：无
+</rules>`;
+
+const CONSOLIDATION_CONTRAST = `<contrast>
+坏：用户讨厌一切重复劳动            ← 把两件具体的事放大成规律
+好：用户讨厌同一件事反复交代        ← 保留具体对象
+坏：用户是个急躁的人                ← 事实里没有，属于心理分析
+好：用户在切换工具时容易不耐烦      ← 每条都能对回事实
+坏：用户有时喜欢重复、有时不喜欢    ← 把矛盾揉成不承担判断的废话
+好：无                              ← 撑不起一条判断时，如实说没有
+</contrast>`;
+
+const VERIFICATION_ROLE = `<role>
+你是证据核查员。你只回答一件事：给定一条结论和一组事实，这些事实是否**直接**支持它。
+你不评价结论是否深刻、是否合理，只看证据。
+</role>`;
+
+const VERIFICATION_RULES = `<rules>
+- 只依据 <facts> 里的原文，不补充常识，不推测，不替它圆场。
+- 判定只能是：支持 / 部分支持 / 不支持。
+- 部分支持 = 有事实支持，但结论里有一部分是事实没说的。
+- 不支持 = 事实说的是另一件事，或者缺乏关键信息。
+- 在"理由"里指出具体是哪个片段支撑（或缺失）。
+</rules>`;
+
+/**
+ * Stage one: write conclusions.
+ *
+ * The model sees only facts and existing conclusions, never the conversation.
+ */
+export function renderConsolidationPrompt(input: ConsolidationPromptInput): string {
+  const facts = input.facts.map((fact) => {
+    const when = fact.atText ? ` | ${fact.atText}` : '';
+    return `  ${fact.id}${when} | ${fact.statement}`;
+  });
+  const existing =
+    input.existing.length > 0
+      ? input.existing.map((fact) => `  ${fact.id} | ${fact.statement}`).join('\n')
+      : '  （空）';
+  return [
+    CONSOLIDATION_ROLE,
+    '<task>判断 <facts> 是否共同指向一条判断；能就写一行结论，不能就写 无。</task>',
+    CONSOLIDATION_RULES,
+    CONSOLIDATION_CONTRAST,
+    ['<facts>', ...facts, '</facts>'].join('\n'),
+    ['<existing>', existing, '</existing>'].join('\n'),
+    '<output>',
+    '结论: 陈述 | 证据=<id>,<id> | 置信=0.6',
+  ].join('\n\n');
+}
+
+/**
+ * Stage two: check the draft against its evidence.
+ *
+ * Deliberately does not carry the draft's reasoning: an independent check is the
+ * whole point (Chain-of-Verification), and a check that can see the excuse tends
+ * to accept it.
+ */
+export function renderVerificationPrompt(input: VerificationPromptInput): string {
+  const facts = input.facts.map((fact) => `  ${fact.id} | ${fact.statement}`).join('\n');
+  return [
+    VERIFICATION_ROLE,
+    VERIFICATION_RULES,
+    `<conclusion>${input.conclusion}</conclusion>`,
+    ['<facts>', facts, '</facts>'].join('\n'),
+    '<output>',
+    '判定: 支持 | 依据=<id>,<id> | 理由=哪条事实的哪个片段支撑了它',
+  ].join('\n\n');
+}

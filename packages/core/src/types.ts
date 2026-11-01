@@ -617,3 +617,18 @@ export interface Correction {
   deviceId?: string;
 }
 
+
+/**
+ * One conclusion the model proposes. `evidence` holds fact ids: the gate refuses
+ * anything citing fewer than two, because one observation is a fact, not a
+ * conclusion.
+ */
+export interface ConclusionDraft {
+  statement: string;
+  evidence: string[];
+  confidence: number;
+  /** Old conclusion this replaces, when the new evidence contradicts it. */
+  supersedes?: string;
+  /** The evidence text, used only to tell quoting from over-generalising. */
+  evidenceText?: string;
+}
