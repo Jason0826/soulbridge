@@ -1044,6 +1044,26 @@ export function openSqlite(file: string): SoulStore {
           .run(at, summaryFactId ?? null, id),
       );
     },
+
+    /**
+     * Close threads the conversation has moved past.
+     *
+     * Quiet is counted in turns, not minutes: a topic is over when the talk has
+     * moved on. Returns the ids closed, so the caller can consolidate them.
+     */
+    closeIdleThreads(soulId: string, userId: string, currentTurnNo: number, idleTurns: number, at: number): string[] {
+      const stale = db
+        .prepare(
+          `SELECT id FROM threads
+           WHERE soul_id = ? AND user_id = ? AND status = 'open'
+             AND COALESCE(last_turn_no, 0) <= ?`,
+        )
+        .all(soulId, userId, currentTurnNo - Math.max(1, idleTurns)) as Row[];
+      const ids = stale.map((row) => String(row.id));
+      const close = db.prepare("UPDATE threads SET status = 'closed', closed_at = ? WHERE id = ?");
+      for (const id of ids) withRetry(() => close.run(at, id));
+      return ids;
+    },
     stepsOf(turnId: string): TurnStep[] {
       const rows = db
         .prepare('SELECT * FROM steps WHERE turn_id = ? ORDER BY idx ASC')

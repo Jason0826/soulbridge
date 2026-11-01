@@ -560,6 +560,15 @@ export class Soul {
     return { ok: true, fact, superseded };
   }
 
+  /**
+   * Close topics the conversation has moved past.
+   *
+   * Deterministic: `idleTurns` is a number of turns, not a guess about meaning.
+   * Returns the closed ids so the caller can run consolidation on them.
+   */
+  closeIdleThreads(currentTurnNo: number, idleTurns = 6, at = Date.now()): string[] {
+    return this.store.closeIdleThreads(this.soulId, this.userId, currentTurnNo, idleTurns, at);
+  }
   /** Current conclusions, newest first. Superseded ones are history, not state. */
   conclusions(limit = 20): Fact[] {
     return this.store

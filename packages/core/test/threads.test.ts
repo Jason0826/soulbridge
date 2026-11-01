@@ -51,3 +51,21 @@ test('threads: touchThread moves a thread to the front of the candidates', () =>
   assert.equal(store.openThreads(S.soulId, S.userId)[0].id, a.id);
   store.close();
 });
+
+test('threads: quiet threads close by turn distance, not by wall clock', () => {
+  const store = openSqlite(':memory:');
+  const active = store.openThread({ ...S, sessionId: 'sess', topic: '还在聊的', openedAt: 1000, turnNo: 10 });
+  const stale = store.openThread({ ...S, sessionId: 'sess', topic: '早就聊完的', openedAt: 1000, turnNo: 3 });
+
+  // Six idle turns is the default: the stale thread is 7 behind, the active one 0.
+  const closed = store.closeIdleThreads(S.soulId, S.userId, 10, 6, 5000);
+  assert.deepEqual(closed, [stale.id]);
+
+  assert.equal(store.thread(stale.id)?.status, 'closed');
+  assert.equal(store.thread(stale.id)?.closedAt, 5000);
+  assert.equal(store.thread(active.id)?.status, 'open');
+
+  // Closing is idempotent: the same call finds nothing left to do.
+  assert.deepEqual(store.closeIdleThreads(S.soulId, S.userId, 10, 6, 6000), []);
+  store.close();
+});

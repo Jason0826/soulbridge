@@ -71,16 +71,29 @@ const pct = (part, whole) => (whole === 0 ? '—' : `${((part / whole) * 100).to
 const per = (part, whole) => (whole === 0 ? '—' : (part / whole).toFixed(2));
 
 const extracts = trace.filter((row) => row.event === 'extract');
-const extractByLlm = extracts.filter((row) => row.by === 'llm').length;
 // Why the rules path ran. "model-failed" and a deliberate rules mode are very
 // different problems, and a single ratio hides which one is happening.
-const fallbackReasons = new Map();
+//
+// A retried turn writes one event per attempt, so counting events overstates
+// failures badly: one turn retried ten times looked like ten broken extractions.
+// Only the final outcome of each turn counts, and records written before the
+// reason field existed are "unmeasured", not "failed".
+const finalByTurn = new Map();
 for (const row of extracts) {
+  if (row.turn === undefined) continue;
+  finalByTurn.set(row.turn, row);
+}
+const measured = [...finalByTurn.values()];
+const measuredLlm = measured.filter((row) => row.by === 'llm').length;
+const fallbackReasons = new Map();
+for (const row of measured) {
   if (row.by === 'llm') continue;
-  const key = String(row.reason ?? 'unknown').split(':')[0].slice(0, 40);
+  const key = String(row.reason ?? 'unmeasured').split(':')[0].slice(0, 40);
   fallbackReasons.set(key, (fallbackReasons.get(key) ?? 0) + 1);
 }
-const attributions = extracts.filter((row) => row.thread);
+const knownFallback = measured.filter((row) => row.by !== 'llm' && row.reason !== undefined).length;
+const modelDenominator = measuredLlm + knownFallback;
+const attributions = measured.filter((row) => row.thread);
 const threadCreated = attributions.filter((row) => row.threadCreated).length;
 
 const consolidations = trace.filter((row) => row.event === 'consolidate' && (row.verdict === 'supported' || row.dropped));
@@ -90,10 +103,12 @@ const report = {
   window: { days, since: new Date(since).toISOString() },
   factsPerTurn: { facts, turns, ratio: turns === 0 ? null : Number((facts / turns).toFixed(2)), pass: turns > 0 && facts / turns <= 1.5 },
   extraction: {
-    runs: extracts.length,
-    byLlm: extractByLlm,
-    modelRate: extracts.length === 0 ? null : Number((extractByLlm / extracts.length).toFixed(3)),
-    pass: extracts.length === 0 ? null : extractByLlm / extracts.length >= 0.8,
+    turns: measured.length,
+    byLlm: measuredLlm,
+    knownFallback,
+    unmeasured: measured.length - measuredLlm - knownFallback,
+    modelRate: modelDenominator === 0 ? null : Number((measuredLlm / modelDenominator).toFixed(3)),
+    pass: modelDenominator === 0 ? null : measuredLlm / modelDenominator >= 0.8,
   },
   attribution: {
     attached: attributions.length,
@@ -128,7 +143,7 @@ console.log(`soulbridge quality — last ${days} days (${HOME})`);
 console.log('');
 console.log(`事实密度      ${report.factsPerTurn.ratio ?? '—'} 条/轮   ${verdict(report.factsPerTurn.pass)}   (${facts} 条 / ${turns} 轮，通过线 ≤1.5)`);
 console.log(
-  `抽取走模型    ${pct(extractByLlm, extracts.length)}        ${verdict(report.extraction.pass)}   (${extractByLlm}/${extracts.length} 次，通过线 ≥80%)`,
+  `抽取走模型    ${pct(measuredLlm, modelDenominator)}        ${verdict(report.extraction.pass)}   (${measuredLlm}/${modelDenominator} 轮，通过线 ≥80%；另有 ${report.extraction.unmeasured} 轮未记录原因，不计入)`,
 );
 console.log(
   `结论支持率    ${pct(supported, consolidations.length)}        ${verdict(report.conclusions.pass)}   (${supported}/${consolidations.length} 次，通过线 ≥80%)`,
