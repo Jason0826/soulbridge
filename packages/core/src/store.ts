@@ -24,6 +24,8 @@ import type {
   TurnFindSpec,
   TurnSpec,
   TurnStep,
+  TurnThread,
+  ThreadSpec,
 } from './types.ts';
 
 export interface SoulStore {
@@ -56,6 +58,16 @@ export interface SoulStore {
   putFact(spec: FactSpec): Fact;
   fact(id: string): Fact | null;
   facts(query: FactQuery): Fact[];
+  /** Open a topic thread. */
+  openThread(spec: ThreadSpec): TurnThread;
+  /** Put one turn into a thread; a turn belongs to exactly one. */
+  attachTurn(turnId: string, threadId: string): void;
+  /** Remember the newest turn number seen in a thread (used for ordering). */
+  touchThread(id: string, turnNo: number): void;
+  /** Open threads, most recently used first — the candidate list for attribution. */
+  openThreads(soulId: string, userId: string, limit?: number): TurnThread[];
+  thread(id: string): TurnThread | null;
+  closeThread(id: string, at: number, summaryFactId?: string): void;
   /** One turn by id, for expanding a fact back into its conversation. */
   turn(id: string): TurnPair | null;
   /** Retire a fact: the new one replaces it, the old row stays for the record. */

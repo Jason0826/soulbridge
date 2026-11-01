@@ -632,3 +632,33 @@ export interface ConclusionDraft {
   /** The evidence text, used only to tell quoting from over-generalising. */
   evidenceText?: string;
 }
+/**
+ * A topic thread: the unit of "understanding" a conversation.
+ *
+ * Deliberately not a contiguous segment — a conversation interleaves (A B A),
+ * and a segment model would cut A in half. A thread's turns need not be adjacent.
+ */
+export interface TurnThread {
+  id: string;
+  soulId: string;
+  userId: string;
+  sessionId: string;
+  topic: string;
+  status: 'open' | 'closed';
+  openedAt: number;
+  closedAt?: number;
+  /** Last turn number seen in this thread; used to order candidates. */
+  lastTurnNo?: number;
+  /** The conclusion written when the thread closed. */
+  summaryFactId?: string;
+}
+
+export interface ThreadSpec {
+  id?: string;
+  soulId: string;
+  userId: string;
+  sessionId: string;
+  topic: string;
+  openedAt: number;
+  turnNo?: number;
+}

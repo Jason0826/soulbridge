@@ -30,13 +30,15 @@ import type {
   GapSpec,
   TurnFindResult,
   TurnFindSpec,
+  ThreadSpec,
+  TurnThread,
   TurnSpec,
   TurnStep,
 } from './types.ts';
 import type { SoulStore } from './store.ts';
 import { bm25, buildCorpusStats, tokenize } from './scoring.ts';
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 /** How many recent pairs are considered before scoring. Bounded so recall stays O(candidates). */
 const RECALL_CANDIDATES = 500;
 export const AFFECT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -237,6 +239,23 @@ CREATE TABLE IF NOT EXISTS gaps (
   closed_by_fact_id TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_gaps_open ON gaps(soul_id, user_id, status, tension DESC);
+
+-- A topic is a thread, not a segment: its turns need not be adjacent, because a
+-- conversation can interleave (A B A) and come back. Consolidation runs when a
+-- thread closes, not when a batch of facts fills up.
+CREATE TABLE IF NOT EXISTS threads (
+  id          TEXT PRIMARY KEY,
+  soul_id     TEXT NOT NULL,
+  user_id     TEXT NOT NULL,
+  session_id  TEXT NOT NULL,
+  topic       TEXT NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'open',
+  opened_at   INTEGER NOT NULL,
+  closed_at   INTEGER,
+  last_turn_no INTEGER,
+  summary_fact_id TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_threads_open ON threads(soul_id, user_id, status, opened_at DESC);
 `;
 
 type Row = Record<string, unknown>;
@@ -309,6 +328,24 @@ function upgradeToV3(db: DatabaseSync): void {
  * are copied across as turns with a single text step, so nothing is lost; the
  * old table stays as a read-only legacy copy.
  */
+
+/** v6 → v7: turn threads (a topic's turns need not be adjacent) plus turns.thread_id. */
+export function upgradeToV7(db: DatabaseSync): void {
+  db.exec(`CREATE TABLE IF NOT EXISTS threads (
+    id          TEXT PRIMARY KEY,
+    soul_id     TEXT NOT NULL,
+    user_id     TEXT NOT NULL,
+    session_id  TEXT NOT NULL,
+    topic       TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'open',
+    opened_at   INTEGER NOT NULL,
+    closed_at   INTEGER,
+    last_turn_no INTEGER,
+    summary_fact_id TEXT
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_threads_open ON threads(soul_id, user_id, status, opened_at DESC)');
+  ensureColumn(db, 'turns', 'thread_id', 'TEXT');
+}
 export function upgradeToV5(db: DatabaseSync): void {
   const hasLegacy = db
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'turn_pairs'")
@@ -375,6 +412,7 @@ export function openSqlite(file: string): SoulStore {
     if (version < 2) upgradeToV2(db);
     if (version < 3) upgradeToV3(db);
     if (version < 5) upgradeToV5(db);
+    if (version < 7) upgradeToV7(db);
     // v6 adds tables only; SCHEMA creates them on every open, nothing to copy.
     setVersion(db, SCHEMA_VERSION);
   }
@@ -953,6 +991,59 @@ export function openSqlite(file: string): SoulStore {
       const row = db.prepare('SELECT * FROM turns WHERE id = ?').get(id) as Row | undefined;
       return row ? rowToTurnPair(row) : null;
     },
+
+    openThread(spec: ThreadSpec): TurnThread {
+      const id = spec.id ?? `th_${spec.openedAt.toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      withRetry(() =>
+        db
+          .prepare(
+            `INSERT INTO threads (id, soul_id, user_id, session_id, topic, status, opened_at, last_turn_no)
+             VALUES (?, ?, ?, ?, ?, 'open', ?, ?)`,
+          )
+          .run(id, spec.soulId, spec.userId, spec.sessionId, spec.topic, spec.openedAt, spec.turnNo ?? null),
+      );
+      return {
+        id,
+        soulId: spec.soulId,
+        userId: spec.userId,
+        sessionId: spec.sessionId,
+        topic: spec.topic,
+        status: 'open',
+        openedAt: spec.openedAt,
+        lastTurnNo: spec.turnNo,
+      };
+    },
+
+    attachTurn(turnId: string, threadId: string): void {
+      withRetry(() => db.prepare('UPDATE turns SET thread_id = ? WHERE id = ?').run(threadId, turnId));
+    },
+
+    touchThread(id: string, turnNo: number): void {
+      withRetry(() => db.prepare('UPDATE threads SET last_turn_no = ? WHERE id = ?').run(turnNo, id));
+    },
+
+    openThreads(soulId: string, userId: string, limit = 5): TurnThread[] {
+      const rows = db
+        .prepare(
+          `SELECT * FROM threads WHERE soul_id = ? AND user_id = ? AND status = 'open'
+           ORDER BY COALESCE(last_turn_no, 0) DESC, opened_at DESC LIMIT ?`,
+        )
+        .all(soulId, userId, limit) as Row[];
+      return rows.map(rowToThread);
+    },
+
+    thread(id: string): TurnThread | null {
+      const row = db.prepare('SELECT * FROM threads WHERE id = ?').get(id) as Row | undefined;
+      return row ? rowToThread(row) : null;
+    },
+
+    closeThread(id: string, at: number, summaryFactId?: string): void {
+      withRetry(() =>
+        db
+          .prepare("UPDATE threads SET status = 'closed', closed_at = ?, summary_fact_id = ? WHERE id = ?")
+          .run(at, summaryFactId ?? null, id),
+      );
+    },
     stepsOf(turnId: string): TurnStep[] {
       const rows = db
         .prepare('SELECT * FROM steps WHERE turn_id = ? ORDER BY idx ASC')
@@ -1156,6 +1247,21 @@ function rowToFact(row: Row, slots: Map<string, FactSlot[]>): Fact {
   };
 }
 
+function rowToThread(row: Row): TurnThread {
+  return {
+    id: String(row.id),
+    soulId: String(row.soul_id),
+    userId: String(row.user_id),
+    sessionId: String(row.session_id),
+    topic: String(row.topic),
+    status: String(row.status) as TurnThread['status'],
+    openedAt: Number(row.opened_at),
+    closedAt: row.closed_at === null || row.closed_at === undefined ? undefined : Number(row.closed_at),
+    lastTurnNo: row.last_turn_no === null || row.last_turn_no === undefined ? undefined : Number(row.last_turn_no),
+    summaryFactId:
+      row.summary_fact_id === null || row.summary_fact_id === undefined ? undefined : String(row.summary_fact_id),
+  };
+}
 function rowToGap(row: Row): Gap {
   return {
     id: String(row.id),
