@@ -27,6 +27,13 @@ export interface KnownFactPrompt {
   atText?: string;
 }
 
+export interface KnownThreadPrompt {
+  id: string;
+  topic: string;
+  /** How many turns ago this thread was last seen. */
+  ago?: number;
+}
+
 export interface ExtractionPromptInput {
   /** The turn's user text. */
   text: string;
@@ -35,6 +42,10 @@ export interface ExtractionPromptInput {
   entities?: KnownEntityPrompt[];
   facts?: KnownFactPrompt[];
   previousUserText?: string;
+  /** Open topic threads: the candidate list for attribution. */
+  threads?: KnownThreadPrompt[];
+  /** Which thread the previous turn belonged to, when known. */
+  previousThreadId?: string;
 }
 
 const EXTRACTION_ROLE = `<role>
@@ -49,6 +60,7 @@ const EXTRACTION_SCHEMA = `<output-format>
 实体: 名字 | 类型 | 关系
 事实: 陈述 | 类型名 | 日期(YYYY-MM-DD) | 时间原文 | 来源 | 置信(0-1) | 槽位
 缺口: 主题 | 张力(0-1) | 相关实体
+线索: 继续 <id>        或        线索: 新 | 一句话主题
 
 填写说明：
 - 类型只能是 person / thing / place / self；关系可空。
@@ -56,10 +68,15 @@ const EXTRACTION_SCHEMA = `<output-format>
 - 日期换算不出来就留空，把原话写进"时间原文"。
 - 来源：experienced（亲历）/ told（听说的）/ inferred（推断的）。
 - 槽位写成 名称=值，多个用 ; 隔开；值是数字就写数字，是实体就写实体名。
+- 线索：这句话在接着聊 <open-threads> 里的哪一条，就写 继续 <id>；
+  开始一个新话题就写 新 | 一句话主题（不超过 20 字）。
+  拿不准时写"新"——多开一条只是话题碎一点，接错会把两件事混成一条结论。
+  没有任何候选线索时，这一行只可能是"新"。
 - 示例：
 实体: 小林 | person | 同事
 事实: 小林在 2026-10-24 那周被裁员 | 裁员 | 2026-10-24 | 上周 | told | 0.8 | 被裁员者=小林
 缺口: 小林后来有着落吗 | 0.6 | 小林
+线索: 继续 th_ab12
 </output-format>`;
 
 const EXTRACTION_RULES = `<rules>
@@ -151,11 +168,13 @@ function renderKnownFacts(facts: KnownFactPrompt[]): string {
  * is edited in one place and shows up in every host's extraction call.
  */
 export function renderExtractionPrompt(input: ExtractionPromptInput): string {
+  const threads = renderOpenThreads(input.threads ?? [], input.previousThreadId);
   const context = [
     '<context>',
     `  <observation-date>${isoDate(input.now)}</observation-date>`,
     renderKnownEntities(input.entities ?? []),
     renderKnownFacts(input.facts ?? []),
+    threads,
     input.previousUserText ? `<previous-user>${input.previousUserText.slice(0, 200)}</previous-user>` : '',
     '</context>',
   ]
@@ -164,7 +183,7 @@ export function renderExtractionPrompt(input: ExtractionPromptInput): string {
 
   return [
     EXTRACTION_ROLE,
-    '<task>把 <source> 里的信息变成记忆操作。只依据 <source> 与 <previous-user>；<known-facts> 只用于判断冲突与去重。</task>',
+    '<task>把 <source> 里的信息变成记忆操作，并说明它属于哪条线索。只依据 <source> 与 <previous-user>；<known-facts> 只用于判断冲突与去重。</task>',
     EXTRACTION_SCHEMA,
     EXTRACTION_RULES,
     EXTRACTION_EXAMPLES,
@@ -172,6 +191,24 @@ export function renderExtractionPrompt(input: ExtractionPromptInput): string {
     `<source>\n${input.text}\n</source>`,
     '<output>',
   ].join('\n\n');
+}
+
+/**
+ * The candidate list for thread attribution.
+ *
+ * Five at most, most recently used first, each with an id the model must quote
+ * back and a short topic it can compare against. Too many candidates and the
+ * model starts keyword-matching; a wrong merge is worse than starting a new
+ * thread, so the list stays short on purpose.
+ */
+function renderOpenThreads(threads: KnownThreadPrompt[], previousThreadId?: string): string {
+  if (threads.length === 0) return '<open-threads>（空）</open-threads>';
+  const lines = threads.slice(0, 5).map((thread) => {
+    const ago = thread.ago === undefined ? '' : ` | ${thread.ago} 轮前`;
+    return `  ${thread.id} | ${thread.topic.slice(0, 20)}${ago}`;
+  });
+  const previous = previousThreadId ? [`  上一轮所属：${previousThreadId}`] : [];
+  return ['<open-threads>', ...lines, ...previous, '</open-threads>'].join('\n');
 }
 
 /* ------------------------------------------------------------------ *

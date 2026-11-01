@@ -25,6 +25,7 @@ export {
 } from './reflect.ts';
 export type { CorrectionLayer, CorrectionSignal, CorrectionVerdict } from './reflect.ts';
 export { rank, scoreMemory, tokenize, relevance, bm25, buildCorpusStats } from './scoring.ts';
+export { parseThreadLine } from './extract.ts';
 export {
   renderConsolidationPrompt,
   renderVerificationPrompt,
@@ -65,6 +66,7 @@ import type {
   ExtractDraft,
   ConclusionDraft,
   Fact,
+  ThreadAttribution,
   FactDetail,
   FactSpec,
   Gap,
@@ -327,7 +329,7 @@ export class Soul {
   }
 
   /** The slice of the store the extractor is allowed to know about. */
-  extractionContext(limit = 20): ExtractionContext {
+  extractionContext(limit = 20, options: { turnNo?: number } = {}): ExtractionContext {
     const entities = this.store
       .findEntities({ soulId: this.soulId, userId: this.userId, limit })
       .map((e) => ({
@@ -339,7 +341,48 @@ export class Soul {
     const facts = this.store
       .facts({ soulId: this.soulId, userId: this.userId, limit: 12 })
       .map((f) => ({ id: f.id, statement: f.statement, atText: f.atText }));
-    return { entities, facts };
+    // Candidate threads, most recently used first. "How many turns ago" is what
+    // lets the model tell "just now" from "a while back" without counting.
+    const threads = this.store.openThreads(this.soulId, this.userId, 5).map((thread) => ({
+      id: thread.id,
+      topic: thread.topic,
+      ago:
+        options.turnNo !== undefined && thread.lastTurnNo !== undefined
+          ? Math.max(0, options.turnNo - thread.lastTurnNo)
+          : undefined,
+    }));
+    return { entities, facts, threads };
+  }
+
+  /**
+   * Put a turn into the thread the model named, or start a new one.
+   *
+   * A named thread that does not exist (or is closed) degrades to a new thread:
+   * the model cannot be allowed to attach a turn to something it never saw.
+   */
+  applyThread(
+    attribution: ThreadAttribution | undefined,
+    spec: { sessionId: string; turnNo: number; turnId: string; at: number; fallbackTopic?: string },
+  ): { threadId: string; created: boolean; topic: string } {
+    if (attribution?.kind === 'continue') {
+      const existing = this.store.thread(attribution.id);
+      if (existing && existing.status === 'open') {
+        this.store.attachTurn(spec.turnId, existing.id);
+        this.store.touchThread(existing.id, spec.turnNo);
+        return { threadId: existing.id, created: false, topic: existing.topic };
+      }
+    }
+    const topic = (attribution?.kind === 'new' ? attribution.topic : undefined) ?? spec.fallbackTopic ?? '未命名话题';
+    const thread = this.store.openThread({
+      soulId: this.soulId,
+      userId: this.userId,
+      sessionId: spec.sessionId,
+      topic: topic.slice(0, 20),
+      openedAt: spec.at,
+      turnNo: spec.turnNo,
+    });
+    this.store.attachTurn(spec.turnId, thread.id);
+    return { threadId: thread.id, created: true, topic: thread.topic };
   }
 
   /**

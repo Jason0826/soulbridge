@@ -285,7 +285,16 @@ export interface ExtractDraft {
   by: 'rules' | 'llm';
   /** Why the rules path was used, so a silent fallback cannot hide. */
   reason?: string;
+  /** Which topic thread this turn belongs to, when the model said. */
+  thread?: ThreadAttribution;
 }
+
+/**
+ * Where a turn belongs. continue must name a thread the model was shown;
+ * anything unparseable or unknown degrades to a new thread, because a wrong split
+ * leaves fragments while a wrong merge poisons a conclusion.
+ */
+export type ThreadAttribution = { kind: 'continue'; id: string } | { kind: 'new'; topic?: string };
 
 /** What a commit actually created or merged. */
 export interface CommitResult {

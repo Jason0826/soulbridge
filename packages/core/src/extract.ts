@@ -15,7 +15,8 @@
  *
  * Pure functions, no I/O, no dependencies.
  */
-import type { EntityDraft, ExtractDraft, FactDraft, FactOperation, GapDraft, SlotValue } from './types.ts';
+import type {
+  ThreadAttribution, EntityDraft, ExtractDraft, FactDraft, FactOperation, GapDraft, SlotValue } from './types.ts';
 import { renderExtractionPrompt } from './prompts.ts';
 
 /** Relations a person is introduced with, longest first so 女同事 wins over 同事. */
@@ -208,6 +209,9 @@ export interface ExtractionContext {
   entities: Array<{ id: string; name: string; aliases?: string[]; relation?: string }>;
   facts: Array<{ id: string; statement: string; atText?: string }>;
   previousUserText?: string;
+  /** Open threads, for attribution. */
+  threads?: Array<{ id: string; topic: string; ago?: number }>;
+  previousThreadId?: string;
 }
 
 /**
@@ -232,6 +236,8 @@ export async function extractWithModel(
     entities: context?.entities,
     facts: context?.facts,
     previousUserText: context?.previousUserText,
+    threads: context?.threads,
+    previousThreadId: context?.previousThreadId,
   });
   let raw: string;
   try {
@@ -241,11 +247,38 @@ export async function extractWithModel(
   }
   // Lines first: one bad record is one bad record. JSON is the fallback for a
   // model that ignores the template and answers in JSON anyway.
+  const thread = parseThreadLine(raw);
   const fromLines = parseLineDraft(raw);
-  if (fromLines) return validateDraft(fromLines, at, context);
+  if (fromLines) {
+    const result = validateDraft(fromLines, at, context);
+    if (result.draft && thread) result.draft.thread = thread;
+    return result;
+  }
   const json = extractJson(raw);
   if (!json) return { draft: null, error: `unparseable output: ${String(raw).slice(0, 60)}` };
-  return validateDraft(json, at, context);
+  const result = validateDraft(json, at, context);
+  if (result.draft && thread) result.draft.thread = thread;
+  return result;
+}
+
+/**
+ * Parse the attribution line.
+ *
+ *  线索: 继续 th_ab12
+ *  线索: 新 | 在聊 cookie 与认证
+ */
+export function parseThreadLine(raw: string): ThreadAttribution | null {
+  for (const line of String(raw ?? '').split(/\r?\n/)) {
+    const match = /^线索\s*[:：]\s*(.+)$/.exec(line.trim());
+    if (!match) continue;
+    const body = match[1].trim();
+    if (/^(无|none|nothing)[。.]?$/i.test(body)) return null;
+    const continued = /^继续\s*[:：]?\s*([A-Za-z0-9_-]+)$/.exec(body);
+    if (continued) return { kind: 'continue', id: continued[1] };
+    const fresh = /^新\s*(?:[|｜:：]\s*(.*))?$/.exec(body);
+    if (fresh) return { kind: 'new', topic: (fresh[1] ?? '').trim() || undefined };
+  }
+  return null;
 }
 
 /** Models wrap JSON in prose or fences; take the outermost object. */
