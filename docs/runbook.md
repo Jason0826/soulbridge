@@ -56,6 +56,18 @@ node --experimental-strip-types scripts/verify-installed.mjs [profileDir]
 > **验收口径**：不看"我改了什么"，看"装上的是什么"。任何一次改动，如果没有一条
 > 针对安装产物的断言，就当作没改。
 
+### 第 0.6 步：发版前看一次质量比率
+
+```bash
+node scripts/quality.mjs --days 7
+```
+
+四项比率（[ADR 0031](adr/0031-model-dependency-acceptance.md)）：事实密度、抽取走模型比例、
+结论支持率、情绪非零率。**任一 FAIL 要在发布记录里写明原因**，不许"感觉还行"就发。
+
+脚本还会列出规则兜底的分布——`model-failed` 和"主动选择规则模式"是两种完全不同的问题，
+一个笼统的比率会把它们混在一起。
+
 ```bash
 # 1. 升版本（不动 git tag）
 npm version patch --no-git-tag-version
