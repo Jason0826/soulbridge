@@ -224,3 +224,4 @@ draft.operations=[]  facts=1  →  落库 0 条，skipped=[]
 - 顺带删掉 `context.ts` 一个从未使用的 `rank` import。
 - 预算棘轮因此 +54 行，已在 `scripts/budget.json` 的 `history` 里记账（**bug 修复允许涨，功能新增不允许**，下次重构还回去）。
 - 仍未修（下一轮）：实体 aliases 被空值覆盖、WAL 备份可能拷坏、迁移重复插 step、注入不转义、空置信落 0、非法日期滚动；插件侧「模型失败吞成空串」「section 带 affect 导致每轮追加 prompt 版本」优先级更高，排在它们前面。
+| 7 | `distill` / `extract` 双开关：`makeLlm` 看 distill，四个阶段看 extract，默认配置（distill=rules）静默关掉整条 LLM 管线 → 统一为 extract 一个开关；无模型时分类/归纳**不入队**，避免顶点被 cap 丢新项 | `config-switch.test.mjs` 5 条（行为 + 守卫）；变异：去掉 usesModel 判断 → 红 | 默认安装从"静默变哑"变成 extract=llm 全通 |

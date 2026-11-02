@@ -7,7 +7,11 @@
       "replacedBy": "turns + steps",
       "status": "done",
       "why": "v5 起一轮是记忆单位，putTurnPair 已委托给 putTurn；turn_pairs 只剩迁移读取。",
-      "check": { "kind": "table", "name": "turn_pairs", "expect": "no-writer" }
+      "check": {
+        "kind": "table",
+        "name": "turn_pairs",
+        "expect": "no-writer"
+      }
     },
     {
       "id": "handoff-doc",
@@ -15,7 +19,11 @@
       "replacedBy": "docs/state.md",
       "status": "done",
       "why": "两份现状态必然互相过期，且新会话第一眼打开的是旧的那份。",
-      "check": { "kind": "file", "path": "docs/handoff.md", "expect": "absent" }
+      "check": {
+        "kind": "file",
+        "path": "docs/handoff.md",
+        "expect": "absent"
+      }
     },
     {
       "id": "review-script",
@@ -23,7 +31,11 @@
       "replacedBy": "scripts/health-check.mjs",
       "status": "done",
       "why": "同一件事两个入口会互相打架；文档检查已经因此分叉过一次。",
-      "check": { "kind": "file", "path": "scripts/review.mjs", "expect": "absent" }
+      "check": {
+        "kind": "file",
+        "path": "scripts/review.mjs",
+        "expect": "absent"
+      }
     },
     {
       "id": "memories-write",
@@ -31,15 +43,24 @@
       "replacedBy": "facts + fact_slots",
       "status": "pending",
       "why": "observe() 仍在写；锚点仍读它。退役需要 observe 只做 affect 分析，锚点改读 facts 的高置信判断。",
-      "check": { "kind": "table", "name": "memories", "expect": "no-writer" }
+      "check": {
+        "kind": "table",
+        "name": "memories",
+        "expect": "no-writer"
+      }
     },
     {
       "id": "distill-switch",
       "old": "配置开关 distill（LLM 总开关）",
       "replacedBy": "extract 及各阶段自己的开关",
-      "status": "pending",
-      "why": "makeLlm 按 distill 创建，四个阶段却按 extract 判断：默认 distill=rules 时整条 LLM 管线静默关闭。",
-      "check": { "kind": "symbol", "path": "PLUGIN", "pattern": "config.distill", "expect": "absent" }
+      "status": "done",
+      "why": "distill 已从代码里删除：makeLlm 只看 extract=llm，四个阶段与入队守卫共用同一判断。",
+      "check": {
+        "kind": "symbol",
+        "path": "PLUGIN",
+        "pattern": "config.distill",
+        "expect": "absent"
+      }
     },
     {
       "id": "anchor-container",
@@ -47,7 +68,12 @@
       "replacedBy": "规则 / 画像 / 记忆 三层（ADR 0033）",
       "status": "pending",
       "why": "context.ts 仍在读旧 memories 做锚点；三层注入在插件侧才完整。",
-      "check": { "kind": "symbol", "path": "packages/core/src/context.ts", "pattern": "store.query(", "expect": "absent" }
+      "check": {
+        "kind": "symbol",
+        "path": "packages/core/src/context.ts",
+        "pattern": "store.query(",
+        "expect": "absent"
+      }
     },
     {
       "id": "json-extraction-shape",
@@ -55,7 +81,12 @@
       "replacedBy": "行格式 + operations",
       "status": "pending",
       "why": "prompt 已禁止 JSON，但 validateDraft 仍保留 JSON 解析分支。已修'被空 operations 遮蔽'，但两套表示仍在。",
-      "check": { "kind": "symbol", "path": "packages/core/src/extract.ts", "pattern": "input.facts", "expect": "absent" }
+      "check": {
+        "kind": "symbol",
+        "path": "packages/core/src/extract.ts",
+        "pattern": "input.facts",
+        "expect": "absent"
+      }
     }
   ]
 }

@@ -21,10 +21,15 @@
       "date": "2026-11-02",
       "delta": 14,
       "reason": "section 稳定性修复：core 新增 includeAffect 开关与类型说明（+10），插件 section 调用与注释（+4）。bug 修复允许涨。"
+    },
+    {
+      "date": "2026-11-02",
+      "delta": 25,
+      "reason": "双开关合一：distill 退役、makeLlm 只看 extract、无模型时不入队（+25 行，含注释）。bug 修复允许涨。"
     }
   ],
   "coreLines": 7432,
-  "pluginLines": 2283,
+  "pluginLines": 2304,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
