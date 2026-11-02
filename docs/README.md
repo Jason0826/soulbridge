@@ -29,7 +29,7 @@
 | **一次交付要走哪十步** | [process.md](process.md)（规范；每步都有判定方式） |
 | **名词/变量声明在哪** | [declarations.json](declarations.json)（唯一声明登记，`health-check` 第 8 节判定） |
 | **旧表示退场到哪一步** | [retirements.json](retirements.json)（`health-check` 第 7 节判定） |
-| 代码审查发现与已修项 | [audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md) |`n| **代码规范（可判定）** | [code-quality.md](code-quality.md) |
+| 代码审查发现与已修项 | [audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md) |`n| **代码规范（可判定）** | [code-quality.md](code-quality.md) |`n| **每次改动的清单** | [checklist.md](checklist.md) |
 
 ## 两个"锚"的分工
 
