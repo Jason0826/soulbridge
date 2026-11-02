@@ -49,6 +49,7 @@
 | 代码与模型的边界 | [adr/0027](adr/0027-code-vs-model-boundary.md) · [adr/0029](adr/0029-extraction-is-the-models-job.md) · [adr/0030](adr/0030-core-adapter-boundary.md) |
 | 模型环节怎么验收 | [adr/0031](adr/0031-model-dependency-acceptance.md) |
 | **记忆分两层、时间与精度** | [adr/0032](adr/0032-two-layers-of-memory.md) |
+| **规则 / 画像 / 记忆三层，锚点退场** | [adr/0033](adr/0033-rules-profile-memory.md) |
 | 存什么、怎么衰减 | [briefs/0019](briefs/0019-memory-selection.md) |
 | 怎么从有限窗口里取 | [briefs/0020](briefs/0020-retrieval-funnel.md) |
 | 抽取与归纳 | [briefs/0016](briefs/0016-extraction-consolidation.md) |
