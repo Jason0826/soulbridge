@@ -599,6 +599,41 @@ if (tooLong.length === 0 && manyParams.length === 0 && uniqueAny.length === 0 &&
   add('PASS', '质量', '函数长度、参数个数、any、console.log 均无违规');
 }
 
+// ---------- 11. 差异体检：机械编辑/编码损坏的痕迹 ----------
+// 这些痕迹只有一种来源：用字符串替换或重定向改代码，而不是用 edit。
+// 三次真实事故都是这样发生的：字面 \n 写进源码、GBK 读成 UTF-8 写回、BOM 丢失。
+// 检查只看**这次改动的行**，所以不会淹没在历史里。
+const damage = [];
+try {
+  const diff = spawnSync('git', ['diff', '--unified=0', 'HEAD'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const text = diff.stdout ?? '';
+  for (const raw of text.split('\n')) {
+    if (!raw.startsWith('+') || raw.startsWith('+++')) continue;
+    const line = raw.slice(1);
+    if (line.includes('\uFFFD')) damage.push(`U+FFFD 替换字符：${line.trim().slice(0, 70)}`);
+    // Written as escapes so this check does not match its own source line.
+    if (/[\u951b\u9286\u9225]|\u9532\u65a4\u62f7/.test(line)) {
+      damage.push(`编码损坏（GBK 被当 UTF-8）：${line.trim().slice(0, 70)}`);
+    }
+    // 注释里出现字面 \n 后跟代码 token：替换时想插换行，实际写进了反斜杠和 n。
+    if (/\/\/.*\\n\s*(const|let|var|function|if|return|await|else|for|while|export)\b/.test(line)) {
+      damage.push(`注释里出现字面 \\n：${line.trim().slice(0, 70)}`);
+    }
+  }
+} catch {
+  damage.push('无法运行 git diff（不是 git 仓库？）');
+}
+if (damage.length > 0) {
+  add(
+    'FAIL',
+    '体检',
+    `${damage.length} 行有机械编辑损坏的痕迹 —— 改代码请用 edit/write 工具：` +
+      damage.slice(0, 3).join(' | '),
+  );
+} else {
+  add('PASS', '体检', '这次改动的行没有替换/编码损坏的痕迹');
+}
+
 // ---------- 输出 ----------
 const order = { FAIL: 0, WARN: 1, PASS: 2 };
 const icon = { FAIL: '✗', WARN: '!', PASS: '✓' };
