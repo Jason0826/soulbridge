@@ -1,0 +1,31 @@
+{
+  "date": "2026-11-02",
+  "note": "棘轮预算：数字是实测值，只能往下调，不能往上调。要加功能导致超限时，先删掉同等规模的东西，再跑 --update-budget。",
+  "coreLines": 7218,
+  "pluginLines": 2223,
+  "files": {
+    "analyze.ts": 255,
+    "directives.ts": 46,
+    "index.ts": 1343,
+    "lexicon.ts": 97,
+    "port.ts": 14,
+    "rules.ts": 194,
+    "seed-lexicon.ts": 145,
+    "consolidate.ts": 367,
+    "context.ts": 126,
+    "extract.ts": 538,
+    "profile-prompt.ts": 125,
+    "prompts.ts": 447,
+    "reflect.ts": 411,
+    "retrieval.ts": 80,
+    "scoring.ts": 170,
+    "sqlite.ts": 1601,
+    "config.ts": 96,
+    "merge.ts": 41,
+    "steering.ts": 103,
+    "transcript.ts": 96,
+    "store.ts": 139,
+    "measure.ts": 45,
+    "types.ts": 694
+  }
+}

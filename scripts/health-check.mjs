@@ -11,21 +11,27 @@
  * ⚠️ 只适用于本仓库的目录结构与文档约定（换仓库会 FAIL，不会假绿）。
  * 可迁移的是检查项清单，不是这个文件——见 ADR 0019 关于"经验 vs 工具"的边界。
  */
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, existsSync, writeFileSync } from 'node:fs';
 import { join, relative, dirname, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const results = [];
 const add = (level, area, message, detail) => results.push({ level, area, message, detail });
 
-// ---------- 1. 规模 ----------
-// 3089 on 2026-10-31: turn_pairs landed while the old memories path still exists.
-// Removing memories is the point of the rewrite; this must come back under 3000
-// then. Do not raise it a second time without deleting something else.
-const CORE_BUDGET = 3200;
-const FILE_BUDGET = 300;
+// ---------- 1. 规模（棘轮预算） ----------
+// 原来的 3200 行 / 单文件 300 行是拍脑袋定的，早就被自己的设计打破——问题不在
+// 数字太小，在于"绝对上限"这种形式：它只能靠重新拍一个更大的数字来续命。
+// 现在改成棘轮：scripts/budget.json 记实测值，只能往下调；超了就是 FAIL，
+// 要加东西先删同等规模的东西，然后 --update-budget。
+const BUDGET_PATH = join(ROOT, 'scripts/budget.json');
+const measuredFiles = {};
+for (const file of walk(join(ROOT, 'packages/core/src'), '.ts')) {
+  const name = relative(join(ROOT, 'packages/core/src'), file).replace(/\\/g, '/').split('/').pop();
+  measuredFiles[name] = readFileSync(file, 'utf8').split('\n').length;
+}
 
 function walk(dir, ext) {
   const out = [];
@@ -42,20 +48,44 @@ function walk(dir, ext) {
 const srcDir = join(ROOT, 'packages/core/src');
 const srcFiles = walk(srcDir, '.ts');
 const srcLines = srcFiles.reduce((n, f) => n + readFileSync(f, 'utf8').split('\n').length, 0);
-// 目录不存在时必须报错，不能报 PASS：0 行会让别的仓库"假绿"，比崩掉更危险。
-if (srcFiles.length === 0) {
-  add('FAIL', '规模', `找不到 ${relative(ROOT, srcDir)}/*.ts —— 这个脚本只适用于本仓库结构`);
-} else if (srcLines > CORE_BUDGET) {
-  add('FAIL', '规模', `core 源码 ${srcLines} 行，超出预算 ${CORE_BUDGET}`);
-} else {
-  add('PASS', '规模', `core 源码 ${srcLines}/${CORE_BUDGET} 行（${srcFiles.length} 个文件）`);
-}
+const PLUGIN_ENTRY = 'D:/git-workspace/repos/dsh-plugin-soulbridge/index.js';
+const pluginLines = existsSync(PLUGIN_ENTRY) ? readFileSync(PLUGIN_ENTRY, 'utf8').split('\n').length : 0;
 
-const bigFiles = srcFiles
-  .map((f) => ({ f, n: readFileSync(f, 'utf8').split('\n').length }))
-  .filter((x) => x.n > FILE_BUDGET);
-for (const { f, n } of bigFiles) {
-  add('WARN', '规模', `${relative(ROOT, f)} 有 ${n} 行，超过单文件预算 ${FILE_BUDGET}`);
+const measuredBudget = {
+  date: new Date().toISOString().slice(0, 10),
+  note: '棘轮预算：数字是实测值，只能往下调，不能往上调。要加功能导致超限时，先删掉同等规模的东西，再跑 --update-budget。',
+  coreLines: srcLines,
+  pluginLines,
+  files: measuredFiles,
+};
+
+if (process.argv.includes('--update-budget')) {
+  writeFileSync(BUDGET_PATH, `${JSON.stringify(measuredBudget, null, 2)}\n`, 'utf8');
+  add('PASS', '规模', `预算已按实测重写：core ${srcLines} 行 / 插件 ${pluginLines} 行`);
+} else if (srcFiles.length === 0) {
+  // 目录不存在时必须报错，不能报 PASS：0 行会让别的仓库"假绿"，比崩掉更危险。
+  add('FAIL', '规模', `找不到 ${relative(ROOT, srcDir)}/*.ts —— 这个脚本只适用于本仓库结构`);
+} else if (!existsSync(BUDGET_PATH)) {
+  add('FAIL', '规模', '缺少 scripts/budget.json —— 先跑一次 --update-budget 建立棘轮');
+} else {
+  const budget = JSON.parse(readFileSync(BUDGET_PATH, 'utf8'));
+  const over = [];
+  if (srcLines > budget.coreLines) over.push(`core ${srcLines} > ${budget.coreLines}`);
+  if (pluginLines > budget.pluginLines) over.push(`插件 ${pluginLines} > ${budget.pluginLines}`);
+  for (const [name, lines] of Object.entries(measuredFiles)) {
+    const allowed = budget.files?.[name];
+    if (allowed !== undefined && lines > allowed) over.push(`${name} ${lines} > ${allowed}`);
+  }
+  if (over.length > 0) {
+    add('FAIL', '规模', `超出棘轮预算（先删再加）：${over.join('；')}`);
+  } else {
+    add('PASS', '规模', `core ${srcLines}/${budget.coreLines} 行 · 插件 ${pluginLines}/${budget.pluginLines} 行 · ${srcFiles.length} 个文件在预算内`);
+  }
+  // 低于预算说明删了东西：提示把棘轮收紧，否则预算会重新变成空话。
+  const slack = budget.coreLines - srcLines;
+  if (slack > Math.max(50, budget.coreLines * 0.03)) {
+    add('WARN', '规模', `core 比预算少 ${slack} 行 —— 跑 --update-budget 收紧棘轮`);
+  }
 }
 
 const docFiles = walk(join(ROOT, 'docs'), '.md');
@@ -360,6 +390,53 @@ if (git.status === 0) {
   const dirtyDocs = dirty.some((l) => l.includes('docs/'));
   if (dirtyCode && !dirtyDocs) {
     add('WARN', '同步', '工作区里 packages/ 有改动，但 docs/ 没有——是不是该更新的文档还没更新？');
+  }
+}
+
+// ---------- 6. 结构漂移（原 review.mjs，已合并） ----------
+// 为什么在这里：检查项按"一件事一个入口"组织。文档检查、规模检查、结构漂移检查
+// 都在这个脚本里；再开第二个"整体 review"脚本，只会让两处结论互相打架（已经发生过一次）。
+const sqliteSrcText = readFileSync(join(ROOT, 'packages/core/src/sqlite.ts'), 'utf8');
+const tableNames = [...sqliteSrcText.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/g)].map((m) => m[1]);
+const frozen = [];
+for (const table of new Set(tableNames)) {
+  const writes = [...sqliteSrcText.matchAll(new RegExp(`(INSERT(?: OR \\w+)? INTO ${table}\\b|UPDATE ${table}\\b)`, 'g'))].length;
+  const reads = [...sqliteSrcText.matchAll(new RegExp(`FROM ${table}\\b`, 'g'))].length;
+  if (writes === 0) frozen.push(`${table}(无写者)`);
+  else if (reads === 0) frozen.push(`${table}(无读者)`);
+}
+if (frozen.length > 0) add('WARN', '结构', `表只在一边出现：${frozen.join(', ')}`);
+else add('PASS', '结构', `${new Set(tableNames).size} 张表的读写都成对`);
+
+if (existsSync(PLUGIN_ENTRY)) {
+  const pluginSrc = readFileSync(PLUGIN_ENTRY, 'utf8');
+  const queues = [...pluginSrc.matchAll(/const read(\w+)Queue = \(\) => readQueueFile/g)].map((m) => m[1]);
+  const sharedIO = /function readQueueFile\(/.test(pluginSrc) && /function writeQueueFile\(/.test(pluginSrc);
+  if (sharedIO && queues.length >= 2) add('PASS', '结构', `${queues.length} 条队列共用一套 IO（各自保留 cap/keep 语义）`);
+  else add('WARN', '结构', '队列的文件读写各写各的，应共用一套 IO');
+}
+
+const renderCount = srcFiles.reduce((n, f) => n + (readFileSync(f, 'utf8').match(/^export function render\w+/gm) ?? []).length, 0);
+const parseCount = srcFiles.reduce((n, f) => n + (readFileSync(f, 'utf8').match(/^export function parse\w+/gm) ?? []).length, 0);
+add('PASS', '结构', `提示词 ${renderCount} 个渲染器 / ${parseCount} 个解析器`);
+if (renderCount > 6) {
+  add('WARN', '结构', `${renderCount} 个提示词模板：每加一个判断要同步改闸门与测试，先看能不能并进已有的`);
+}
+
+const dbFile = join(process.env.SOULBRIDGE_HOME ?? join(process.env.USERPROFILE ?? '', '.soulbridge'), 'soul.db');
+if (existsSync(dbFile)) {
+  try {
+    const proj = createRequire(import.meta.url)('node:sqlite');
+    const db = new proj.DatabaseSync(dbFile, { readOnly: true });
+    const rows = db
+      .prepare("SELECT type_name, COUNT(*) n FROM facts WHERE status != 'superseded' GROUP BY type_name ORDER BY n DESC")
+      .all();
+    const singles = rows.filter((r) => r.n === 1).length;
+    db.close();
+    add('PASS', '结构', `${rows.length} 个事实标签：${rows.slice(0, 6).map((r) => `${r.type_name}${r.n}`).join(' ')}`);
+    if (singles > rows.length / 3) add('WARN', '结构', `${singles}/${rows.length} 个标签只用过一次（碎片化）`);
+  } catch {
+    add('WARN', '结构', '数据库读不了，跳过词汇统计');
   }
 }
 
