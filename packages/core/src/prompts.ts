@@ -389,14 +389,19 @@ const CLASSIFY_ROLE = `<role>
 </role>`;
 
 const CLASSIFY_RULES = `<rules>
+一条一条判断，每种输出一行：
 - 规则 = 能回答"什么时候该做什么"。它必须有一个具体的触发场景。
 - 画像 = 说的是这个人的偏好、原则、性格，没有触发场景。
-- 触发条件写成 JSON，最多两种条件：
-    {"any":["关键词1","关键词2"]}          消息里出现这些词时触发
-    {"regex":"\\\\.json\\\\b"}             关键词不够具体时用正则
-    {"state":"long-session"}               会话状态（例如长会话、连续空回复）
-- 关键词要具体：1–3 个词，能在真实消息里命中。不要用"代码""工作"这种大词。
-- 动作写一句话，祈使句，不要重复原文全文。
+- 待修 = 你判断不了是哪一种，或者想不出触发条件。
+
+填写规则那一行时，字段用 key=value，不要写 JSON：
+  关键词=json,package.json       消息里出现任意一个就触发（1–3 个，要具体）
+  正则=\.json\b                  关键词不够具体时用
+  状态=long-session              会话状态（长会话、连续空回复）
+  动作=用 edit 工具改 JSON        祈使句，一句话
+  至少给一个触发条件；一个都没有就写"待修"。
+
+- 关键词不要用"代码""工作"这种大词，它们每天都会出现。
 - 只能输出 <input> 里出现过的 id，不许编。
 </rules>`;
 
@@ -406,7 +411,7 @@ const CLASSIFY_EXAMPLE = `<example>
 - fc_b | 用户讨厌同一件事反复讲，换工具又要重新交代
 </input>
 <output>
-规则: fc_a | {"any":["json","package.json","配置"]} | 用 edit 工具或 BOM 安全写入，不要用字符串替换
+规则: fc_a | 关键词=json,package.json,配置 | 动作=用 edit 工具或 BOM 安全写入，不要用字符串替换
 画像: fc_b
 </output>
 </example>`;
@@ -422,6 +427,7 @@ export function renderRuleClassifyPrompt(input: RuleClassifyPromptInput): string
     CLASSIFY_ROLE,
     CLASSIFY_RULES,
     CLASSIFY_EXAMPLE,
+    '<format>每行：规则: id | 关键词=… | 动作=… / 画像: id / 待修: id | 原因=…</format>',
     ['<input>', ...items, '</input>'].join('\n'),
     '<output>',
   ].join('\n\n');

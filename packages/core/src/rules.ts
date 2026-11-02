@@ -99,24 +99,37 @@ export function selectRules(
 
 export interface RuleClassification {
   id: string;
-  kind: 'rule' | 'profile';
-  /** Raw trigger JSON, when this is a rule. */
+  /**
+   * `pending` is a third bucket on purpose: a lesson that is neither clearly a
+   * triggered rule nor clearly a statement about the person must not be forced into
+   * either. As a rule it would become wallpaper; as a profile line it would put an
+   * imperative into the description of a person.
+   */
+  kind: 'rule' | 'profile' | 'pending';
+  /** Trigger JSON built by this parser, never authored by the model. */
   trigger?: string;
   /** One sentence of what to do, when this is a rule. */
   action?: string;
+  /** Why it could not be classified, when pending. */
+  reason?: string;
 }
 
-const CLASSIFIED = /^(规则|画像)\s*[:：]\s*(.+)$/;
+const CLASSIFIED = /^(规则|画像|待修)\s*[:：]\s*(.+)$/;
+const KEY_FIELD = /^(关键词|正则|状态|动作|原因)\s*[=＝]\s*(.*)$/;
 
 /**
- * Parse the classifier's answer:
+ * Parse the classifier's answer. Line-table, not JSON — the model fills fields and
+ * the code assembles the trigger, because we already know model-authored JSON is a
+ * hope (the extractor was moved off it for the same reason).
  *
- *   规则: fc_x | {"any":["json","package.json"]} | 用 edit 工具改 JSON
- *   画像: fc_y
+ *   规则: fc_x | 关键词=json,package.json | 动作=用 edit 工具改 JSON
+ *   规则: fc_y | 正则=\.json\b
+ *   规则: fc_z | 状态=long-session
+ *   画像: fc_p
+ *   待修: fc_q | 原因=不知道什么时候该用
  *
- * A rule whose trigger does not parse is downgraded to a profile item rather than
- * becoming an always-on rule — the point of the split is that rules must be
- * situation-specific.
+ * A 规则 with no usable condition becomes 待修, not 画像: the two failures have
+ * different consequences and only one of them pollutes the profile.
  */
 export function parseRuleClassifications(raw: string): RuleClassification[] {
   const out: RuleClassification[] = [];
@@ -126,17 +139,43 @@ export function parseRuleClassifications(raw: string): RuleClassification[] {
     const parts = match[2].split('|').map((part) => part.trim());
     const id = parts[0];
     if (!id || !/^fc_/.test(id)) continue;
-    if (match[1] === '画像') {
+    const kindLabel = match[1];
+
+    const fields = new Map<string, string>();
+    for (const part of parts.slice(1)) {
+      const field = KEY_FIELD.exec(part);
+      if (field) fields.set(field[1], field[2].trim());
+    }
+
+    if (kindLabel === '画像') {
       out.push({ id, kind: 'profile' });
       continue;
     }
-    const trigger = parts[1];
-    const action = parts[2];
-    if (!trigger || !parseTrigger(trigger)) {
-      out.push({ id, kind: 'profile' });
+    if (kindLabel === '待修') {
+      out.push({ id, kind: 'pending', reason: fields.get('原因') });
       continue;
     }
-    out.push({ id, kind: 'rule', trigger, action: action || undefined });
+
+    const keywords = (fields.get('关键词') ?? '')
+      .split(/[,，、;；\s]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const regex = fields.get('正则');
+    const state = fields.get('状态');
+    const trigger: RuleTrigger = {};
+    if (keywords.length > 0) trigger.any = keywords;
+    if (regex) trigger.regex = regex;
+    if (state) trigger.state = state;
+    if (!trigger.any && !trigger.regex && !trigger.state) {
+      out.push({ id, kind: 'pending', reason: '规则缺少触发条件' });
+      continue;
+    }
+    out.push({
+      id,
+      kind: 'rule',
+      trigger: JSON.stringify(trigger),
+      action: fields.get('动作') || undefined,
+    });
   }
   return out;
 }

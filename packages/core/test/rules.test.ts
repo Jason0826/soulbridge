@@ -93,21 +93,30 @@ test('rules: the store loads rules and skips ones without a usable trigger', () 
   assert.equal(fires(rules[0], '帮我改 package.json'), true);
   store.close();
 });
-test('classifier: a rule keeps its trigger; a bad trigger falls back to profile', () => {
+test('classifier: a keyed line becomes a rule; no condition becomes 待修', () => {
   const raw = [
-    '规则: fc_a | {"any":["json","package.json"]} | 用 edit 工具改 JSON',
-    '画像: fc_b',
-    '规则: fc_c | not-json | 这条触发条件坏了',
+    '规则: fc_a | 关键词=json,package.json | 动作=用 edit 工具改 JSON',
+    '规则: fc_b | 正则=\\.json\\b',
+    '规则: fc_c | 状态=long-session',
+    '规则: fc_d | 动作=没有触发条件的规则',
+    '画像: fc_e',
+    '待修: fc_f | 原因=判断不了',
   ].join('\n');
   const classified = parseRuleClassifications(raw);
   assert.deepEqual(
     classified.map((item) => [item.id, item.kind]),
     [
       ['fc_a', 'rule'],
-      ['fc_b', 'profile'],
-      ['fc_c', 'profile'],
+      ['fc_b', 'rule'],
+      ['fc_c', 'rule'],
+      ['fc_d', 'pending'],
+      ['fc_e', 'profile'],
+      ['fc_f', 'pending'],
     ],
   );
-  assert.equal(classified[0].trigger, '{"any":["json","package.json"]}');
+  // The trigger is assembled by the parser, never authored by the model.
+  assert.deepEqual(JSON.parse(classified[0].trigger ?? '{}'), { any: ['json', 'package.json'] });
   assert.equal(classified[0].action, '用 edit 工具改 JSON');
+  assert.deepEqual(JSON.parse(classified[2].trigger ?? '{}'), { state: 'long-session' });
+  assert.equal(classified[3].reason, '规则缺少触发条件');
 });

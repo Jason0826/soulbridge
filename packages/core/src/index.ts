@@ -702,6 +702,17 @@ export class Soul {
     this.store.setFactTypeName(factId, '画像');
   }
 
+  /**
+   * Park a lesson that could not be classified.
+   *
+   * Neither bucket is safe for it: as a rule it would fire every turn, and as a
+   * profile line it would put an imperative into the description of a person. It
+   * goes to 待修, which nothing injects, and shows up in a review count.
+   */
+  markUnclassified(factId: string): void {
+    this.store.setFactTypeName(factId, '待修');
+  }
+
   /** Which primitive this question needs (0020).
    *
    * The subject is resolved against the entities we hold, so "上次和 a 吃饭" can
