@@ -341,6 +341,10 @@ export interface Fact {
   sourceTurnId?: string;
   supersededBy?: string;
   createdAt: number;
+  /** How many times retrieval has surfaced it. Decay slows with use (0019). */
+  recallCount: number;
+  /** Last time retrieval surfaced it. */
+  lastRecalledAt?: number;
   slots: FactSlot[];
 }
 

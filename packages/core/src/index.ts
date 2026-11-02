@@ -47,6 +47,8 @@ export {
   parseRelationDraft,
 } from './consolidate.ts';
 export type { VerificationDraft, ConclusionRelation } from './consolidate.ts';
+export { planRetrieval } from './retrieval.ts';
+export type { RetrievalPlan, RetrievalPrimitive } from './retrieval.ts';
 export * from './affect/index.ts';
 export { measureStyle } from './style/measure.ts';
 export type { StyleMetrics } from './style/measure.ts';
@@ -89,6 +91,8 @@ import type {
 } from './types.ts';
 import type { SoulStore } from './store.ts';
 import type { AffectAnalyzer } from './affect/port.ts';
+import { planRetrieval } from './retrieval.ts';
+import type { RetrievalPlan } from './retrieval.ts';
 import { gateConclusion, conclusionSlots } from './consolidate.ts';
 import { buildContext } from './context.ts';
 import { reflect, ruleExtract, nextEmotion } from './reflect.ts';
@@ -616,6 +620,29 @@ export class Soul {
       superseded = old.id;
     }
     return { ok: true, fact, superseded };
+  }
+
+  /**
+   * Which primitive this question needs (0020).
+   *
+   * The subject is resolved against the entities we hold, so "上次和 a 吃饭" can
+   * never be answered with the last closed topic.
+   */
+  planRetrieval(text: string): RetrievalPlan {
+    const names = this.store
+      .findEntities({ soulId: this.soulId, userId: this.userId, limit: 500 })
+      .map((entity) => entity.name);
+    return planRetrieval(text, names);
+  }
+
+  /** The entity timeline: what is known about one person/thing, newest first. */
+  latestAbout(entityName: string, options: { predicate?: string; limit?: number } = {}): Fact[] {
+    return this.store.latestAbout(this.soulId, this.userId, entityName, options);
+  }
+
+  /** Mark facts as surfaced; retrieval practice slows their decay (0019). */
+  recordRecalls(factIds: string[], at = Date.now()): void {
+    this.store.recordRecalls(factIds, at);
   }
 
   /**

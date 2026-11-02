@@ -39,7 +39,7 @@ import type {
 import type { SoulStore } from './store.ts';
 import { bm25, buildCorpusStats, tokenize } from './scoring.ts';
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 /** How many recent pairs are considered before scoring. Bounded so recall stays O(candidates). */
 const RECALL_CANDIDATES = 500;
 export const AFFECT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -208,10 +208,13 @@ CREATE TABLE IF NOT EXISTS facts (
   source         TEXT NOT NULL DEFAULT 'experienced',
   source_turn_id TEXT,
   superseded_by  TEXT,
-  created_at     INTEGER NOT NULL
+  created_at     INTEGER NOT NULL,
+  recall_count   INTEGER NOT NULL DEFAULT 0,
+  last_recalled_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_facts_scope ON facts(soul_id, user_id, at DESC);
 CREATE INDEX IF NOT EXISTS idx_facts_status ON facts(soul_id, user_id, status);
+CREATE INDEX IF NOT EXISTS idx_facts_created ON facts(soul_id, user_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS fact_slots (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -331,6 +334,14 @@ function upgradeToV3(db: DatabaseSync): void {
  */
 
 /** v6 → v7: turn threads (a topic's turns need not be adjacent) plus turns.thread_id. */
+export function upgradeToV8(db: DatabaseSync): void {
+  // What decays is the chance of being recalled, so the store has to know how
+  // often and how recently that happened (0019).
+  ensureColumn(db, 'facts', 'recall_count', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn(db, 'facts', 'last_recalled_at', 'INTEGER');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_facts_created ON facts(soul_id, user_id, created_at DESC)');
+}
+
 export function upgradeToV7(db: DatabaseSync): void {
   db.exec(`CREATE TABLE IF NOT EXISTS threads (
     id          TEXT PRIMARY KEY,
@@ -414,6 +425,7 @@ export function openSqlite(file: string): SoulStore {
     if (version < 3) upgradeToV3(db);
     if (version < 5) upgradeToV5(db);
     if (version < 7) upgradeToV7(db);
+  if (version < 8) upgradeToV8(db);
     // v6 adds tables only; SCHEMA creates them on every open, nothing to copy.
     setVersion(db, SCHEMA_VERSION);
   }
@@ -1201,6 +1213,59 @@ export function openSqlite(file: string): SoulStore {
       );
     },
 
+    /**
+     * Count that retrieval surfaced these facts.
+     *
+     * This is the rehearsal in 0019: a memory used often decays more slowly, so the
+     * counter is the mechanism, not a statistic.
+     */
+    recordRecalls(factIds: string[], at: number): void {
+      if (factIds.length === 0) return;
+      const stmt = db.prepare('UPDATE facts SET recall_count = recall_count + 1, last_recalled_at = ? WHERE id = ?');
+      for (const id of factIds) withRetry(() => stmt.run(at, id));
+    },
+
+    /**
+     * The entity timeline: facts about one person/thing, newest event first.
+     *
+     * This is the primitive behind "上次和 a 吃饭" — the subject decides what is
+     * fetched, and `predicate` narrows within that subject's own facts. It must
+     * never look outside the subject: answering about b when asked about a is the
+     * one error worse than saying nothing.
+     */
+    latestAbout(
+      soulId: string,
+      userId: string,
+      entityName: string,
+      options: { predicate?: string; limit?: number } = {},
+    ): Fact[] {
+      const limit = Math.max(1, options.limit ?? 5);
+      const predicate = options.predicate?.trim();
+      const rows = db
+        .prepare(
+          `SELECT DISTINCT f.* FROM facts f
+           JOIN fact_slots s ON s.fact_id = f.id AND s.value_type = 'entity'
+           JOIN entities e ON e.id = s.entity_id
+           WHERE f.soul_id = ? AND f.user_id = ? AND f.status != 'superseded'
+             AND (e.name = ? OR e.aliases LIKE ?)
+             AND (? IS NULL OR f.statement LIKE ? OR COALESCE(f.type_name, '') LIKE ?)
+           ORDER BY COALESCE(f.at, f.created_at) DESC
+           LIMIT ?`,
+        )
+        .all(
+          soulId,
+          userId,
+          entityName,
+          `%${entityName}%`,
+          predicate ?? null,
+          predicate ? `%${predicate}%` : null,
+          predicate ? `%${predicate}%` : null,
+          limit,
+        ) as Row[];
+      const slots = slotsOfRows(db, rows.map((row) => String(row.id)));
+      return rows.map((row) => rowToFact(row, slots));
+    },
+
     stepsOf(turnId: string): TurnStep[] {
       const rows = db
         .prepare('SELECT * FROM steps WHERE turn_id = ? ORDER BY idx ASC')
@@ -1400,6 +1465,8 @@ function rowToFact(row: Row, slots: Map<string, FactSlot[]>): Fact {
     sourceTurnId: row.source_turn_id === null ? undefined : String(row.source_turn_id),
     supersededBy: row.superseded_by === null ? undefined : String(row.superseded_by),
     createdAt: Number(row.created_at),
+    recallCount: Number(row.recall_count ?? 0),
+    lastRecalledAt: row.last_recalled_at === null || row.last_recalled_at === undefined ? undefined : Number(row.last_recalled_at),
     slots: slots.get(id) ?? [],
   };
 }

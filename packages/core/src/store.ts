@@ -74,6 +74,10 @@ export interface SoulStore {
   /** Append slots to an existing fact, skipping ones it has. Returns how many were added. */
   addSlots(factId: string, slots: { slot: string; value: SlotValue }[]): number;
   setFactConfidence(factId: string, confidence: number): void;
+  /** Count that retrieval surfaced these facts (0019: use slows decay). */
+  recordRecalls(factIds: string[], at: number): void;
+  /** Facts about one entity, newest event first; predicate narrows within it. */
+  latestAbout(soulId: string, userId: string, entityName: string, options?: { predicate?: string; limit?: number }): Fact[];
   /** The thread the previous turn belonged to, if any. */
   threadBefore(sessionId: string, turnNo: number): string | null;
   /** The most recently closed thread, or null when none has closed yet. */
