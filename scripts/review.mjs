@@ -13,6 +13,7 @@
  *   node scripts/review.mjs
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { join, relative } from 'node:path';
 import { homedir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
@@ -113,6 +114,44 @@ try {
   db.close();
 } catch {
   note('数据库不可读，跳过');
+}
+
+/* 6. Docs that lag the code. The rule "a change updates its docs" was a promise;
+   this is the check. state.md carries its own "最后核对" timestamp, and the code
+   carries its last commit — if the code is newer, the doc is stale. */
+console.log('\ndocs');
+function lastCommit(repo, paths) {
+  try {
+    return execSync(`git log -1 --format=%cI -- ${paths}`, { cwd: repo, encoding: 'utf8' }).trim();
+  } catch {
+    return '';
+  }
+}
+try {
+  const stateDoc = readFileSync(join(ROOT, 'docs', 'state.md'), 'utf8');
+  const stamped = /最后核对：\*\*(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})\*\*/.exec(stateDoc);
+  if (!stamped) {
+    note('state.md 没有 `最后核对：**YYYY-MM-DD HH:MM**` 时间戳，无法判断是否落后');
+  } else {
+    const docAt = Date.parse(`${stamped[1]}T${stamped[2]}:00`);
+    const newest = [
+      // Only files that change behaviour: a docs-only commit must not make the doc
+      // look stale relative to itself.
+      ['core', lastCommit(ROOT, 'packages')],
+      ['plugin', lastCommit(PLUGIN, 'index.js')],
+    ]
+      .filter(([, at]) => at)
+      .map(([name, at]) => [name, Date.parse(at)])
+      .sort((a, b) => b[1] - a[1])[0];
+    if (!newest) note('取不到代码最后提交时间，跳过文档新鲜度');
+    else if (newest[1] > docAt + 60_000) {
+      note(`state.md 核对于 ${stamped[1]} ${stamped[2]}，但 ${newest[0]} 代码在 ${new Date(newest[1]).toISOString()} 之后还改过 —— 文档落后于代码`);
+    } else {
+      ok(`state.md 与代码同步（核对 ${stamped[1]} ${stamped[2]}，代码最后提交 ≤ 核对时间）`);
+    }
+  }
+} catch {
+  note('读不到 docs/state.md，跳过文档新鲜度');
 }
 
 console.log(`\n${warn.length} 处需要整体判断，其余是常态。`);

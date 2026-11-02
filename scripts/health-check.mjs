@@ -131,10 +131,15 @@ if (!existsSync(roadmapPath)) {
   add('FAIL', '文档', '找不到 docs/roadmap.md');
 } else {
   const roadmap = readFileSync(roadmapPath, 'utf8');
-  const ids = [...roadmap.matchAll(/^### (N\d+)\./gm)].map((m) => m[1]);
+  // 编号项既可以是 `### R1.` 标题，也可以是表格里的 `| **R1** |`。
+  // 检查的是"编号不重复"，不是某种排版格式。
+  const ids = [
+    ...[...roadmap.matchAll(/^### ([A-Z]\d+)\./gm)].map((m) => m[1]),
+    ...[...roadmap.matchAll(/^\| \*\*([A-Z]\d+)\*\*/gm)].map((m) => m[1]),
+  ];
   const dupIds = ids.filter((id, i) => ids.indexOf(id) !== i);
   if (ids.length === 0) {
-    add('WARN', '文档', 'roadmap 里没有 `### N数字.` 形式的编号项 —— 编号检查无从执行');
+    add('WARN', '文档', 'roadmap 里没有 `### R1.` 或 `| **R1** |` 形式的编号项 —— 编号检查无从执行');
   } else if (dupIds.length > 0) {
     add('FAIL', '文档', `roadmap 编号重复：${[...new Set(dupIds)].join(', ')}`);
   } else {
