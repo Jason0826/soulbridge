@@ -107,3 +107,32 @@ test('promotion: only flagged lessons of a corrected turn are candidates', () =>
   assert.deepEqual(soul.promotionCandidates('t1').map((fact) => fact.id), ['f_lesson']);
   store.close();
 });
+
+test('commit: a JSON-shaped draft is not silently dropped by an empty operations array', () => {
+  // validateDraft always returns operations (empty when the input had none), so
+  // `draft.operations ?? facts` left the legacy facts unwritten — with no skipped
+  // entry, no error and by='llm'. Facts written by the JSON fallback just vanished.
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  const draft = validateDraft(
+    {
+      entities: [{ name: '小林', type: 'person' }],
+      facts: [
+        {
+          statement: '小林在十月被裁员一次',
+          source: 'told',
+          confidence: 0.8,
+          at: Date.now(),
+          slots: [{ slot: '被裁员者', entity: '小林' }],
+        },
+      ],
+    },
+    Date.now(),
+    undefined,
+  );
+  assert.deepEqual(draft.draft?.operations, []);
+  const result = soul.commitDrafts(draft.draft!, { turnId: 't1' });
+  assert.equal(result.facts.length, 1);
+  assert.deepEqual(result.skipped, []);
+  store.close();
+});

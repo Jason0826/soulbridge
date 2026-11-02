@@ -9,7 +9,6 @@
  */
 import type { ContextRequest, ContextResult, Emotion } from './types.ts';
 import type { SoulStore } from './store.ts';
-import { rank } from './scoring.ts';
 import { selectDirectives } from './affect/directives.ts';
 
 export const DEFAULT_MAX_CHARS = 1200;

@@ -250,6 +250,8 @@ const PROFILE_ABSOLUTE = /一切|所有|总是|从不/;
 const PROFILE_FRAGMENT = /^(每次|因为|然后|所以|但是|而且|并且)/;
 /** One judgment per line. A semicolon is how three unrelated points get welded together. */
 const PROFILE_MULTI_CLAUSE = /[；;]/;
+/** Negation flips the meaning while sharing nearly every bigram. */
+const PROFILE_NEGATION = /[不没别勿非无]/;
 
 function profileBigrams(text: string): Set<string> {
   const clean = text.replace(/[\s，。、；：！？,.;:!?"'（）()]/g, '');
@@ -302,7 +304,14 @@ export function parseProfileMerge(raw: string, allowed: Set<string>, expected?: 
       .map((id) => id.trim())
       .filter((id) => allowed.has(id));
     if (sources.length === 0) continue;
-    const duplicate = out.some((kept) => profileSimilarity(kept.statement, statement) >= 0.7);
+    const duplicate = out.some((kept) => {
+      if (profileSimilarity(kept.statement, statement) < 0.7) return false;
+      // "喜欢爬山" and "不喜欢爬山" share ~0.86 of their bigrams, and folding them
+      // keeps whichever came first — writing the person's preference backwards.
+      // Opposite polarity is never a duplicate: the prompt says a flipped direction
+      // is worse than a missing line.
+      return PROFILE_NEGATION.test(kept.statement) === PROFILE_NEGATION.test(statement);
+    });
     if (duplicate) continue;
     out.push({ statement, sources, dimension: dimension as ProfileDimension });
   }

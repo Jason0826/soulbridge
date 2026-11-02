@@ -81,8 +81,8 @@ const PROFILE_EXAMPLE = `<example>
 - fc_c | 用户很讨厌一件事反复讲，换工具又要重新交代
 </input>
 <output>
-画像: 要机制，不要靠 prompt 的自觉 | 来源=fc_a,fc_b
-画像: 讨厌重复交代，工具换了也不该重讲 | 来源=fc_c
+画像: 要机制，不要靠 prompt 的自觉 | 维度=工作方式 | 来源=fc_a,fc_b
+画像: 讨厌重复交代，工具换了也不该重讲 | 维度=沟通偏好 | 来源=fc_c
 </output>
 </example>`;
 

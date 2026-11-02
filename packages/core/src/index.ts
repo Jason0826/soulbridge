@@ -599,9 +599,14 @@ export class Soul {
       return written;
     };
 
-    // Operations carry the merge decision (Mem0's ADD/UPDATE/DELETE); plain
-    // facts are the legacy shape and every one of them is an add.
-    const operations = draft.operations ?? draft.facts.map((fact) => ({ op: 'add' as const, fact }));
+    // Operations carry the merge decision (Mem0's ADD/UPDATE/DELETE); plain facts are
+    // the legacy shape and every one of them is an add.
+    // `validateDraft` always returns an operations array, so `??` alone left it empty
+    // and every legacy fact was written nowhere — silently, with no skipped entry.
+    const operations =
+      draft.operations && draft.operations.length > 0
+        ? draft.operations
+        : draft.facts.map((fact) => ({ op: 'add' as const, fact }));
     for (const operation of operations) {
       if (operation.op === 'noop') continue;
       const written = writeFact(operation.fact);
@@ -832,8 +837,13 @@ export class Soul {
    * never be answered with the last closed topic.
    */
   planRetrieval(text: string): RetrievalPlan {
+    // Only people and places can be a question's subject. A concept entity like 情绪
+    // or a product like dsh matches ordinary technical messages, and routing to it
+    // suppresses the related-conversation block — which is how "把 package.json 改
+    // 一下" ended up asking about entity "a".
     const names = this.store
       .findEntities({ soulId: this.soulId, userId: this.userId, limit: 500 })
+      .filter((entity) => entity.type === 'person' || entity.type === 'place' || entity.type === 'self')
       .map((entity) => entity.name);
     return planRetrieval(text, names);
   }

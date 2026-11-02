@@ -4,10 +4,15 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-02 22:05**（core 0.0.76 / plugin 0.0.89）
+最后核对：**2026-11-02 22:50**（core 0.0.77 / plugin 0.0.89）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
-> 全系统审计（今晚新增）：[audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md)。
+> 全系统审计：[audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md)。
+> 代码审查（今晚，含已修复 4 条）：[audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md)。
+
+**22:50 修复摘要**（详见代码审查第六节）：检索路由的三处误判、合并 prompt 示例与闸门不一致、
+正反句被折叠、JSON 形状抽取被空 operations 遮蔽。core 241 测试全过；
+`scripts/review-probes.mjs` 前 5 段从红变绿。
 
 ## 一、当前架构（一句话）
 

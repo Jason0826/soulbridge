@@ -17,10 +17,21 @@ import { Soul } from '../packages/core/src/index.ts';
 const at = Date.parse('2026-11-02T10:00:00Z');
 const names = ['a', '用户', '小凌', 'dsh', '情绪', 'handoff 文件', 'soulbridge'];
 
-console.log('--- 检索路由：1 字实体名不该劫持普通消息 ---');
-for (const q of ['把 package.json 的版本号改一下', '我觉得它的情绪不太对', '看一下 handoff 文件的格式']) {
-  const plan = planRetrieval(q, names);
-  console.log(`  ${plan.primitive}${plan.subject ? `(${plan.subject})` : ''}  ← ${q}`);
+console.log('--- 检索路由：实体类型与 1 字名都不该劫持普通消息 ---');
+{
+  // Through the Soul method, not the bare function: it is the method that decides
+  // which entity types may be a subject (only person/place/self qualify).
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  store.putEntity({ soulId: 's1', userId: 'u1', type: 'person', name: 'a' });
+  store.putEntity({ soulId: 's1', userId: 'u1', type: 'person', name: '小林' });
+  store.putEntity({ soulId: 's1', userId: 'u1', type: 'thing', name: '情绪' });
+  store.putEntity({ soulId: 's1', userId: 'u1', type: 'thing', name: 'handoff 文件' });
+  for (const q of ['把 package.json 的版本号改一下', '我觉得它的情绪不太对', '看一下 handoff 文件的格式', '上次和小林吃饭聊了什么']) {
+    const plan = soul.planRetrieval(q);
+    console.log(`  ${plan.primitive}${plan.subject ? `(${plan.subject})` : ''}  ← ${q}`);
+  }
+  store.close();
 }
 
 console.log('--- 连词后不该凭空造主语 ---');
@@ -29,9 +40,15 @@ for (const q of ['跟上次一样就行', '和数据保持一致', '我和他一
 }
 
 console.log('--- 合并 prompt 的示例必须能过自己的闸门 ---');
-const example =
-  '画像: 要机制，不要靠 prompt 的自觉 | 来源=fc_a,fc_b\n画像: 讨厌重复交代，工具换了也不该重讲 | 来源=fc_c';
-console.log(`  通过 ${parseProfileMerge(example, new Set(['fc_a', 'fc_b', 'fc_c'])).length} 行（期望 2）`);
+{
+  // Read the example out of the prompt itself: a hand-copied example drifts from the
+  // one the model sees, and that is exactly how the bug shipped.
+  const { renderProfileMergePrompt } = await import('../packages/core/src/profile-prompt.ts');
+  const prompt = renderProfileMergePrompt({ items: [{ id: 'fc_a', statement: '占位' }] });
+  const example = /<output>\n([\s\S]*?)\n<\/output>/.exec(prompt)?.[1] ?? '';
+  const lines = parseProfileMerge(example, new Set(['fc_a', 'fc_b', 'fc_c']));
+  console.log(`  示例输出通过 ${lines.length} 行（期望 2）`);
+}
 
 console.log('--- 正反两句不能被折叠成一句 ---');
 const pair = parseProfileMerge(
@@ -44,6 +61,7 @@ console.log('--- JSON 形状的抽取结果必须能落库 ---');
 {
   const parsed = validateDraft(
     {
+      entities: [{ name: '小林', type: 'person' }],
       facts: [
         {
           statement: '小林在十月被裁员一次',

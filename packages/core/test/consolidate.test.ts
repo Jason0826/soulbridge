@@ -462,6 +462,30 @@ test('profile prompt: the classifier and the merge share one definition of a dim
   assert.match(classify, /画像: id \| 维度=/);
 });
 
+test('profile prompt: the example inside the prompt must pass the parser', () => {
+  // The only complete example in the merge prompt used to omit 维度=, which the
+  // parser requires — a model copying it produced zero lines, the batch was retried
+  // three times and then dropped. The example and the gate must agree.
+  const prompt = renderProfileMergePrompt({ items: [{ id: 'fc_a', statement: '占位' }] });
+  const example = /<output>\n([\s\S]*?)\n<\/output>/.exec(prompt)?.[1] ?? '';
+  const lines = parseProfileMerge(example, new Set(['fc_a', 'fc_b', 'fc_c']), '工作方式');
+  assert.equal(lines.length, 1, 'the 工作方式 line survives');
+  assert.equal(parseProfileMerge(example, new Set(['fc_a', 'fc_b', 'fc_c'])).length, 2);
+});
+
+test('profile: opposite polarity is never a duplicate', () => {
+  // 喜欢爬山 and 不喜欢爬山 share ~0.86 of their bigrams; folding them kept whichever
+  // came first, which writes the person's preference backwards.
+  const lines = parseProfileMerge(
+    [
+      '画像: 喜欢爬山和露营 | 维度=生活兴趣 | 来源=fc_a',
+      '画像: 不喜欢爬山和露营 | 维度=生活兴趣 | 来源=fc_b',
+    ].join('\n'),
+    new Set(['fc_a', 'fc_b']),
+  );
+  assert.equal(lines.length, 2);
+});
+
 test('profile: derived lines are not offered back as merge input', () => {
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });

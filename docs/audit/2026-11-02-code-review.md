@@ -208,3 +208,17 @@ draft.operations=[]  facts=1  →  落库 0 条，skipped=[]
 3. 先自查两条路径：**多写一致性**（事务）与**注入安全**（块结构）。
 4. **能跑脚本的先跑**：这份里的 P0/P1 有四条是用 `scripts/review-probes.mjs` 在真实实体表和真实解析器上复现的，不是读出来的。
 5. 区域审的结论必须复核后才写进"已复核"——标签是承诺。
+
+## 六、第一轮已修（2026-11-02 22:45）
+
+| # | 修了什么 | 回归测试 | probe 前后 |
+|---|---|---|---|
+| 1 | 路由：1 字拉丁名要求词边界（`package` 不再命中 `a`）；只有 person/place/self 能当主体；连词后无谓语或含功能词一律拒绝 | `retrieval.test.ts` +3 条 | `entity(a)` → `related`；`上次一样/数据保持/他一起` → `undefined` |
+| 2 | 合并 prompt 示例补 `维度=` | `consolidate.test.ts`「示例必须能过自己的闸门」 | 通过 0 行 → **2 行** |
+| 3 | 去重不再折叠正反句（极性不同不算重复） | `consolidate.test.ts`「正反句永不折叠」 | 保留 1 条 → **2 条** |
+| 4 | JSON 形状的抽取不再被空 `operations` 遮蔽 | `promotion.test.ts`「JSON draft 不被静默丢弃」 | 落库 0 条 → **1 条** |
+
+- core 241 测试全过（+6）；`review-probes.mjs` 前 5 段全部变成期望值。
+- 顺带删掉 `context.ts` 一个从未使用的 `rank` import。
+- 预算棘轮因此 +54 行，已在 `scripts/budget.json` 的 `history` 里记账（**bug 修复允许涨，功能新增不允许**，下次重构还回去）。
+- 仍未修（下一轮）：实体 aliases 被空值覆盖、WAL 备份可能拷坏、迁移重复插 step、注入不转义、空置信落 0、非法日期滚动；插件侧「模型失败吞成空串」「section 带 affect 导致每轮追加 prompt 版本」优先级更高，排在它们前面。

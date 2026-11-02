@@ -104,6 +104,36 @@ test('router: pronouns and particles are not subjects', () => {
   assert.equal(subjectCandidate('和你说过'), undefined);
   assert.equal(subjectCandidate('和 c 吃饭是什么时候'), 'c');
 });
+
+test('router: a one-letter entity does not match inside a word', () => {
+  // The live bug: an entity named "a" turned "把 package.json 的版本号改一下" into
+  // `entity(a)`, and planBlocks then suppressed the related-conversation block.
+  const plan = planRetrieval('把 package.json 的版本号改一下', ['a']);
+  assert.equal(plan.primitive, 'related');
+  // …but a real mention still routes.
+  assert.equal(planRetrieval('上次和 a 吃饭是什么时候', ['a']).subject, 'a');
+});
+
+test('router: only people and places can be a subject', () => {
+  // Concepts and products match ordinary messages; routing to them is the same bug.
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  store.putEntity({ soulId: 's1', userId: 'u1', type: 'thing', name: '情绪' });
+  store.putEntity({ soulId: 's1', userId: 'u1', type: 'thing', name: 'handoff 文件' });
+  store.putEntity({ soulId: 's1', userId: 'u1', type: 'person', name: '小林' });
+  assert.equal(soul.planRetrieval('我觉得它的情绪不太对').primitive, 'related');
+  assert.equal(soul.planRetrieval('看一下 handoff 文件的格式').primitive, 'related');
+  assert.equal(soul.planRetrieval('上次和小林吃饭聊了什么').subject, '小林');
+  store.close();
+});
+
+test('router: a conjunction phrase is not a name', () => {
+  // 上次一样 / 数据保持 / 他一起 all used to become subjects, injecting a fake
+  // <about-now> for somebody who does not exist.
+  for (const text of ['跟上次一样就行', '和数据保持一致', '我和他一起去的', '跟上次聊到的地方一样']) {
+    assert.equal(subjectCandidate(text), undefined, text);
+  }
+});
 test('latestAbout: relevance to the question beats plain recency', () => {
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
