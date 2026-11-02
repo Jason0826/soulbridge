@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openSqlite } from '../src/sqlite.ts';
 import { Soul } from '../src/index.ts';
-import { planRetrieval } from '../src/retrieval.ts';
+import { planRetrieval, subjectCandidate } from '../src/retrieval.ts';
 
 test('router: the subject decides the primitive, not the word 上次', () => {
   const names = ['a', 'c', '核桃', '核桃暗号'];
@@ -88,4 +88,19 @@ test('latestAbout: a predicate narrows inside the subject', () => {
   assert.deepEqual(soul.latestAbout('a', { predicate: '火锅' }).map((fact) => fact.id), ['f1']);
   assert.deepEqual(soul.latestAbout('a', { predicate: '吵架' }), []);
   store.close();
+});
+
+test('router: an unknown name is an unknown subject, not an absent one', () => {
+  // "上次和 c 吃饭" — c is not in the store. Falling through to continuity would
+  // answer with whatever topic closed last, which is the failure this guards.
+  const plan = planRetrieval('上次和 c 吃饭是什么时候', ['a']);
+  assert.equal(plan.primitive, 'entity');
+  assert.equal(plan.subject, 'c');
+  assert.match(plan.reason, /unknown subject/);
+});
+
+test('router: pronouns and particles are not subjects', () => {
+  assert.equal(planRetrieval('上次我和你聊到哪了', []).primitive, 'continuity');
+  assert.equal(subjectCandidate('和你说过'), undefined);
+  assert.equal(subjectCandidate('和 c 吃饭是什么时候'), 'c');
 });
