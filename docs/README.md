@@ -27,6 +27,7 @@
 | 新会话从哪开始 | [state.md](state.md)（唯一现状态文档） |
 | 全系统审计与 review 方法 | [audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md) |
 | **一次交付要走哪十步** | [process.md](process.md)（规范；每步都有判定方式） |
+| **名词/变量声明在哪** | [declarations.json](declarations.json)（唯一声明登记，`health-check` 第 8 节判定） |
 | **旧表示退场到哪一步** | [retirements.json](retirements.json)（`health-check` 第 7 节判定） |
 | 代码审查发现与已修项 | [audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md) |
 

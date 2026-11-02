@@ -480,6 +480,39 @@ if (!existsSync(RETIREMENTS_PATH)) {
   if (pendingCount > 0) add('WARN', '退场', `${stillThere}/${pendingCount} 项技术债仍在：${debt.join(', ')}`);
 }
 
+// ---------- 8. 唯一声明（docs/declarations.json） ----------
+// 原则：变量、常量、名词、枚举、格式、默认值只在一处声明，其他地方只引用/渲染。
+// 这一节找的是"同一批字面量还在别的文件里重复写"——改名时会漏改的那种副本。
+const DECLARATIONS_PATH = join(ROOT, 'docs/declarations.json');
+if (!existsSync(DECLARATIONS_PATH)) {
+  add('WARN', '声明', '缺少 docs/declarations.json —— 唯一声明没有登记，等于没有检查');
+} else {
+  const declarations = JSON.parse(readFileSync(DECLARATIONS_PATH, 'utf8'));
+  let clean = 0;
+  for (const entry of declarations.entries ?? []) {
+    const declaredIn = entry.declaredIn;
+    const allowed = new Set([declaredIn, ...(entry.allowed ?? [])]);
+    const scan = declaredIn.startsWith('D:') ? [PLUGIN_ENTRY] : srcFiles;
+    const copies = scan
+      .map((file) => relative(ROOT, file).replace(/\\/g, '/') && file)
+      .filter((file) => existsSync(file))
+      .filter((file) => {
+        const rel = file.replace(/\\/g, '/').replace(`${ROOT.replace(/\\/g, '/')}/`, '');
+        if (allowed.has(rel) || allowed.has(file)) return false;
+        return readFileSync(file, 'utf8').includes(entry.literal);
+      })
+      .map((file) => file.replace(/\\/g, '/').replace(`${ROOT.replace(/\\/g, '/')}/`, '').split('/').pop());
+    if (copies.length === 0) {
+      clean += 1;
+    } else if (entry.mode === 'fail') {
+      add('FAIL', '声明', `${entry.what} 在 ${copies.length} 处重复写：${copies.join(', ')}`);
+    } else {
+      add('WARN', '声明', `${entry.what} 有 ${copies.length} 处副本：${copies.join(', ')} —— 应改成引用唯一声明`);
+    }
+  }
+  if (clean > 0) add('PASS', '声明', `${clean} 项只有一处声明`);
+}
+
 // ---------- 输出 ----------
 const order = { FAIL: 0, WARN: 1, PASS: 2 };
 const icon = { FAIL: '✗', WARN: '!', PASS: '✓' };

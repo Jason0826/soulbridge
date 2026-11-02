@@ -1,0 +1,32 @@
+{
+  "note": "唯一声明登记：变量、常量、名词、枚举、格式、默认值都只能有一处声明，其他地方只引用或渲染。这份文件登记'声明在哪里'，health-check 第 8 节找出还在重复写同一批字面量的文件。copies 非空 = 债：要么改成引用那一处声明，要么把这一处登记为第二个声明点并在 design 里说明为什么（通常说明不了）。",
+  "entries": [
+    {
+      "id": "profile-dimensions",
+      "what": "画像维度名（价值观/工作方式/…）",
+      "literal": "价值观",
+      "declaredIn": "packages/core/src/consolidate.ts",
+      "allowed": [],
+      "mode": "warn",
+      "why": "PROFILE_DIMENSIONS 是唯一声明；prompt 里的维度说明应当由它渲染，而不是再抄一遍名词。"
+    },
+    {
+      "id": "fact-status-superseded",
+      "what": "事实状态值 superseded",
+      "literal": "'superseded'",
+      "declaredIn": "packages/core/src/types.ts",
+      "allowed": [],
+      "mode": "warn",
+      "why": "FactStatus 是唯一声明；SQL 与过滤条件里的字面量是副本，改名时会漏改。"
+    },
+    {
+      "id": "queue-file-names",
+      "what": "队列文件名 pending-extract / classify / profile / threads",
+      "literal": "pending-extract",
+      "declaredIn": "D:/git-workspace/repos/dsh-plugin-soulbridge/index.js",
+      "allowed": [],
+      "mode": "warn",
+      "why": "每个队列文件名只在插件里出现一次；如果哪天出现第二次，说明有人绕过了 readQueueFile。"
+    }
+  ]
+}
