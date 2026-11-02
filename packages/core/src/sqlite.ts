@@ -1048,17 +1048,28 @@ export function openSqlite(file: string): SoulStore {
     /**
      * Close threads the conversation has moved past.
      *
-     * Quiet is counted in turns, not minutes: a topic is over when the talk has
-     * moved on. Returns the ids closed, so the caller can consolidate them.
+     * Quiet is counted in **turns**, not in the numeric difference between turn
+     * numbers. The host's turn number is not a per-exchange counter — in practice
+     * it jumps by 10–30 per user message — so `currentTurn - lastTurn >= 6` closed
+     * a topic one message after it opened. Counting rows is what "six turns later"
+     * actually means.
+     *
+     * Threads belonging to another session are closed too: that session ended, and
+     * a topic does not stay open across a session boundary.
      */
-    closeIdleThreads(soulId: string, userId: string, currentTurnNo: number, idleTurns: number, at: number): string[] {
+    closeIdleThreads(soulId: string, userId: string, sessionId: string, idleTurns: number, at: number): string[] {
       const stale = db
         .prepare(
-          `SELECT id FROM threads
-           WHERE soul_id = ? AND user_id = ? AND status = 'open'
-             AND COALESCE(last_turn_no, 0) <= ?`,
+          `SELECT t.id FROM threads t
+           WHERE t.soul_id = ? AND t.user_id = ? AND t.status = 'open'
+             AND (
+               t.session_id <> ?
+               OR (SELECT COUNT(*) FROM turns x
+                   WHERE x.session_id = t.session_id
+                     AND x.turn_no > COALESCE(t.last_turn_no, 0)) >= ?
+             )`,
         )
-        .all(soulId, userId, currentTurnNo - Math.max(1, idleTurns)) as Row[];
+        .all(soulId, userId, sessionId, Math.max(1, idleTurns)) as Row[];
       const ids = stale.map((row) => String(row.id));
       const close = db.prepare("UPDATE threads SET status = 'closed', closed_at = ? WHERE id = ?");
       for (const id of ids) withRetry(() => close.run(at, id));
@@ -1070,14 +1081,42 @@ export function openSqlite(file: string): SoulStore {
         .all(threadId) as Row[];
       return rows.map(rowToTurnPair);
     },
+    /**
+     * The thread worth handing over: a finished topic that produced a conclusion.
+     *
+     * A one-message question also closes as a "thread", and handing that over tells
+     * the next session nothing but noise ("we last talked about: who am I"). So a
+     * summary comes first; otherwise a topic needs at least two turns to qualify.
+     */
     lastClosedThread(soulId: string, userId: string): TurnThread | null {
-      const row = db
+      const summarised = db
         .prepare(
           `SELECT * FROM threads WHERE soul_id = ? AND user_id = ? AND status = 'closed'
+             AND summary_fact_id IS NOT NULL
            ORDER BY COALESCE(closed_at, 0) DESC LIMIT 1`,
         )
         .get(soulId, userId) as Row | undefined;
-      return row ? rowToThread(row) : null;
+      if (summarised) return rowToThread(summarised);
+      const substantial = db
+        .prepare(
+          `SELECT t.* FROM threads t WHERE t.soul_id = ? AND t.user_id = ? AND t.status = 'closed'
+             AND (SELECT COUNT(*) FROM turns x WHERE x.thread_id = t.id) >= 2
+           ORDER BY COALESCE(t.closed_at, 0) DESC LIMIT 1`,
+        )
+        .get(soulId, userId) as Row | undefined;
+      return substantial ? rowToThread(substantial) : null;
+    },
+
+    /** The thread the previous turn belonged to, if any — the cheapest continuity hint. */
+    threadBefore(sessionId: string, turnNo: number): string | null {
+      const row = db
+        .prepare(
+          `SELECT thread_id FROM turns
+           WHERE session_id = ? AND turn_no < ? AND thread_id IS NOT NULL
+           ORDER BY turn_no DESC LIMIT 1`,
+        )
+        .get(sessionId, turnNo) as Row | undefined;
+      return row ? String(row.thread_id) : null;
     },
     factsByTurns(turnIds: string[]): Fact[] {
       if (turnIds.length === 0) return [];
