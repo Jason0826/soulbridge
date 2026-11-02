@@ -4,56 +4,81 @@
 > 每一行都有出处：设计在哪一行、代码在哪一行、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：2026-11-01 00:40
+最后核对：2026-11-02 09:30
 
-## 一、设计与实现
+## 一、当前架构（一句话）
 
-| # | 设计（出处） | 代码事实（文件:行） | 实测 | 判定 |
+```
+轮次（turns/steps）→ 事实（facts/entities/gaps）→ 线索（threads）→ 结论（facts 里 type=结论）
+```
+
+每层都有确定性闸门；模型只负责语义，失败有地板（ADR 0031）。
+
+## 二、设计与实现对照
+
+| # | 设计（出处） | 代码事实 | 实测 | 判定 |
 |---|---|---|---|---|
-| 1 | 记忆单元 = 一问一答 `briefs/0010 §4` | `turn_pairs` 表；`recordTurnPair` | 44 行，p50 493 / p90 1102 / max 1678 字 | ✅ 已实现 |
-| 2 | 超过长度上限要提炼 `0010 §4` | **无** | 21/44 条超 500 字 | ❌ 未实现 |
-| 3 | 原文不可变、派生可重建 `0010 §8` | `turn_pairs` 只有插入，无更新/删除路径 | — | ✅ |
-| 4 | 三轴 type/subject/time `0010 §4` | `turn_pairs` 无 `subject` | — | ❌ |
-| 5 | `metadata` 开放容器 `0010 §4` | `metadata_json TEXT DEFAULT '{}'` | 一直是 `{}` | ⚠️ 结构在、没写 |
-| 6 | 注入分工：system prompt 放画像，pre-step 放片段 `0010 §10` | 插件：section 取 **memories**（importance≥8）；pre-step 取 **turn_pairs** | — | ⚠️ 片段侧对，锚点侧仍是旧机制（画像不存在） |
-| 7 | 锚点不该用 `importance ≥ 8` 选 `0010 §10` | `dsh-plugin-soulbridge/index.js:207` | importance 只有 6/7/8/9 四档 | ❌ 仍是旧法 |
-| 8 | 排序 = 相关 × 时效 × 证据（乘积） `0007 §4` | `packages/core/src/scoring.ts:139` 五因子**加权和** | — | ❌ |
-| 9 | 删掉 `vividness` `0007 §4` | `scoring.ts:143` 仍参与；写入恒 0.8/0.9 | 去掉后 top-5 重合 0.95 | ❌ 仍保留 |
-| 10 | relevance 换 BM25 `0007 §2` | `scoring.ts:160` `rank()` 用 bm25 | 18202 字那条 top3 命中 85% → 17% | ✅ |
-| 11 | recency 要衰减 | `scoring.ts:21,118` 半衰期 30 天，起点 `lastRecalledAt ?? createdAt` | 已实现 | ✅ |
-| 12 | 证据等级（纠正 > 用户 > 规则 > 归纳） `0007 §4` | **无** | — | ❌ |
-| 13 | 纠正检测 L1/L2 `briefs/0008` | `detectCorrection`；插件已接 | `corrections` 45 行；`structural:negation` 精度约 11% | ⚠️ 有数据、质量差 |
-| 14 | 注入 trace `briefs/0005-injection-trace` | 插件 0.0.43：`trace.jsonl` 记 blocks/usage/inject ids | 有块结构；**没有候选数与分数** | ⚠️ 部分 |
-| 15 | MVP1：关掉重开能接上 `mvp.md` | 三块结构齐（turn_pairs → recallTurnPairs → pre-step 注入） | **未做实测** | ⏳ 待验收 |
+| 1 | 一轮是完整往返，不是一问一答 `0010 §4` | `turns` + `steps`；`turn/end` 触发写入 | 每轮 1–4 步，`steps.kind` 有 text/reasoning | ✅ |
+| 2 | 推理存但不注入 | `recordTurnPair({steps})`；召回只读 `assistant_text` | 5 条 reasoning / 8572 字符 | ✅ |
+| 3 | 抽取 = 模型填表 + 确定性闸门 `ADR 0029` | `prompts.ts renderExtractionPrompt` + `extract.ts validateDraft` | 90.9% 走模型；`无` 1 字符可解析 | ✅ |
+| 4 | 不记对话动作（请求/提问） `0016 §4` | prompt 的 `<when-to-write>` 四类 | 请求类消息产出 `facts=0` | ✅ |
+| 5 | 话题不是段，是线索（A B A） `0017 §4` | `threads` 表 + `turns.thread_id`；`applyThread` | A1/A2/A3 同线索，B1 独立 | ✅ |
+| 6 | 线索按"空闲轮数"闭合 `0017 §4.3` | `closeIdleThreads(currentTurnNo, idleTurns)` | 6 为默认，可配；幂等 | ✅ |
+| 7 | 归纳按线索，不按事实批次 `0017 §4.4` | `threadContext` + 两阶段 prompt | A B A：证据 3/3，含最后回来那轮 | ✅ |
+| 8 | 结论 = facts 行 + 证据槽，≥2 证据 `ADR 0031` | `recordConclusion` / `conclusionSlots` | 3 条结论，闸门拦过 4 次 partial | ✅ |
+| 9 | 系统提示词只放稳定内容 | `section` 88 字符（soul+style+affect） | 无 "section: changed" 抖动 | ✅ |
+| 10 | 动态记忆走消息通道 | `buildRelatedContext`：锚点 + `<about>` + `<related>` + `<handoff>` | 注入 1.9–5.4KB | ✅ |
+| 11 | "上次聊到哪" = 上一闭合线索 `0017 §4.5` | `lastClosedThread` + `renderHandoff` | **尚未被真实触发**（需跨会话） | ⏳ |
+| 12 | 情绪读出用户状态 | 词典 `analyzeAffect`（模型未接） | 非零率 **2.9%** | ❌ |
+| 13 | 可携带（导出契约） `ADR 0028` | **无导出实现** | — | ❌ |
+| 14 | 行为影响（记忆改变行为） | **无**（0018 挂起） | — | ⏳ |
+| 15 | 老 `memories` 表退场 | 只读冻结；锚点仍读它 | 81 条，无新增 | ⚠️ 冻结中 |
 
-## 二、已知的文档债
+## 三、四个比率（`node scripts/quality.mjs --days 7`）
 
-| 问题 | 影响 |
-|---|---|
-| **两个 brief 都编号 0005**（`0005-eval-harness.md`、`0005-injection-trace.md`） | 引用"0005"会歧义 |
-| `briefs/0008` 状态写"真机 corrections 仍为 0 行" | 实际 45 行，文档滞后 |
-| `references.md` 曾写"我们完全没有衰减" | **错**：recency 已有 30 天半衰期；缺的是 `vividness` 不动、`recall_count` 几乎不参与 |
+| 指标 | 值 | 通过线 | 判定 |
+|---|---|---|---|
+| 事实密度 | 0.29 条/轮 | ≤1.5 | PASS |
+| 抽取走模型 | 91.5% | ≥80% | PASS |
+| 结论支持率 | 100%（3 次） | ≥80% | PASS（样本小） |
+| 情绪非零率 | 3.0% | ≥50% | FAIL |
 
-## 三、怎么自己核对（三条命令）
+口径：按轮去重（重试不算独立跑）、无 `reason` 字段的旧记录算"未测量"。
+
+## 四、已知缺口（按优先级）
+
+| # | 缺口 | 影响 | 在哪 |
+|---|---|---|---|
+| 1 | **情绪读不出** | 语气恒定，2.9% 命中 | 词典 vs 模型 |
+| 2 | **行为影响没做** | 记住了但行为不变 | 0018 Deferred |
+| 3 | handoff 未真实触发 | 跨会话续聊未验证 | 需新会话 |
+| 4 | 导出契约未实现 | 换机器/换工具带不走 | ADR 0028 第 3 条 |
+| 5 | 线索主题质量差 | 出现"做吧""做"当主题 | 归属 prompt |
+| 6 | 老 memories 只读 | 锚点来源仍是旧表 | 等结论层替换 |
+| 7 | `threadIdleTurns=6` 未验证 | 阈值是猜的 | 等真实数据 |
+
+## 五、怎么自己核对
 
 ```powershell
 cd D:\git-workspace\repos\soulbridge
 
-# 1. 评分到底用什么（看 139 行是不是加权和）
-Select-String packages/core/src/scoring.ts -Pattern 'WEIGHTS|bm25\('
+# 1. 四个比率（ADR 0031）
+node scripts/quality.mjs --days 7
 
-# 2. 注入分工（看第 207 行 ANCHOR 和第 290 行 turn_pairs）
-Select-String D:\git-workspace\repos\dsh-plugin-soulbridge\index.js -Pattern 'const ANCHOR|recallTurnPairs'
+# 2. 某条线索的完整验收（A B A）
+node scripts/abba-check.mjs --topic 核桃
 
-# 3. 数据现状
-node packages/cli/src/cli.ts stats
+# 3. 装上去的东西是否真的对
+node --experimental-strip-types scripts/verify-installed.mjs
 ```
 
-## 四、我这次会话里说错过的判断（供你校准）
+## 六、我说错过的判断（供你校准）
 
 | 我说过 | 实际 | 错在 |
 |---|---|---|
-| "新会话历史干净，所以恢复" | 正常会话反而更老（10-26 vs 10-30） | 没查创建时间 |
-| "turn_pair 覆盖率 11%，MVP1 致命伤" | 上线后 74%，且真正的短板是长度无界与机制分工 | 分母含功能上线前的数据 |
+| "抽取走模型只有 52.9%，最该修" | 按轮去重后 90.9%，21:00 之后 100% | **指标写错**：重试被当成独立失败 |
+| "情绪一写就立刻影响这轮语气" | pre-step 在提示词组装之后，最早下一轮 | 没读 agent-loop 时序 |
+| "让模型输出 JSON 是可行的" | 54 字符被丢两小时 | 把格式契约押在 hope 上 |
+| "新会话历史干净所以恢复" | 正常会话反而更老 | 没查创建时间 |
 | "我们完全没有衰减" | recency 有 30 天半衰期 | 没读 scoring.ts |
 | "注入是空回复的诱因" | 关掉注入仍复现 | 单次实验就下结论 |
