@@ -7,6 +7,7 @@
  *
  *   node scripts/seed-profile.mjs --dry-run
  *   node scripts/seed-profile.mjs --apply
+ *   node scripts/seed-profile.mjs --apply --include-superseded   # re-test after a bad merge
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -22,9 +23,16 @@ if (!apply && !process.argv.includes('--dry-run')) {
 }
 
 const db = new DatabaseSync(join(HOME, 'soul.db'), { readOnly: true });
+const statuses = db
+  .prepare("SELECT status, COUNT(*) AS n FROM facts WHERE type_name = '画像' GROUP BY status")
+  .all();
+console.log(`profile rows by status: ${statuses.map((row) => `${row.status}=${row.n}`).join(' ')}`);
+
 const rows = db
   .prepare(
-    "SELECT id, statement FROM facts WHERE type_name = '画像' AND status != 'superseded' ORDER BY created_at LIMIT 60",
+    includeSuperseded
+      ? "SELECT id, statement FROM facts WHERE type_name = '画像' ORDER BY created_at LIMIT 60"
+      : "SELECT id, statement FROM facts WHERE type_name = '画像' AND status != 'superseded' ORDER BY created_at LIMIT 60",
   )
   .all();
 db.close();
@@ -41,7 +49,9 @@ if (existsSync(queueFile)) {
   }
 }
 const seen = new Set(existing.map((item) => item.id));
-const items = rows.filter((row) => !seen.has(String(row.id))).map((row) => ({ id: String(row.id), statement: String(row.statement) }));
+const items = rows
+  .filter((row) => !seen.has(String(row.id)))
+  .map((row) => ({ id: String(row.id), statement: String(row.statement) }));
 
 if (apply) {
   writeFileSync(queueFile, JSON.stringify([...existing, ...items].slice(0, 200), null, 2), 'utf8');
