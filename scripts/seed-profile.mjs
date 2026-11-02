@@ -17,6 +17,7 @@ import { DatabaseSync } from 'node:sqlite';
 const HOME = process.env.SOULBRIDGE_HOME ?? join(homedir(), '.soulbridge');
 const apply = process.argv.includes('--apply');
 const includeSuperseded = process.argv.includes('--include-superseded');
+const onlySuperseded = process.argv.includes('--only-superseded');
 if (!apply && !process.argv.includes('--dry-run')) {
   console.error('pass --dry-run or --apply');
   process.exit(2);
@@ -30,7 +31,9 @@ console.log(`profile rows by status: ${statuses.map((row) => `${row.status}=${ro
 
 const rows = db
   .prepare(
-    includeSuperseded
+    onlySuperseded
+      ? "SELECT id, statement FROM facts WHERE type_name = '画像' AND status = 'superseded' ORDER BY created_at LIMIT 60"
+      : includeSuperseded
       ? "SELECT id, statement FROM facts WHERE type_name = '画像' ORDER BY created_at LIMIT 60"
       : "SELECT id, statement FROM facts WHERE type_name = '画像' AND status != 'superseded' ORDER BY created_at LIMIT 60",
   )
