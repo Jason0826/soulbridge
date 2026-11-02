@@ -220,7 +220,26 @@ export function readVerification(
 export interface ProfileLine {
   statement: string;
   sources: string[];
+  dimension: ProfileDimension;
 }
+
+/**
+ * The dimensions a profile line can belong to.
+ *
+ * A person is not one list: work style, communication habits, feelings, relationships
+ * and boundaries are different lenses. Without a dimension, a global merge welds
+ * unrelated lines together and one busy dimension crowds out the rest.
+ */
+export const PROFILE_DIMENSIONS = [
+  '价值观',
+  '工作方式',
+  '沟通偏好',
+  '情绪',
+  '人际关系',
+  '生活兴趣',
+  '边界',
+] as const;
+export type ProfileDimension = (typeof PROFILE_DIMENSIONS)[number];
 
 const PROFILE_LINE = /^画像\s*[:：]\s*(.+)$/;
 /** Hedged lines describe a mood, not a person; the merge has not happened yet. */
@@ -270,6 +289,10 @@ export function parseProfileMerge(raw: string, allowed: Set<string>): ProfileLin
     if (PROFILE_MULTI_CLAUSE.test(statement)) continue;
     if (PROFILE_HEDGE.test(statement) || PROFILE_ABSOLUTE.test(statement)) continue;
     if (PROFILE_FRAGMENT.test(statement)) continue;
+    const dimension = fields
+      .find((field) => field.startsWith('维度'))
+      ?.replace(/^维度\s*[=＝]\s*/, '');
+    if (!dimension || !(PROFILE_DIMENSIONS as readonly string[]).includes(dimension)) continue;
     const sourceField = fields.find((field) => field.startsWith('来源'));
     const sources = (sourceField?.replace(/^来源\s*[=＝]\s*/, '') ?? '')
       .split(/[,，、;；\s]+/)
@@ -278,7 +301,7 @@ export function parseProfileMerge(raw: string, allowed: Set<string>): ProfileLin
     if (sources.length === 0) continue;
     const duplicate = out.some((kept) => profileSimilarity(kept.statement, statement) >= 0.7);
     if (duplicate) continue;
-    out.push({ statement, sources });
+    out.push({ statement, sources, dimension: dimension as ProfileDimension });
   }
   return out;
 }

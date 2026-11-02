@@ -751,6 +751,7 @@ export class Soul {
           ...line.sources.map((id) => ({ slot: '来源', value: { kind: 'fact' as const, factId: id } })),
           // A merged line is not an original: re-merging merged lines loses detail.
           { slot: '合并', value: { kind: 'text' as const, value: '1' } },
+          { slot: '维度', value: { kind: 'text' as const, value: line.dimension } },
         ],
       });
       written.push(fact);

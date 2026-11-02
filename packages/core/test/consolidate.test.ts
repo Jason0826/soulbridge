@@ -291,7 +291,7 @@ test('verification: an empty or unparseable reply is a retry, not a rejection', 
 test('profile: merged lines keep only sources that were offered', () => {
   const allowed = new Set(['fc_a', 'fc_b']);
   const lines = parseProfileMerge(
-    ['画像: 要机制不要靠自觉 | 来源=fc_a,fc_b', '画像: 凭空来的判断 | 来源=fc_zzz', '画像: 短 | 来源=fc_a'].join('\n'),
+    ['画像: 要机制不要靠自觉 | 维度=工作方式 | 来源=fc_a,fc_b', '画像: 凭空来的判断 | 维度=工作方式 | 来源=fc_zzz', '画像: 短 | 维度=工作方式 | 来源=fc_a'].join('\n'),
     allowed,
   );
   assert.equal(lines.length, 1);
@@ -304,7 +304,9 @@ test('profile: merging supersedes the sources and keeps the trail', () => {
   store.putFact({ soulId: 's1', userId: 'u1', id: 'f1', statement: '用户要机制不要 prompt', typeName: '画像', holder: 'self' });
   store.putFact({ soulId: 's1', userId: 'u1', id: 'f2', statement: '结构化输出优先工具解析', typeName: '画像', holder: 'self' });
 
-  const written = soul.applyProfileMerge([{ statement: '要机制，不靠 prompt 自觉', sources: ['f1', 'f2'] }]);
+  const written = soul.applyProfileMerge([
+    { statement: '要机制，不靠 prompt 自觉', sources: ['f1', 'f2'], dimension: '工作方式' },
+  ]);
   assert.equal(written.length, 1);
   assert.equal(soul.profile(8).length, 1, 'the merged line is the active profile');
   assert.equal(store.fact('f1')?.status, 'superseded');
@@ -316,10 +318,10 @@ test('profile gates: the three bad lines from the live merge are rejected', () =
   const allowed = new Set(['fc_a', 'fc_b', 'fc_c', 'fc_d']);
   const lines = parseProfileMerge(
     [
-      '画像: 每次因为换工具，换模型而要重复去讲 | 来源=fc_a', // fragment
-      '画像: 有时候希望先讨论 | 来源=fc_b', // hedged
-      '画像: 一切事情都要先验证 | 来源=fc_c', // absolute
-      '画像: 先验证再动手，不靠推测 | 来源=fc_d', // good
+      '画像: 每次因为换工具，换模型而要重复去讲 | 维度=沟通偏好 | 来源=fc_a', // fragment
+      '画像: 有时候希望先讨论 | 维度=沟通偏好 | 来源=fc_b', // hedged
+      '画像: 一切事情都要先验证 | 维度=工作方式 | 来源=fc_c', // absolute
+      '画像: 先验证再动手，不靠推测 | 维度=工作方式 | 来源=fc_d', // good
     ].join('\n'),
     allowed,
   );
@@ -333,8 +335,8 @@ test('profile gates: the same sentence twice is folded, a paraphrase is left to 
   const allowed = new Set(['fc_a', 'fc_b']);
   const lines = parseProfileMerge(
     [
-      '画像: 用户要机制不靠自觉 | 来源=fc_a',
-      '画像: 用户要机制，不靠自觉 | 来源=fc_b',
+      '画像: 用户要机制不靠自觉 | 维度=工作方式 | 来源=fc_a',
+      '画像: 用户要机制，不靠自觉 | 维度=工作方式 | 来源=fc_b',
     ].join('\n'),
     allowed,
   );
@@ -343,14 +345,14 @@ test('profile gates: the same sentence twice is folded, a paraphrase is left to 
 test('profile gates: a semicolon-welded line is rejected, the split version passes', () => {
   // The real output of the first merge: three ideas welded with semicolons.
   const allowed = new Set(['fc_a', 'fc_b', 'fc_c']);
-  const welded = parseProfileMerge('画像: 设指标促成长；记忆按想起概率衰减 | 来源=fc_a', allowed);
+  const welded = parseProfileMerge('画像: 设指标促成长；记忆按想起概率衰减 | 维度=工作方式 | 来源=fc_a', allowed);
   assert.equal(welded.length, 0);
 
   const split = parseProfileMerge(
     [
-      '画像: 设指标促成长 | 来源=fc_a',
-      '画像: 记忆按想起概率衰减 | 来源=fc_b',
-      '画像: 教训按作用域和复现衰减 | 来源=fc_c',
+      '画像: 设指标促成长 | 维度=工作方式 | 来源=fc_a',
+      '画像: 记忆按想起概率衰减 | 维度=工作方式 | 来源=fc_b',
+      '画像: 教训按作用域和复现衰减 | 维度=工作方式 | 来源=fc_c',
     ].join('\n'),
     allowed,
   );
