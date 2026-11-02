@@ -47,6 +47,8 @@ export {
   parseRelationDraft,
 } from './consolidate.ts';
 export type { VerificationDraft, ConclusionRelation } from './consolidate.ts';
+export { fires, parseTrigger, selectRules } from './rules.ts';
+export type { Rule, RuleTrigger } from './rules.ts';
 export { planRetrieval } from './retrieval.ts';
 export type { RetrievalPlan, RetrievalPrimitive } from './retrieval.ts';
 export * from './affect/index.ts';
@@ -91,6 +93,8 @@ import type {
 } from './types.ts';
 import type { SoulStore } from './store.ts';
 import type { AffectAnalyzer } from './affect/port.ts';
+import { parseTrigger } from './rules.ts';
+import type { Rule } from './rules.ts';
 import { planRetrieval } from './retrieval.ts';
 import type { RetrievalPlan } from './retrieval.ts';
 import { gateConclusion, conclusionSlots } from './consolidate.ts';
@@ -654,7 +658,29 @@ export class Soul {
   }
 
   /**
-   * Which primitive this question needs (0020).
+   * The rules we hold (ADR 0033): facts whose type is 规则 and whose 触发 slot parses.
+   *
+   * A rule without a usable trigger is skipped, not injected — an always-on rule is
+   * wallpaper, and wallpaper is how a lesson gets ignored.
+   */
+  rules(): Rule[] {
+    const out: Rule[] = [];
+    for (const fact of this.store.facts({ soulId: this.soulId, userId: this.userId, limit: 500 })) {
+      if (fact.typeName !== '规则' || fact.status === 'superseded') continue;
+      const triggerSlot = fact.slots.find((slot) => slot.slot === '触发' && slot.value.kind === 'text');
+      const trigger = parseTrigger(triggerSlot?.value.kind === 'text' ? triggerSlot.value.value : '');
+      if (!trigger) continue;
+      out.push({
+        id: fact.id,
+        statement: fact.statement,
+        trigger,
+        confidence: fact.confidence,
+      });
+    }
+    return out;
+  }
+
+  /** Which primitive this question needs (0020).
    *
    * The subject is resolved against the entities we hold, so "上次和 a 吃饭" can
    * never be answered with the last closed topic.
