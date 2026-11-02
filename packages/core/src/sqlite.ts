@@ -799,6 +799,26 @@ export function openSqlite(file: string): SoulStore {
     putEntity(spec: EntitySpec): Entity {
       const now = spec.seenAt ?? Date.now();
       const id = spec.id ?? `en_${spec.type}_${encodeURIComponent(spec.name)}`;
+      // A refresh that only names the entity must not erase what is known about it.
+      // The upsert used to write `excluded.aliases` unconditionally, so every
+      // "just mention them again" call wiped the nickname and the attributes —
+      // and `latestAbout` lost its alias match, meaning the person stopped being
+      // recognized by anything but their full name.
+      const existingRow = db
+        .prepare('SELECT aliases, attrs FROM entities WHERE soul_id = ? AND user_id = ? AND type = ? AND name = ?')
+        .get(spec.soulId, spec.userId, spec.type, spec.name) as { aliases?: string; attrs?: string } | undefined;
+      const readJson = <T>(raw: string | undefined, fallback: T): T => {
+        if (raw === undefined) return fallback;
+        try {
+          return JSON.parse(raw) as T;
+        } catch {
+          return fallback;
+        }
+      };
+      const existingAliases = readJson<string[]>(existingRow?.aliases, []);
+      const existingAttrs = readJson<Record<string, unknown>>(existingRow?.attrs, {});
+      const aliases = spec.aliases === undefined ? existingAliases : [...new Set([...existingAliases, ...spec.aliases])];
+      const attrs = spec.attrs === undefined ? existingAttrs : { ...existingAttrs, ...spec.attrs };
       withRetry(() =>
         db
           .prepare(
@@ -817,8 +837,8 @@ export function openSqlite(file: string): SoulStore {
             spec.userId,
             spec.type,
             spec.name,
-            JSON.stringify(spec.aliases ?? []),
-            JSON.stringify(spec.attrs ?? {}),
+            JSON.stringify(aliases),
+            JSON.stringify(attrs),
             now,
             now,
             now,
