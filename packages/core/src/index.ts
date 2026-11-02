@@ -51,9 +51,11 @@ export {
   parseRelationDraft,
   readVerification,
   parseProfileMerge,
+  groupProfileCandidates,
+  isDerivedProfileLine,
 } from './consolidate.ts';
 export type { VerificationDraft, ConclusionRelation } from './consolidate.ts';
-export type { ProfileLine } from './consolidate.ts';
+export type { ProfileLine, ProfileCandidate, ProfileGroup } from './consolidate.ts';
 import type { ProfileLine } from './consolidate.ts';
 export { fires, parseRuleClassifications, parseTrigger, selectRules } from './rules.ts';
 export type { Rule, RuleTrigger, RuleClassification } from './rules.ts';
@@ -105,7 +107,7 @@ import { parseTrigger } from './rules.ts';
 import type { Rule } from './rules.ts';
 import { planRetrieval } from './retrieval.ts';
 import type { RetrievalPlan } from './retrieval.ts';
-import { gateConclusion, conclusionSlots } from './consolidate.ts';
+import { gateConclusion, conclusionSlots, isDerivedProfileLine } from './consolidate.ts';
 import { buildContext } from './context.ts';
 import { reflect, ruleExtract, nextEmotion } from './reflect.ts';
 import { rank, tokenize } from './scoring.ts';
@@ -726,7 +728,14 @@ export class Soul {
   profileItems(limit = 60): Fact[] {
     return this.store
       .facts({ soulId: this.soulId, userId: this.userId, limit: 500 })
-      .filter((fact) => fact.typeName === '画像' && fact.status !== 'superseded')
+      .filter(
+        (fact) =>
+          fact.typeName === '画像' &&
+          fact.status !== 'superseded' &&
+          // A line that cites sources is derived: merging it again compresses a
+          // compression, and the second round is thinner than the first.
+          !isDerivedProfileLine(fact),
+      )
       .slice(0, limit);
   }
 

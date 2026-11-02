@@ -10,6 +10,8 @@ import {
   parseRelationDraft,
   readVerification,
   parseProfileMerge,
+  groupProfileCandidates,
+  isDerivedProfileLine,
   parseVerificationDraft,
 } from '../src/consolidate.ts';
 import { renderConsolidationPrompt, renderVerificationPrompt } from '../src/prompts.ts';
@@ -365,4 +367,88 @@ test('profile prompt: dimension definitions travel with the request', () => {
   assert.match(prompt, /超越具体情境/);
   assert.match(prompt, /边界：明确说过的/);
   assert.match(prompt, /维度=价值观/);
+});
+
+test('profile prompt: a single-dimension batch says so', () => {
+  const plain = renderProfileMergePrompt({ items: [{ id: 'fc_a', statement: '先验证再动手' }] });
+  const scoped = renderProfileMergePrompt({
+    items: [{ id: 'fc_a', statement: '先验证再动手' }],
+    dimension: '工作方式',
+  });
+  // Without the scope block the model is free to re-widen the batch it was handed.
+  assert.doesNotMatch(plain, /<scope>/);
+  assert.match(scoped, /全部是「工作方式」维度的判断/);
+  assert.match(scoped, /维度=工作方式/);
+});
+
+test('profile: the merge input is cut along dimensions, never welded across them', () => {
+  const groups = groupProfileCandidates([
+    { id: 'a', statement: '先验证再动手', dimension: '工作方式' },
+    { id: 'b', statement: '讨厌重复交代', dimension: '沟通偏好' },
+    { id: 'c', statement: '从根本解决', dimension: '工作方式' },
+    { id: 'd', statement: '没标注过的一句', dimension: undefined },
+    { id: 'e', statement: '维度写错的', dimension: '不是维度' },
+  ]);
+  // Biggest group first: it is where one call collapses the most repetition.
+  assert.deepEqual(
+    groups.map((group) => [group.dimension, group.items.length]),
+    [
+      ['工作方式', 2],
+      ['', 2],
+      ['沟通偏好', 1],
+    ],
+  );
+  // An unknown dimension is not a dimension; it joins the unlabelled group instead
+  // of inventing a batch the parser would then reject line by line.
+  assert.deepEqual(
+    groups[1].items.map((item) => item.id),
+    ['d', 'e'],
+  );
+});
+
+test('profile: a batch declared as one dimension rejects a line from another', () => {
+  const allowed = new Set(['fc_a', 'fc_b']);
+  const lines = parseProfileMerge(
+    [
+      '画像: 先验证再动手 | 维度=工作方式 | 来源=fc_a',
+      '画像: 讨厌重复交代 | 维度=沟通偏好 | 来源=fc_b',
+    ].join('\n'),
+    allowed,
+    '工作方式',
+  );
+  // The prompt asks for one dimension; the parser is what enforces it.
+  assert.deepEqual(lines.map((line) => line.statement), ['先验证再动手']);
+});
+
+test('profile: a line that cites a source is derived, marker or not', () => {
+  assert.equal(isDerivedProfileLine({ slots: [{ slot: '来源' }] }), true);
+  assert.equal(isDerivedProfileLine({ slots: [{ slot: '合并' }] }), true);
+  assert.equal(isDerivedProfileLine({ slots: [{ slot: '维度' }] }), false);
+  assert.equal(isDerivedProfileLine({}), false);
+});
+
+test('profile: derived lines are not offered back as merge input', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  // An original judgment.
+  store.putFact({ ...base, id: 'f1', statement: '先验证再动手', typeName: '画像', holder: 'self' });
+  // A merged line: it cites the original, so re-merging it would compress a compression.
+  store.putFact({
+    ...base,
+    id: 'f2',
+    statement: '动手前先验证，不靠推测',
+    typeName: '画像',
+    holder: 'self',
+    slots: [
+      { slot: '来源', value: { kind: 'fact', factId: 'f1' } },
+      { slot: '合并', value: { kind: 'text', value: '1' } },
+    ],
+  });
+  assert.deepEqual(
+    soul.profileItems().map((fact) => fact.id),
+    ['f1'],
+  );
+  // The merged line is still what gets injected: derived is not discarded.
+  assert.deepEqual(soul.profile().map((fact) => fact.id).sort(), ['f1', 'f2']);
+  store.close();
 });

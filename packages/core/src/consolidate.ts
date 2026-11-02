@@ -278,7 +278,7 @@ function profileSimilarity(a: string, b: string): number {
  * What code cannot check is direction ("先" becoming "后"). That needs the separate
  * verification pass, and it is why this parser is not the last gate.
  */
-export function parseProfileMerge(raw: string, allowed: Set<string>): ProfileLine[] {
+export function parseProfileMerge(raw: string, allowed: Set<string>, expected?: string): ProfileLine[] {
   const out: ProfileLine[] = [];
   for (const line of String(raw ?? '').split(/\r?\n/)) {
     const match = PROFILE_LINE.exec(line.trim());
@@ -293,6 +293,9 @@ export function parseProfileMerge(raw: string, allowed: Set<string>): ProfileLin
       .find((field) => field.startsWith('维度'))
       ?.replace(/^维度\s*[=＝]\s*/, '');
     if (!dimension || !(PROFILE_DIMENSIONS as readonly string[]).includes(dimension)) continue;
+    // The batch is one dimension by construction; a line that leaves it means the
+    // model mixed two lenses back together, which is the welding the split prevents.
+    if (expected && dimension !== expected) continue;
     const sourceField = fields.find((field) => field.startsWith('来源'));
     const sources = (sourceField?.replace(/^来源\s*[=＝]\s*/, '') ?? '')
       .split(/[,，、;；\s]+/)
@@ -304,4 +307,61 @@ export function parseProfileMerge(raw: string, allowed: Set<string>): ProfileLin
     out.push({ statement, sources, dimension: dimension as ProfileDimension });
   }
   return out;
+}
+
+/**
+ * A merged line is derived: it exists because other lines do.
+ *
+ * Derivedness used to be a slot written by exactly one code path. Any line created
+ * another way was therefore treated as an original and could be merged again, and
+ * re-compressing a compression produces lines thinner than what they came from.
+ * Citing a source is what makes a line derived; the marker is only a cache of that,
+ * so both are read — a line that names its sources can never be merge input.
+ */
+export function isDerivedProfileLine(fact: { slots?: { slot: string }[] }): boolean {
+  return (fact.slots ?? []).some((slot) => slot.slot === '来源' || slot.slot === '合并');
+}
+
+export interface ProfileCandidate {
+  id: string;
+  statement: string;
+  dimension?: string;
+}
+
+export interface ProfileGroup {
+  /** Empty for candidates that have no dimension yet; they are not merge input. */
+  dimension: string;
+  items: ProfileCandidate[];
+}
+
+/**
+ * Cut the merge input along dimensions before any model sees it.
+ *
+ * A single call across every dimension welded unrelated judgments into one sentence
+ * ("以目的实现为准，大胆假设、小心求证"). Which judgment belongs to which lens is a
+ * semantic call, but *keeping batches apart* is structure, so code does it: the
+ * model only ever compresses lines that are already about the same thing.
+ *
+ * Unlabelled candidates are their own group. Guessing a dimension to fill a batch
+ * would be invention, and a wrong dimension is worse than a missing line.
+ */
+export function groupProfileCandidates(items: ProfileCandidate[]): ProfileGroup[] {
+  const order: string[] = [];
+  const groups = new Map<string, ProfileCandidate[]>();
+  for (const item of items) {
+    const known =
+      typeof item.dimension === 'string' && (PROFILE_DIMENSIONS as readonly string[]).includes(item.dimension);
+    const dimension = known ? (item.dimension as string) : '';
+    let bucket = groups.get(dimension);
+    if (!bucket) {
+      bucket = [];
+      groups.set(dimension, bucket);
+      order.push(dimension);
+    }
+    bucket.push(item);
+  }
+  // Biggest group first: it is the one with the most repetition to collapse.
+  return order
+    .map((dimension) => ({ dimension, items: groups.get(dimension) ?? [] }))
+    .sort((a, b) => b.items.length - a.items.length);
 }

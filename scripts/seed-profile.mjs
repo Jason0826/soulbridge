@@ -5,8 +5,10 @@
  * the same thing. Merging compresses them into a handful, and each merged line keeps
  * the ids it came from so a reader can walk back.
  *
- * Merged lines are derived and are excluded by default: re-merging a compression is
- * cascading compression and produces thinner lines than the set it came from.
+ * Derived lines (those that cite a source) are excluded by default: re-merging a
+ * compression is cascading compression and produces thinner lines than the set it
+ * came from. Each queued item carries its dimension so the merge can be cut along
+ * dimensions instead of welding unrelated judgments in one call.
  *
  *   node scripts/seed-profile.mjs --dry-run
  *   node scripts/seed-profile.mjs --apply
@@ -34,16 +36,22 @@ const statuses = db
   .all();
 console.log(`profile rows by status: ${statuses.map((row) => `${row.status}=${row.n}`).join(' ')}`);
 
-const notMerged = includeMerged
+// Derived means "cites a source": a merged line is derived whether or not an older
+// writer left the 合并 marker on it.
+const notDerived = includeMerged
   ? ''
-  : "AND NOT EXISTS (SELECT 1 FROM fact_slots s WHERE s.fact_id = facts.id AND s.slot = '合并')";
+  : "AND NOT EXISTS (SELECT 1 FROM fact_slots s WHERE s.fact_id = facts.id AND s.slot IN ('来源','合并'))";
 const scope = onlySuperseded
   ? "AND status = 'superseded'"
   : includeSuperseded
     ? ''
     : "AND status != 'superseded'";
 const rows = db
-  .prepare(`SELECT id, statement FROM facts WHERE type_name = '画像' ${scope} ${notMerged} ORDER BY created_at LIMIT 60`)
+  .prepare(
+    `SELECT id, statement,
+            (SELECT s.value_text FROM fact_slots s WHERE s.fact_id = facts.id AND s.slot = '维度' LIMIT 1) AS dimension
+     FROM facts WHERE type_name = '画像' ${scope} ${notDerived} ORDER BY created_at LIMIT 60`,
+  )
   .all();
 db.close();
 
@@ -61,7 +69,9 @@ if (existsSync(queueFile)) {
 const seen = new Set(existing.map((item) => item.id));
 const items = rows
   .filter((row) => !seen.has(String(row.id)))
-  .map((row) => ({ id: String(row.id), statement: String(row.statement) }));
+  // The dimension travels with the judgment: the merge is cut along it, and an
+  // unlabelled item is reported rather than guessed.
+  .map((row) => ({ id: String(row.id), statement: String(row.statement), dimension: row.dimension ?? '' }));
 
 if (apply) {
   writeFileSync(queueFile, JSON.stringify([...existing, ...items].slice(0, 200), null, 2), 'utf8');

@@ -81,6 +81,23 @@ const PROFILE_EXAMPLE = `<example>
 
 export interface ProfileMergePromptInput {
   items: { id: string; statement: string }[];
+  /** When set, this batch is already one dimension and the output must stay in it. */
+  dimension?: string;
+}
+
+/**
+ * One dimension per batch.
+ *
+ * Splitting the input is what actually stops cross-dimension welding; this block
+ * only stops the model from re-widening the batch it was handed. The parser rejects
+ * a line that leaves the dimension anyway, so this is the explanation, not the guard.
+ */
+function scopeBlock(dimension: string): string {
+  return `<scope>
+这一批输入已经按维度分好：全部是「${dimension}」维度的判断。
+输出每行都必须是 维度=${dimension}。不要输出别的维度，也不要把别的维度的内容并进来。
+如果某条判断其实不属于「${dimension}」，直接丢掉它，不要改写它的维度。
+</scope>`;
 }
 
 /** Compress a pile of judgments about the person into a few that hold. */
@@ -91,6 +108,7 @@ export function renderProfileMergePrompt(input: ProfileMergePromptInput): string
     PROFILE_METHOD,
     PROFILE_DIMENSIONS_BLOCK,
     PROFILE_RULES,
+    ...(input.dimension ? [scopeBlock(input.dimension)] : []),
     PROFILE_EXAMPLES,
     PROFILE_EXAMPLE,
     ['<input>', ...items, '</input>'].join('\n'),
