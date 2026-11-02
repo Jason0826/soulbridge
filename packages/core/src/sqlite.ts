@@ -1048,15 +1048,19 @@ export function openSqlite(file: string): SoulStore {
     /**
      * Close topics the conversation has moved past.
      *
-     * Three different signals, each honest about what it knows:
+     * Three signals, ordered by how much they actually know:
      *
-     *   - Inside the running session, quiet is counted in **turns** (rows), because
-     *     the host's turn number is not a per-exchange counter (it jumps by 10–30).
-     *   - A session the host reports as **archived** is finished by the user's own
-     *     declaration — that is the strongest signal available.
-     *   - Otherwise another session counts as finished only after `idleMs` of
-     *     silence: several windows can be open at once, and switching must not
-     *     close a live session's topics.
+     *   - `archived`: the user put the session away. A declaration, not an
+     *     inference — the strongest signal, so it wins even over recency.
+     *   - `quiet-turns`: inside the running session, the conversation moved on N
+     *     turns. Counted as **rows**, because the host's turn number is not a
+     *     per-exchange counter (it jumps by 10–30 per message).
+     *   - `quiet-time`: silence in another session. The weakest signal, kept only
+     *     as a safety net, and deliberately long: closing early writes a partial
+     *     conclusion into durable memory, while closing late only delays one.
+     *
+     * The reason is returned so the log can say which signal actually fired, and
+     * so a threshold that fires too early is visible instead of silent.
      */
     closeIdleThreads(
       soulId: string,
@@ -1066,7 +1070,7 @@ export function openSqlite(file: string): SoulStore {
       idleMs: number,
       archivedSessionIds: string[],
       at: number,
-    ): string[] {
+    ): Array<{ id: string; reason: 'archived' | 'quiet-turns' | 'quiet-time' }> {
       const archived = new Set(archivedSessionIds);
       const open = db
         .prepare(
@@ -1082,18 +1086,23 @@ export function openSqlite(file: string): SoulStore {
         .all(soulId, userId) as Row[];
 
       const cutoff = at - Math.max(60_000, idleMs);
-      const ids = open
-        .filter((row) => {
-          const threadSession = String(row.session_id);
-          if (threadSession === sessionId) return Number(row.quiet_turns) >= Math.max(1, idleTurns);
-          if (archived.has(threadSession)) return true;
-          return Number(row.last_activity) <= cutoff;
-        })
-        .map((row) => String(row.id));
+      const closing: Array<{ id: string; reason: 'archived' | 'quiet-turns' | 'quiet-time' }> = [];
+      for (const row of open) {
+        const threadSession = String(row.session_id);
+        if (threadSession === sessionId) {
+          if (Number(row.quiet_turns) >= Math.max(1, idleTurns)) {
+            closing.push({ id: String(row.id), reason: 'quiet-turns' });
+          }
+        } else if (archived.has(threadSession)) {
+          closing.push({ id: String(row.id), reason: 'archived' });
+        } else if (Number(row.last_activity) <= cutoff) {
+          closing.push({ id: String(row.id), reason: 'quiet-time' });
+        }
+      }
 
       const close = db.prepare("UPDATE threads SET status = 'closed', closed_at = ? WHERE id = ?");
-      for (const id of ids) withRetry(() => close.run(at, id));
-      return ids;
+      for (const thread of closing) withRetry(() => close.run(at, thread.id));
+      return closing;
     },
     threadTurns(threadId: string): TurnPair[] {
       const rows = db

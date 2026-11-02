@@ -66,7 +66,8 @@ test('threads: quiet is counted in turns, not in turn-number distance', () => {
 
   // Two turns happened after the old thread's last turn; the fresh one is one behind.
   const closed = store.closeIdleThreads(S.soulId, S.userId, 'sess', 2, 30 * 60_000, [], 5000);
-  assert.deepEqual(closed, [oldThread.id]);
+  assert.deepEqual(closed.map((thread) => thread.id), [oldThread.id]);
+  assert.equal(closed[0].reason, 'quiet-turns');
   assert.equal(store.thread(fresh.id)?.status, 'open');
 
   // Idempotent.
@@ -78,7 +79,7 @@ test('threads: a topic from another session closes, because that session ended',
   const store = openSqlite(':memory:');
   const other = store.openThread({ ...S, sessionId: 'old-session', topic: '上个会话的', openedAt: 1000, turnNo: 5 });
   // The other session's last turn was long ago, so it counts as finished.
-  assert.deepEqual(store.closeIdleThreads(S.soulId, S.userId, 'new-session', 6, 30 * 60_000, [], 9_000_000), [other.id]);
+  assert.deepEqual(store.closeIdleThreads(S.soulId, S.userId, 'new-session', 6, 30 * 60_000, [], 9_000_000).map((t) => t.id), [other.id]);
   assert.equal(store.thread(other.id)?.status, 'closed');
   store.close();
 });
@@ -160,6 +161,7 @@ test('threads: an archived session closes at once, however recent its turns are'
     ['archived-session'],
     9_100_000,
   );
-  assert.deepEqual(closed, [thread.id]);
+  assert.deepEqual(closed.map((t) => t.id), [thread.id]);
+  assert.equal(closed[0].reason, 'archived');
   store.close();
 });

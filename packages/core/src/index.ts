@@ -571,13 +571,13 @@ export class Soul {
   closeIdleThreads(
     sessionId: string,
     options: { idleTurns?: number; idleMs?: number; archivedSessionIds?: string[]; at?: number } = {},
-  ): string[] {
+  ): Array<{ id: string; reason: 'archived' | 'quiet-turns' | 'quiet-time' }> {
     return this.store.closeIdleThreads(
       this.soulId,
       this.userId,
       sessionId,
       options.idleTurns ?? 6,
-      options.idleMs ?? 30 * 60_000,
+      options.idleMs ?? 24 * 60 * 60_000,
       options.archivedSessionIds ?? [],
       options.at ?? Date.now(),
     );
