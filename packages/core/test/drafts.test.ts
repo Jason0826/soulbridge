@@ -229,29 +229,47 @@ test('commit: a fact with neither slot nor time is refused and reported', () => 
   store.close();
 });
 
-test('commit: a fact with no entity is not a memory, so it is skipped', () => {
+test('commit: a fact needs a key back, and time counts as one', () => {
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
-  const result = soul.commitDrafts({
+  // Nothing to find it by: no participant, no time. That is a fragment of
+  // dialogue, not a memory.
+  const bare = soul.commitDrafts({
     entities: [],
     facts: [{ statement: '今天很热', source: 'told', confidence: 0.6, slots: [] }],
     gaps: [],
     by: 'rules',
   });
-  assert.equal(result.facts.length, 0);
-  assert.deepEqual(
-    result.skipped.map((entry) => entry.reason),
-    ['no slots and no time'],
-    'without slots or time it stops at the earlier gate',
-  );
+  assert.equal(bare.facts.length, 0);
+  assert.deepEqual(bare.skipped.map((entry) => entry.reason), ['no slots and no time']);
 
-  const withTime = soul.commitDrafts({
+  // A slot with no entity and no time is the case this gate exists for.
+  const loose = soul.commitDrafts({
     entities: [],
-    facts: [{ statement: '今天很热', atText: '今天', source: 'told', confidence: 0.6, slots: [{ slot: '天气', value: { kind: 'text', value: '热' } }] }],
+    facts: [{ statement: '有些闷', source: 'told', confidence: 0.6, slots: [{ slot: '感受', value: { kind: 'text', value: '闷' } }] }],
     gaps: [],
     by: 'rules',
   });
-  assert.equal(withTime.facts.length, 0);
-  assert.equal(withTime.skipped[0].reason, 'no entity anchor');
+  assert.equal(loose.facts.length, 0);
+  assert.deepEqual(loose.skipped.map((entry) => entry.reason), ['no anchor (entity or time)']);
+
+  // No participant, but a time. Frame semantics calls the missing participant
+  // null-instantiated, and impersonal statements are legitimate facts, so this
+  // one is stored — reachable by when, not by who.
+  const timed = soul.commitDrafts({
+    entities: [],
+    facts: [
+      {
+        statement: '今天很热',
+        atText: '今天',
+        source: 'told',
+        confidence: 0.6,
+        slots: [{ slot: '天气', value: { kind: 'text', value: '热' } }],
+      },
+    ],
+    gaps: [],
+    by: 'rules',
+  });
+  assert.equal(timed.facts.length, 1);
   store.close();
 });

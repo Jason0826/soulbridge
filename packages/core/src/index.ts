@@ -452,11 +452,15 @@ export class Soul {
         skipped.push({ what: statement, reason: 'no slots and no time' });
         return null;
       }
-      // A fact with no entity cannot be recalled when the conversation turns to
-      // that person or thing, so it is a fragment of dialogue rather than a
-      // memory. Rejected before entity creation so a skip has no side effects.
-      if (!factDraft.slots.some((slot) => slot.value.kind === 'entity')) {
-        skipped.push({ what: statement, reason: 'no entity anchor' });
+      // A fact needs a way back, not necessarily an entity. "天冷了" has no
+      // participant and is still a fact; FrameNet calls this null instantiation,
+      // and impersonal predicates ("下雨了") are the classic zero-argument case.
+      // What a memory cannot survive is having no key at all: no entity, no time.
+      const anchored = factDraft.slots.some((slot) => slot.value.kind === 'entity')
+        || factDraft.at !== undefined
+        || factDraft.atText !== undefined;
+      if (!anchored) {
+        skipped.push({ what: statement, reason: 'no anchor (entity or time)' });
         return null;
       }
       // A slot may only point at an entity that was declared or already known.

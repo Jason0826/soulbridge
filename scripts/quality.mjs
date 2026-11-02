@@ -48,6 +48,12 @@ const turnsWithThread = one(
   since,
 ).n;
 const threads = one('SELECT COUNT(*) AS n FROM threads WHERE opened_at >= ?', since).n;
+const unanchored = one(
+  `SELECT COUNT(*) AS n FROM facts f
+   WHERE COALESCE(f.created_at, 0) >= ?
+     AND NOT EXISTS (SELECT 1 FROM fact_slots s WHERE s.fact_id = f.id AND s.value_type = 'entity')`,
+  since,
+).n;
 const affectAll = one('SELECT COUNT(*) AS n FROM affect_samples WHERE at >= ?', since).n;
 const affectSignal = one('SELECT COUNT(*) AS n FROM affect_samples WHERE at >= ? AND confidence > 0', since).n;
 
@@ -124,6 +130,11 @@ const report = {
     supportRate: consolidations.length === 0 ? null : Number((supported / consolidations.length).toFixed(3)),
     pass: consolidations.length === 0 ? null : supported / consolidations.length >= 0.8,
   },
+  anchors: {
+    facts,
+    unanchored,
+    rate: facts === 0 ? null : Number((unanchored / facts).toFixed(3)),
+  },
   affect: {
     samples: affectAll,
     withSignal: affectSignal,
@@ -152,6 +163,9 @@ console.log(
   `情绪非零率    ${pct(affectSignal, affectAll)}        ${verdict(report.affect.pass)}   (${affectSignal}/${affectAll} 条，通过线 ≥50%)`,
 );
 console.log('');
+console.log(
+  `无实体锚点    ${pct(unanchored, facts)}         （观察值：有些事实只有时间，没有参与者）`,
+);
 console.log(`线索新开率    ${pct(threadCreated, attributions.length)}         （观察值，暂无通过线）`);
 console.log(`归属覆盖率    ${pct(turnsWithThread, turns)}         （有线索的轮次 / 全部轮次）`);
 console.log(`线索数        ${threads} 条`);
