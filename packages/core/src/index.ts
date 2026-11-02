@@ -406,10 +406,22 @@ export class Soul {
     const skipped: CommitResult['skipped'] = [];
     const at = options.at ?? Date.now();
 
+    // One entity per name, whatever its declared type: the same 核桃 appearing as
+    // both person and thing splits every recall that mentions it. Existing rows
+    // win, so a wrongly typed first sighting is reused rather than duplicated.
+    const byName = new Map<string, Entity>();
+    for (const known of this.store.findEntities({ soulId: this.soulId, userId: this.userId, limit: 500 })) {
+      if (!byName.has(known.name)) byName.set(known.name, known);
+    }
+
+    const declared = new Set(draft.entities.map((entity) => entity.name));
+
     const ensureEntity = (name: string, type: EntityDraft['type'] = 'person'): Entity => {
-      const key = `${type}:${name}`;
-      const existing = entities.get(key);
+      const existing = byName.get(name);
       if (existing) return existing;
+      const key = `${type}:${name}`;
+      const pending = entities.get(key);
+      if (pending) return pending;
       const written = this.store.putEntity({
         soulId: this.soulId,
         userId: this.userId,
@@ -420,6 +432,7 @@ export class Soul {
         aliases: draft.entities.find((e) => e.name === name)?.aliases,
       });
       entities.set(key, written);
+      byName.set(name, written);
       return written;
     };
 
@@ -437,6 +450,24 @@ export class Soul {
       }
       if (factDraft.slots.length === 0 && factDraft.at === undefined && factDraft.atText === undefined) {
         skipped.push({ what: statement, reason: 'no slots and no time' });
+        return null;
+      }
+      // A fact with no entity cannot be recalled when the conversation turns to
+      // that person or thing, so it is a fragment of dialogue rather than a
+      // memory. Rejected before entity creation so a skip has no side effects.
+      if (!factDraft.slots.some((slot) => slot.value.kind === 'entity')) {
+        skipped.push({ what: statement, reason: 'no entity anchor' });
+        return null;
+      }
+      // A slot may only point at an entity that was declared or already known.
+      // Without this the slot value itself becomes an entity — the store filled up
+      // with "仅在电话里说" and even a fact id as a person.
+      const stray = factDraft.slots.find(
+        (slot) => slot.value.kind === 'entity' && !declared.has(slot.value.entityName) && !byName.has(slot.value.entityName),
+      );
+      if (stray) {
+        const name = stray.value.kind === 'entity' ? stray.value.entityName : '';
+        skipped.push({ what: statement, reason: `undeclared entity: ${name}` });
         return null;
       }
       const duplicate = recent.some(
@@ -571,7 +602,7 @@ export class Soul {
       typeName: '结论',
       holder: 'self',
       confidence: gate.confidence,
-      slots: conclusionSlots(gate.evidence),
+      slots: conclusionSlots(gate.evidence, this.entitiesOfFacts(gate.evidence)),
     });
     // Superseding an unknown row would silently claim a revision that never
     // happened; the gate already checked the target is a conclusion we hold.
@@ -652,6 +683,18 @@ export class Soul {
       .map((turn) => ({ turnNo: turn.turn, userText: turn.userText }));
     return { thread, conclusion, turns };
   }
+  /** The entities a set of facts mentions — the key a conclusion is recalled by. */
+  entitiesOfFacts(factIds: string[]): string[] {
+    const ids = new Set<string>();
+    for (const factId of factIds) {
+      const fact = this.store.fact(factId);
+      for (const slot of fact?.slots ?? []) {
+        if (slot.value.kind === 'entity') ids.add(slot.value.entityId);
+      }
+    }
+    return [...ids];
+  }
+
   /**
    * Conclusions worth comparing a new one against.
    *
@@ -661,10 +704,18 @@ export class Soul {
    */
   conclusionCandidates(evidence: string[], limit = 8): Array<{ id: string; statement: string; evidence: number }> {
     const wanted = new Set(evidence);
+    const wantedEntities = new Set(this.entitiesOfFacts(evidence));
     return this.conclusions(200)
       .map((fact) => {
         const ids = evidenceOf(fact);
-        return { fact, shared: ids.filter((id) => wanted.has(id)).length, evidence: ids.length };
+        const sharedEntities = fact.slots.filter(
+          (slot) => slot.slot === '关于' && slot.value.kind === 'entity' && wantedEntities.has(slot.value.entityId),
+        ).length;
+        // Shared evidence first, then the same person/thing: two conclusions about
+        // the same entity are the likeliest restatements even when their evidence
+        // happens to be disjoint.
+        const shared = ids.filter((id) => wanted.has(id)).length * 2 + sharedEntities;
+        return { fact, shared, evidence: ids.length };
       })
       .sort((a, b) => b.shared - a.shared)
       .slice(0, limit)
@@ -688,7 +739,10 @@ export class Soul {
     const heldSet = new Set(held);
     const added = this.store.addSlots(
       into,
-      conclusionSlots(evidence.filter((id) => !heldSet.has(id))),
+      conclusionSlots(
+        evidence.filter((id) => !heldSet.has(id)),
+        this.entitiesOfFacts(evidence),
+      ),
     );
     // Confidence follows evidence count, as the gate does; never lower it.
     const total = new Set([...held, ...evidence]).size;

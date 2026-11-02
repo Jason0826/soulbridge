@@ -141,7 +141,7 @@ test('model: supersede retires the old fact and writes the new one', async () =>
 test('model: an unknown supersede target falls back to add instead of losing the news', async () => {
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
-  const llm = () => '{"operations":[{"op":"supersede","target":"fc_nope","fact":{"statement":"小林搬走了","at_text":"昨天","slots":[{"slot":"搬家者","entity":"小林"}]}}],"entities":[],"gaps":[]}';
+  const llm = () => '{"operations":[{"op":"supersede","target":"fc_nope","fact":{"statement":"小林搬走了","at_text":"昨天","slots":[{"slot":"搬家者","entity":"小林"}]}}],"entities":[{"name":"小林","type":"person"}],"gaps":[]}';
   const draft = await soul.extract('小林搬走了', { llm, at: NOW });
   assert.equal(draft.operations?.[0].op, 'add', 'unknown target degrades to add');
   const result = soul.commitDrafts(draft, { at: NOW });
@@ -152,7 +152,7 @@ test('model: an unknown supersede target falls back to add instead of losing the
 test('model: noop writes nothing', async () => {
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
-  const llm = () => '{"operations":[{"op":"noop"}],"entities":[],"gaps":[]}';
+  const llm = () => '{"operations":[{"op":"noop"}],"entities":[{"name":"小林","type":"person"}],"gaps":[]}';
   const draft = await soul.extract('好的知道了', { llm, at: NOW });
   const result = soul.commitDrafts(draft, { at: NOW });
   assert.equal(result.facts.length, 0);
@@ -226,5 +226,32 @@ test('commit: a fact with neither slot nor time is refused and reported', () => 
   });
   assert.equal(result.facts.length, 0);
   assert.equal(result.skipped[0].reason, 'no slots and no time');
+  store.close();
+});
+
+test('commit: a fact with no entity is not a memory, so it is skipped', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  const result = soul.commitDrafts({
+    entities: [],
+    facts: [{ statement: '今天很热', source: 'told', confidence: 0.6, slots: [] }],
+    gaps: [],
+    by: 'rules',
+  });
+  assert.equal(result.facts.length, 0);
+  assert.deepEqual(
+    result.skipped.map((entry) => entry.reason),
+    ['no slots and no time'],
+    'without slots or time it stops at the earlier gate',
+  );
+
+  const withTime = soul.commitDrafts({
+    entities: [],
+    facts: [{ statement: '今天很热', atText: '今天', source: 'told', confidence: 0.6, slots: [{ slot: '天气', value: { kind: 'text', value: '热' } }] }],
+    gaps: [],
+    by: 'rules',
+  });
+  assert.equal(withTime.facts.length, 0);
+  assert.equal(withTime.skipped[0].reason, 'no entity anchor');
   store.close();
 });

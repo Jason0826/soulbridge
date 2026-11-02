@@ -65,9 +65,19 @@ export function gateConclusion(input: ConclusionGateInput): ConclusionGateResult
  * No new table: a conclusion is a fact whose type is 结论, whose holder is the
  * soul itself, and whose evidence is a `fact` slot per citation. That keeps
  * retrieval, export and supersede working unchanged.
+ *
+ * A conclusion also carries the entities its evidence mentions, under `关于`.
+ * Without that it cannot be recalled when the conversation turns to that person —
+ * the one question the whole layer exists to answer.
  */
-export function conclusionSlots(evidence: string[]): { slot: string; value: SlotValue }[] {
-  return evidence.map((factId) => ({ slot: '证据', value: { kind: 'fact', factId } }));
+export function conclusionSlots(
+  evidence: string[],
+  entities: string[] = [],
+): { slot: string; value: SlotValue }[] {
+  return [
+    ...evidence.map((factId) => ({ slot: '证据', value: { kind: 'fact' as const, factId } })),
+    ...entities.map((entityId) => ({ slot: '关于', value: { kind: 'entity' as const, entityId } })),
+  ];
 }
 
 const RECORD = /^结论\s*[:：]\s*(.+)$/;

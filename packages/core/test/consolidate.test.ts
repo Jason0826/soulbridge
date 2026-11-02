@@ -242,3 +242,33 @@ test('conclusions: candidates put shared evidence first', () => {
   assert.equal(candidates[1].id, unrelated.fact?.id);
   store.close();
 });
+test('conclusions: a conclusion inherits the entities its evidence mentions', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  const lin = store.putEntity({ soulId: 's1', userId: 'u1', type: 'person', name: '小林', seenAt: 1 });
+  const wu = store.putEntity({ soulId: 's1', userId: 'u1', type: 'thing', name: '核桃', seenAt: 1 });
+  store.putFact({ soulId: 's1', userId: 'u1', id: 'f1', statement: '小林说核桃要在紧急时用', slots: [{ slot: '说', value: { kind: 'entity', entityId: lin.id } }, { slot: '对象', value: { kind: 'entity', entityId: wu.id } }] });
+  store.putFact({ soulId: 's1', userId: 'u1', id: 'f2', statement: '小林又强调了一次', slots: [{ slot: '说', value: { kind: 'entity', entityId: lin.id } }] });
+
+  const written = soul.recordConclusion(
+    { statement: '小林很在意这个暗号的用法', evidence: ['f1', 'f2'], confidence: 0.6 },
+    { allowed: ['f1', 'f2'] },
+  );
+  const about = written.fact?.slots.filter((slot) => slot.slot === '关于').map((slot) => slot.value.kind === 'entity' && slot.value.entityId);
+  assert.deepEqual(about, [lin.id, wu.id], 'both entities are reachable from the conclusion');
+  store.close();
+});
+
+test('conclusions: candidates match by entity even when evidence is disjoint', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  const lin = store.putEntity({ soulId: 's1', userId: 'u1', type: 'person', name: '小林', seenAt: 1 });
+  store.putFact({ soulId: 's1', userId: 'u1', id: 'f1', statement: '小林换了工作', slots: [{ slot: '谁', value: { kind: 'entity', entityId: lin.id } }] });
+  store.putFact({ soulId: 's1', userId: 'u1', id: 'f2', statement: '小林不喜欢被催', slots: [{ slot: '谁', value: { kind: 'entity', entityId: lin.id } }] });
+  store.putFact({ soulId: 's1', userId: 'u1', id: 'f3', statement: '今天吃了火锅', slots: [{ slot: '谁', value: { kind: 'text', value: '用户' } }] });
+
+  soul.recordConclusion({ statement: '小林最近在工作上有些变化', evidence: ['f1', 'f2'], confidence: 0.6 }, { allowed: ['f1', 'f2'] });
+  const byEntity = soul.conclusionCandidates([], 5);
+  assert.equal(byEntity.length, 1, 'a conclusion about 小林 is found through its entity');
+  store.close();
+});
