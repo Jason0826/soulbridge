@@ -13,32 +13,35 @@
       "reason": "唯一声明：维度名、准入定义、排序行、示例里的维度值从两个 prompt 收进 dimensions.ts 并改为渲染（新增 48 行，删掉散落副本）。结构修复允许涨，下次重构还回去。"
     }
   ],
-  "coreLines": 7320,
+  "coreLines": 7422,
   "pluginLines": 2223,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 1353,
+    "index.ts": 1354,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 194,
     "seed-lexicon.ts": 145,
+    "dimensions.ts": 38,
+    "labels.ts": 26,
+    "status.ts": 59,
     "consolidate.ts": 369,
-    "context.ts": 125,
-    "dimensions.ts": 61,
+    "context.ts": 128,
+    "dimension-text.ts": 31,
     "extract.ts": 538,
-    "profile-prompt.ts": 118,
+    "profile-prompt.ts": 119,
     "prompts.ts": 448,
     "reflect.ts": 411,
     "retrieval.ts": 116,
     "scoring.ts": 170,
-    "sqlite.ts": 1601,
+    "sqlite.ts": 1602,
     "config.ts": 96,
     "merge.ts": 41,
     "steering.ts": 103,
     "transcript.ts": 96,
     "store.ts": 139,
     "measure.ts": 45,
-    "types.ts": 694
+    "types.ts": 697
   }
 }

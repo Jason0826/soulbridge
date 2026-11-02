@@ -516,6 +516,31 @@ if (!existsSync(DECLARATIONS_PATH)) {
   if (clean > 0) add('PASS', '声明', `${clean} 项只有一处声明`);
 }
 
+// ---------- 9. config 只放定义（代码只做解码） ----------
+// 约定：packages/core/src/config/ 下的文件只能有数据和类型——不能有函数、分支、循环。
+// 定义集中到 config，解码（渲染、校验、SQL 绑定）留在代码里；这条检查防止
+// "顺手在配置里写个 helper"——那会让定义文件变成第二个逻辑层。
+const CONFIG_DIR = join(ROOT, 'packages/core/src/config');
+if (!existsSync(CONFIG_DIR)) {
+  add('WARN', '配置', '没有 packages/core/src/config/ —— 定义还散在代码里');
+} else {
+  const configFiles = walk(CONFIG_DIR, '.ts');
+  const offenders = [];
+  for (const file of configFiles) {
+    const text = readFileSync(file, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '');
+    if (/\bfunction\b|\bif\s*\(|\bfor\s*\(|\bwhile\s*\(|\bswitch\s*\(|\breturn\b/.test(text)) {
+      offenders.push(relative(ROOT, file));
+    }
+  }
+  if (offenders.length > 0) {
+    add('FAIL', '配置', `config 里出现逻辑（只能有数据和类型）：${offenders.join(', ')}`);
+  } else {
+    add('PASS', '配置', `${configFiles.length} 个定义文件只有数据，解码在代码里`);
+  }
+}
+
 // ---------- 输出 ----------
 const order = { FAIL: 0, WARN: 1, PASS: 2 };
 const icon = { FAIL: '✗', WARN: '!', PASS: '✓' };

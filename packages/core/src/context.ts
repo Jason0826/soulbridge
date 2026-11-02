@@ -9,6 +9,8 @@
  */
 import type { ContextRequest, ContextResult, Emotion } from './types.ts';
 import type { SoulStore } from './store.ts';
+import { FACT_STATUS } from './config/status.ts';
+import { ANCHOR_TYPES } from './config/labels.ts';
 import { selectDirectives } from './affect/directives.ts';
 
 export const DEFAULT_MAX_CHARS = 1200;
@@ -77,11 +79,12 @@ export function buildContext(
   // lessons are facts now (ADR 0032), while the legacy `memories` table is still
   // read until its rows have been migrated and deleted. The union keeps the
   // injection stable across that switch instead of dropping every lesson at once.
-  const ANCHOR_TYPES = new Set(['结论', '教训', '原则', '性格']);
+  // The anchor vocabulary is declared in config/labels.ts; this file only filters.
+  const anchorTypes = new Set(ANCHOR_TYPES);
   type Anchor = { id: string; label: string; text: string; score: number };
   const anchors: Anchor[] = store
     .facts({ soulId: request.soulId, userId: request.userId, limit: 300 })
-    .filter((fact) => fact.status !== 'superseded' && ANCHOR_TYPES.has(fact.typeName ?? ''))
+    .filter((fact) => fact.status !== FACT_STATUS.superseded && anchorTypes.has(fact.typeName ?? ''))
     .map((fact) => ({ id: fact.id, label: fact.typeName ?? '事实', text: fact.statement, score: fact.confidence }));
   for (const memory of store.query({ soulId: request.soulId, userId: request.userId })) {
     if (request.types !== undefined && !request.types.includes(memory.type)) continue;

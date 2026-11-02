@@ -35,26 +35,3 @@ export const PROFILE_DIMENSION_DEFINITIONS: Record<ProfileDimension, string> = {
   生活兴趣: '自愿投入时间的事。"喜欢爬山"算。',
   边界: '明确说过的"不要"。没有公认分类学，必须贴着原话，不许概括。',
 };
-
-export function isProfileDimension(value: unknown): value is ProfileDimension {
-  return typeof value === 'string' && (PROFILE_DIMENSIONS as readonly string[]).includes(value);
-}
-
-/**
- * Render the definitions block both prompts embed.
- *
- * Generated from the declaration above so a new dimension cannot be added to the
- * vocabulary without appearing in the prompt (and vice versa).
- */
-export function renderDimensionDefinitions(): string {
-  const lines = PROFILE_DIMENSIONS.map((dimension) => `- ${dimension}：${PROFILE_DIMENSION_DEFINITIONS[dimension]}`);
-  return `<dimensions>
-每个维度是什么，决定什么算一条、什么不算：
-${lines.join('\n')}
-</dimensions>`;
-}
-
-/** The "维度=价值观|工作方式|…" line, generated rather than retyped. */
-export function dimensionChoices(): string {
-  return `维度=${PROFILE_DIMENSIONS.join('|')}`;
-}

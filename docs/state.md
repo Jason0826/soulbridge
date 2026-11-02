@@ -4,11 +4,11 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-02 23:00**（core 0.0.78 / plugin 0.0.89）
+最后核对：**2026-11-02 23:20**（core 0.0.79 / plugin 0.0.89）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
-> 旧表示退场登记：[retirements.json](retirements.json)（`health-check` 第 7 节判定）。
+> 旧表示退场登记：[retirements.json](retirements.json)（`health-check` 第 7 节判定）。`n> 名词/变量声明：[declarations.json](declarations.json)，定义文件在 `packages/core/src/config/`（`health-check` 第 8、9 节）。
 > 全系统审计：[audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md)。
 > 代码审查（今晚，含已修复 4 条）：[audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md)。
 

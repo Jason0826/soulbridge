@@ -2,7 +2,8 @@
  * Profile merging: many judgments → a few that hold up
  * ------------------------------------------------------------------ */
 
-import { PROFILE_DIMENSIONS, dimensionChoices, renderDimensionDefinitions } from './dimensions.ts';
+import { PROFILE_DIMENSIONS } from './config/dimensions.ts';
+import { dimensionChoices, renderDimensionDefinitions } from './dimension-text.ts';
 
 const PROFILE_ROLE = `<role>
 你在整理一组"关于这个人的判断"。它们现在又碎又重复，你要把它们合并成更少、更准的句子。

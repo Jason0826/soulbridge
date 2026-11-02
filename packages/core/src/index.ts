@@ -103,6 +103,7 @@ import type {
   Visibility,
 } from './types.ts';
 import type { SoulStore } from './store.ts';
+import { FACT_STATUS, MEMORY_STATUS } from './config/status.ts';
 import type { AffectAnalyzer } from './affect/port.ts';
 import { parseTrigger } from './rules.ts';
 import type { Rule } from './rules.ts';
@@ -202,7 +203,7 @@ export class Soul {
     return this.store.query({
       soulId: this.soulId,
       userId: this.userId,
-      status: ['active', 'superseded'],
+      status: [MEMORY_STATUS.active, MEMORY_STATUS.superseded],
       includeExpired: true,
       limit,
     });
@@ -721,7 +722,7 @@ export class Soul {
   rules(): Rule[] {
     const out: Rule[] = [];
     for (const fact of this.store.facts({ soulId: this.soulId, userId: this.userId, limit: 500 })) {
-      if (fact.typeName !== '规则' || fact.status === 'superseded') continue;
+      if (fact.typeName !== '规则' || fact.status === FACT_STATUS.superseded) continue;
       const triggerSlot = fact.slots.find((slot) => slot.slot === '触发' && slot.value.kind === 'text');
       const trigger = parseTrigger(triggerSlot?.value.kind === 'text' ? triggerSlot.value.value : '');
       if (!trigger) continue;
@@ -781,7 +782,7 @@ export class Soul {
       .filter(
         (fact) =>
           fact.typeName === '画像' &&
-          fact.status !== 'superseded' &&
+          fact.status !== FACT_STATUS.superseded &&
           // A line that cites sources is derived: merging it again compresses a
           // compression, and the second round is thinner than the first.
           !isDerivedProfileLine(fact),
@@ -816,7 +817,7 @@ export class Soul {
       written.push(fact);
       for (const sourceId of line.sources) {
         const source = this.store.fact(sourceId);
-        if (source && source.status !== 'superseded') this.store.supersedeFact(sourceId, fact.id);
+        if (source && source.status !== FACT_STATUS.superseded) this.store.supersedeFact(sourceId, fact.id);
       }
     }
     return written;
@@ -826,7 +827,7 @@ export class Soul {
   profile(limit = 8): Fact[] {
     return this.store
       .facts({ soulId: this.soulId, userId: this.userId, limit: 500 })
-      .filter((fact) => fact.typeName === '画像' && fact.status !== 'superseded')
+      .filter((fact) => fact.typeName === '画像' && fact.status !== FACT_STATUS.superseded)
       .sort((a, b) => b.confidence - a.confidence || b.createdAt - a.createdAt)
       .slice(0, limit);
   }
@@ -977,7 +978,7 @@ export class Soul {
     const target = this.store.fact(into);
     if (!target) return { ok: false, reason: 'target-missing' };
     if (target.typeName !== '结论') return { ok: false, reason: 'target-not-conclusion' };
-    if (target.status === 'superseded') return { ok: false, reason: 'target-superseded' };
+    if (target.status === FACT_STATUS.superseded) return { ok: false, reason: 'target-superseded' };
 
     const held = evidenceOf(target);
     const heldSet = new Set(held);
@@ -999,7 +1000,7 @@ export class Soul {
   conclusions(limit = 20): Fact[] {
     return this.store
       .facts({ soulId: this.soulId, userId: this.userId, holder: 'self', limit: 200 })
-      .filter((fact) => fact.typeName === '结论' && fact.status !== 'superseded')
+      .filter((fact) => fact.typeName === '结论' && fact.status !== FACT_STATUS.superseded)
       .slice(0, limit);
   }
 

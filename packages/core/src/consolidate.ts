@@ -229,10 +229,10 @@ export interface ProfileLine {
  * Declared in dimensions.ts so prompts render it instead of retyping the names —
  * a second copy is how "add an eighth dimension" becomes a silent drift.
  */
-export { PROFILE_DIMENSIONS } from './dimensions.ts';
-export type { ProfileDimension } from './dimensions.ts';
-import { PROFILE_DIMENSIONS } from './dimensions.ts';
-import type { ProfileDimension } from './dimensions.ts';
+export { PROFILE_DIMENSIONS } from './config/dimensions.ts';
+export type { ProfileDimension } from './config/dimensions.ts';
+import { PROFILE_DIMENSIONS } from './config/dimensions.ts';
+import type { ProfileDimension } from './config/dimensions.ts';
 
 const PROFILE_LINE = /^画像\s*[:：]\s*(.+)$/;
 /** Hedged lines describe a mood, not a person; the merge has not happened yet. */

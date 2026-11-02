@@ -14,7 +14,7 @@
  *   - end with the output anchor
  */
 import { PROFILE_DIMENSIONS_BLOCK } from './profile-prompt.ts';
-import { dimensionChoices } from './dimensions.ts';
+import { dimensionChoices } from './dimension-text.ts';
 
 export interface KnownEntityPrompt {
   id: string;

@@ -9,6 +9,7 @@
 import { copyFileSync, existsSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { DEFAULT_EMOTION } from './types.ts';
+import { FACT_STATUS, MEMORY_STATUS } from './config/status.ts';
 import type {
   AffectSignal,
   Correction,
@@ -593,8 +594,8 @@ export function openSqlite(file: string): SoulStore {
       const result = withRetry(() =>
         db
           .prepare(
-            `UPDATE memories SET status = 'superseded', superseded_by = ?, updated_at = ?
-             WHERE id = ? AND status = 'active' AND deleted_at IS NULL`,
+            `UPDATE memories SET status = '${MEMORY_STATUS.superseded}', superseded_by = ?, updated_at = ?
+             WHERE id = ? AND status = '${MEMORY_STATUS.active}' AND deleted_at IS NULL`,
           )
           .run(newId, now, oldId),
       );
@@ -954,7 +955,7 @@ export function openSqlite(file: string): SoulStore {
     supersedeFact(oldId: string, newId: string): void {
       withRetry(() =>
         db
-          .prepare("UPDATE facts SET status = 'superseded', superseded_by = ? WHERE id = ?")
+          .prepare(`UPDATE facts SET status = '${FACT_STATUS.superseded}', superseded_by = ? WHERE id = ?`)
           .run(newId, oldId),
       );
     },
@@ -1276,7 +1277,7 @@ export function openSqlite(file: string): SoulStore {
           `SELECT DISTINCT f.* FROM facts f
            JOIN fact_slots s ON s.fact_id = f.id AND s.value_type = 'entity'
            JOIN entities e ON e.id = s.entity_id
-           WHERE f.soul_id = ? AND f.user_id = ? AND f.status != 'superseded'
+           WHERE f.soul_id = ? AND f.user_id = ? AND f.status != '${FACT_STATUS.superseded}'
              AND (e.name = ? OR e.aliases LIKE ?)
              AND (? IS NULL OR f.statement LIKE ? OR COALESCE(f.type_name, '') LIKE ?)
            ORDER BY COALESCE(f.at, f.created_at) DESC

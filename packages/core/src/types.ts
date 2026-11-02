@@ -15,7 +15,9 @@ export type MemoryType =
   | 'fact';
 
 export type Visibility = 'private' | 'shared';
-export type MemoryStatus = 'active' | 'superseded' | 'archived';
+// Memory lifecycle lives in config/status.ts too (the legacy layer uses the same word).
+export type { MemoryStatus } from './config/status.ts';
+import type { MemoryStatus } from './config/status.ts';
 
 export interface Memory {
   id: string;
@@ -328,8 +330,10 @@ export interface FactSlot {
   value: SlotValue;
 }
 
-export type FactStatus = 'open' | 'kept' | 'broken' | 'superseded' | 'none';
-export type FactSource = 'experienced' | 'told' | 'inferred';
+// Vocabulary is declared in config/ and only referenced here: one declaration point,
+// so a status rename cannot leave an old copy behind in another filter.
+export type { FactStatus, FactSource, AtPrecision } from './config/status.ts';
+import type { FactStatus, FactSource, AtPrecision } from './config/status.ts';
 
 export interface Fact {
   id: string;
@@ -361,8 +365,7 @@ export interface Fact {
   slots: FactSlot[];
 }
 
-/** How exactly a fact is located in time (ADR 0032). */
-export type AtPrecision = 'day' | 'range' | 'relative' | 'unknown';
+// How exactly a fact is located in time (ADR 0032) — declared in config/status.ts.
 
 export interface FactSpec {
   id?: string;

@@ -5,7 +5,7 @@
       "id": "profile-dimensions",
       "what": "画像维度名（价值观/工作方式/…）",
       "literal": "价值观",
-      "declaredIn": "packages/core/src/dimensions.ts",
+      "declaredIn": "packages/core/src/config/dimensions.ts",
       "allowed": [],
       "mode": "warn",
       "why": "PROFILE_DIMENSIONS 与准入定义都在 dimensions.ts；两个 prompt 都从它渲染，示例与排序行也是模板插值。"
@@ -14,7 +14,7 @@
       "id": "fact-status-superseded",
       "what": "事实状态值 superseded",
       "literal": "'superseded'",
-      "declaredIn": "packages/core/src/types.ts",
+      "declaredIn": "packages/core/src/config/status.ts",
       "allowed": [],
       "mode": "warn",
       "why": "FactStatus 是唯一声明；SQL 与过滤条件里的字面量是副本，改名时会漏改。"
