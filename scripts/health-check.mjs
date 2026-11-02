@@ -541,6 +541,64 @@ if (!existsSync(CONFIG_DIR)) {
   }
 }
 
+// ---------- 10. 代码质量（docs/code-quality.md 里能机械查的部分） ----------
+// 只查"判定明确"的规则。品味、设计、耦合这些留给人审清单——假装机器能全查，
+// 只会让人相信一个假的绿灯。
+const QUALITY_LIMITS = { functionLines: 60, params: 4 };
+const noDoc = [];
+const tooLong = [];
+const manyParams = [];
+const anyTypes = [];
+const consoleLogs = [];
+for (const file of srcFiles) {
+  const rel = relative(ROOT, file);
+  const text = readFileSync(file, 'utf8');
+  for (const line of text.split('\n')) {
+    if (line.includes('console.log(')) consoleLogs.push(rel);
+    if (/: any\b/.test(line)) anyTypes.push(rel);
+  }
+  // 缩进 0 的 function 声明 = 顶层函数；往回找最近的 /** 判断有没有说明。
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (!/^export (async )?function \w+/.test(line)) continue;
+    const name = /function (\w+)/.exec(line)?.[1] ?? '';
+    // 说明可以是 JSDoc（/** … */）或紧邻的一行注释（// …）；空行不影响。
+    let hasDoc = false;
+    for (let back = i - 1; back >= 0; back -= 1) {
+      const previous = lines[back].trim();
+      if (previous === '') continue;
+      if (previous.endsWith('*/') || previous.startsWith('*') || previous.startsWith('//')) hasDoc = true;
+      break;
+    }
+    if (!hasDoc) noDoc.push(`${rel}: ${name}`);
+    // 函数体长度与参数个数
+    const header = line;
+    const params = /\(([^)]*)\)/.exec(header)?.[1] ?? '';
+    if (params.split(',').filter((p) => p.trim()).length > QUALITY_LIMITS.params) manyParams.push(`${rel}: ${name}`);
+    let depth = 0;
+    let bodyLines = 0;
+    for (let j = i; j < lines.length; j += 1) {
+      depth += (lines[j].match(/\{/g) ?? []).length - (lines[j].match(/\}/g) ?? []).length;
+      bodyLines += 1;
+      if (depth === 0 && j > i) break;
+    }
+    // 只看函数体，不算前面的 JSDoc：100 行是硬上限，60 是建议值。
+    if (bodyLines > 100) tooLong.push(`${rel}: ${name} (${bodyLines} 行)`);
+  }
+}
+if (noDoc.length > 0) add('WARN', '质量', `${noDoc.length} 个导出函数没有说明（名字之外要写清边界）：${noDoc.slice(0, 5).join('; ')}`);
+else add('PASS', '质量', '所有导出函数都有说明文档');
+if (tooLong.length > 0) add('WARN', '质量', `${tooLong.length} 个函数超过 100 行：${tooLong.slice(0, 5).join('; ')}`);
+if (manyParams.length > 0) add('WARN', '质量', `${manyParams.length} 个函数参数超过 ${QUALITY_LIMITS.params} 个：${manyParams.slice(0, 5).join('; ')}`);
+const uniqueAny = [...new Set(anyTypes)];
+if (uniqueAny.length > 0) add('WARN', '质量', `${uniqueAny.length} 个文件用了 : any：${uniqueAny.join(', ')}`);
+const uniqueLog = [...new Set(consoleLogs)];
+if (uniqueLog.length > 0) add('WARN', '质量', `${uniqueLog.length} 个文件直接 console.log：${uniqueLog.join(', ')}`);
+if (tooLong.length === 0 && manyParams.length === 0 && uniqueAny.length === 0 && uniqueLog.length === 0) {
+  add('PASS', '质量', '函数长度、参数个数、any、console.log 均无违规');
+}
+
 // ---------- 输出 ----------
 const order = { FAIL: 0, WARN: 1, PASS: 2 };
 const icon = { FAIL: '✗', WARN: '!', PASS: '✓' };

@@ -19,7 +19,7 @@
 | 6 | **文档更新** | `state.md` / `roadmap.md` / `mvp.md` / ADR 同步 | `health-check` 4.7：代码比状态文档新就 FAIL；`[同步]` 检查 commit |
 | 7 | **代码实施** | 代码 + 迁移 + 事务边界 | 新操作是否破坏旧假设（单写者、输入前置条件） |
 | 8 | **代码验证** | 装上去的产物验证，不是源码验证 | `scripts/verify-installed.mjs` + 在已部署副本上跑行为 |
-| 9 | **代码质量 review** | 五路并行审 + 每条发现的复核标签 + 复现脚本 | 每条发现带 `file:line` + 验证方式；"已复核"必须是跑出来的 |
+| 9 | **代码质量 review** | [code-quality.md](code-quality.md)：命名/解耦/错误/定义/测试 + 人审八问 + 置信度 ≥80 | 五路并行审 + 每条发现的复核标签 + 复现脚本；"已复核"必须是跑出来的 |
 | 10 | **旧代码清理** | `docs/retirements.json`：旧表示登记为 done/pending | `health-check` 第 7 节：done 的旧表示若复活就 FAIL；pending 的显示为债 |
 
 ## 三条贯穿规则
