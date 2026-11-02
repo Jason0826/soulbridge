@@ -1,0 +1,61 @@
+{
+  "note": "退场登记：每一行是'同一件事的旧表示'。status=done 表示旧表示已经不能复活；status=pending 表示还活着（技术债）。health-check 第 7 节读这个文件：done 的若复活 → FAIL；pending 的若仍然存在 → WARN（债）；pending 的若已消失 → WARN（该改成 done）。",
+  "entries": [
+    {
+      "id": "turn-pairs-write",
+      "old": "turn_pairs 表作为会话写入目标",
+      "replacedBy": "turns + steps",
+      "status": "done",
+      "why": "v5 起一轮是记忆单位，putTurnPair 已委托给 putTurn；turn_pairs 只剩迁移读取。",
+      "check": { "kind": "table", "name": "turn_pairs", "expect": "no-writer" }
+    },
+    {
+      "id": "handoff-doc",
+      "old": "docs/handoff.md（第二份'现状态'）",
+      "replacedBy": "docs/state.md",
+      "status": "done",
+      "why": "两份现状态必然互相过期，且新会话第一眼打开的是旧的那份。",
+      "check": { "kind": "file", "path": "docs/handoff.md", "expect": "absent" }
+    },
+    {
+      "id": "review-script",
+      "old": "scripts/review.mjs（第二个整体检查入口）",
+      "replacedBy": "scripts/health-check.mjs",
+      "status": "done",
+      "why": "同一件事两个入口会互相打架；文档检查已经因此分叉过一次。",
+      "check": { "kind": "file", "path": "scripts/review.mjs", "expect": "absent" }
+    },
+    {
+      "id": "memories-write",
+      "old": "memories 表（旧记忆层）的写入路径",
+      "replacedBy": "facts + fact_slots",
+      "status": "pending",
+      "why": "observe() 仍在写；锚点仍读它。退役需要 observe 只做 affect 分析，锚点改读 facts 的高置信判断。",
+      "check": { "kind": "table", "name": "memories", "expect": "no-writer" }
+    },
+    {
+      "id": "distill-switch",
+      "old": "配置开关 distill（LLM 总开关）",
+      "replacedBy": "extract 及各阶段自己的开关",
+      "status": "pending",
+      "why": "makeLlm 按 distill 创建，四个阶段却按 extract 判断：默认 distill=rules 时整条 LLM 管线静默关闭。",
+      "check": { "kind": "symbol", "path": "PLUGIN", "pattern": "config.distill", "expect": "absent" }
+    },
+    {
+      "id": "anchor-container",
+      "old": "锚点（importance>=N 的一池子记忆）",
+      "replacedBy": "规则 / 画像 / 记忆 三层（ADR 0033）",
+      "status": "pending",
+      "why": "context.ts 仍在读旧 memories 做锚点；三层注入在插件侧才完整。",
+      "check": { "kind": "symbol", "path": "packages/core/src/context.ts", "pattern": "store.query(", "expect": "absent" }
+    },
+    {
+      "id": "json-extraction-shape",
+      "old": "抽取结果的 JSON 形状（facts 数组）",
+      "replacedBy": "行格式 + operations",
+      "status": "pending",
+      "why": "prompt 已禁止 JSON，但 validateDraft 仍保留 JSON 解析分支。已修'被空 operations 遮蔽'，但两套表示仍在。",
+      "check": { "kind": "symbol", "path": "packages/core/src/extract.ts", "pattern": "input.facts", "expect": "absent" }
+    }
+  ]
+}

@@ -7,12 +7,18 @@
 最后核对：**2026-11-02 22:50**（core 0.0.77 / plugin 0.0.89）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
+> 流程规范：[process.md](process.md)（十步，每步有判定方式）。
+> 旧表示退场登记：[retirements.json](retirements.json)（`health-check` 第 7 节判定）。
 > 全系统审计：[audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md)。
 > 代码审查（今晚，含已修复 4 条）：[audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md)。
 
 **22:50 修复摘要**（详见代码审查第六节）：检索路由的三处误判、合并 prompt 示例与闸门不一致、
 正反句被折叠、JSON 形状抽取被空 operations 遮蔽。core 241 测试全过；
 `scripts/review-probes.mjs` 前 5 段从红变绿。
+
+**退场账**（22:50）：已退场 3 项（turn_pairs 写入、handoff.md、review.mjs），
+技术债 4 项（memories 写入、distill 开关、锚点容器、JSON 抽取形状）——
+每一项都在 `docs/retirements.json` 里，清干净就翻成 done，复活就 FAIL。
 
 ## 一、当前架构（一句话）
 

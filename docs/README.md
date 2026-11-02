@@ -26,6 +26,9 @@
 | [protocol.md](protocol.md) | 占位文件，只为不让旧链接 404；协议内容在 [spec/protocol.v0.md](spec/protocol.v0.md) |
 | 新会话从哪开始 | [state.md](state.md)（唯一现状态文档） |
 | 全系统审计与 review 方法 | [audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md) |
+| **一次交付要走哪十步** | [process.md](process.md)（规范；每步都有判定方式） |
+| **旧表示退场到哪一步** | [retirements.json](retirements.json)（`health-check` 第 7 节判定） |
+| 代码审查发现与已修项 | [audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md) |
 
 ## 两个"锚"的分工
 

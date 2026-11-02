@@ -440,6 +440,46 @@ if (existsSync(dbFile)) {
   }
 }
 
+// ---------- 7. 退场检查（docs/retirements.json） ----------
+// 代码审查的结论：同一件事两个表示，是这里最稳定的缺陷生成器（`operations ?? facts`
+// 静默丢了一整类事实；distill 与 extract 两个开关让默认安装静默变哑）。
+// 所以旧表示必须登记，并且由机器判定它有没有真的退场。
+const RETIREMENTS_PATH = join(ROOT, 'docs/retirements.json');
+if (!existsSync(RETIREMENTS_PATH)) {
+  add('WARN', '退场', '缺少 docs/retirements.json —— 旧表示没有登记，等于没有退场检查');
+} else {
+  const ledger = JSON.parse(readFileSync(RETIREMENTS_PATH, 'utf8'));
+  let doneOk = 0;
+  let stillThere = 0;
+  let pendingCount = 0;
+  const debt = [];
+  for (const entry of ledger.entries ?? []) {
+    const check = entry.check ?? {};
+    let present = true;
+    if (check.kind === 'table') {
+      const writers = [...sqliteSrcText.matchAll(new RegExp(`(INSERT(?: OR \\w+)? INTO ${check.name}\\b|UPDATE ${check.name}\\b)`, 'g'))].length;
+      const readers = [...sqliteSrcText.matchAll(new RegExp(`FROM ${check.name}\\b`, 'g'))].length;
+      present = check.expect === 'no-writer' ? writers > 0 : readers > 0;
+    } else if (check.kind === 'file') {
+      present = existsSync(join(ROOT, check.path));
+    } else if (check.kind === 'symbol') {
+      const target = check.path === 'PLUGIN' ? PLUGIN_ENTRY : join(ROOT, check.path);
+      present = existsSync(target) && readFileSync(target, 'utf8').includes(check.pattern);
+    }
+    if (entry.status === 'done') {
+      if (present) add('FAIL', '退场', `已退场的旧表示复活了：${entry.id}（${entry.old}）`);
+      else doneOk += 1;
+    } else {
+      pendingCount += 1;
+      debt.push(entry.id);
+      if (!present) add('WARN', '退场', `${entry.id} 已经清干净了 —— 把 status 改成 done`);
+      else stillThere += 1;
+    }
+  }
+  if (doneOk > 0) add('PASS', '退场', `${doneOk} 项已退场且没有复活`);
+  if (pendingCount > 0) add('WARN', '退场', `${stillThere}/${pendingCount} 项技术债仍在：${debt.join(', ')}`);
+}
+
 // ---------- 输出 ----------
 const order = { FAIL: 0, WARN: 1, PASS: 2 };
 const icon = { FAIL: '✗', WARN: '!', PASS: '✓' };
