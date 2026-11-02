@@ -19,6 +19,15 @@ import type {
   ThreadAttribution, EntityDraft, ExtractDraft, FactDraft, FactOperation, GapDraft, SlotValue } from './types.ts';
 import { renderExtractionPrompt } from './prompts.ts';
 
+/**
+ * What a fact's confidence is when the model did not give one.
+ *
+ * The midpoint is the only honest value: 0 says "probably false" and 1 says
+ * "certain", and neither is what "no answer" means. Used by both the text and the
+ * JSON paths so the two shapes cannot disagree.
+ */
+export const UNKNOWN_CONFIDENCE = 0.6;
+
 /** Relations a person is introduced with, longest first so 女同事 wins over 同事. */
 const RELATIONS = [
   '女朋友', '男朋友', '老婆', '老公', '对象', '同事', '朋友', '同学', '闺蜜', '室友',
@@ -338,7 +347,7 @@ function parseFactDraft(obj: Record<string, unknown>): FactDraft | null {
     atText,
     atPrecision: precision,
     source: (SOURCES.has(source) ? source : 'told') as FactDraft['source'],
-    confidence: typeof obj.confidence === 'number' ? Math.min(1, Math.max(0, obj.confidence)) : 0.6,
+    confidence: typeof obj.confidence === 'number' ? Math.min(1, Math.max(0, obj.confidence)) : UNKNOWN_CONFIDENCE,
     // Only an explicit yes counts: the field is read by the promotion rules, and a
     // default-yes would promote every observation to a lesson.
     ...(obj.principle === true ? { principle: true } : {}),
@@ -484,8 +493,13 @@ export function parseLineDraft(raw: string): Record<string, unknown> | null {
       if (at && /^\d{4}-\d{2}-\d{2}$/.test(at)) fact.at = Date.parse(`${at}T00:00:00Z`);
       if (atText) fact.at_text = atText;
       if (source) fact.source = source;
-      const conf = Number(confidence);
-      if (Number.isFinite(conf)) fact.confidence = conf;
+      // An empty field is "the model did not say", not "the model said zero".
+      // `Number('')` is 0, so an empty confidence used to rank the fact last — the
+      // opposite of an honest unknown. An explicit number (including 0) is honoured.
+      if (confidence !== undefined) {
+        const parsed = confidence.trim() === '' ? Number.NaN : Number(confidence);
+        fact.confidence = Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : UNKNOWN_CONFIDENCE;
+      }
 
       // 持有= / 精度= / 原则候选= are keyed so the positional fields stay backward
       // compatible; anything else in the tail is the slot list.

@@ -46,9 +46,14 @@
       "date": "2026-11-03",
       "delta": 28,
       "reason": "注入转义：新增 inject-text.ts（统一转义入口）+ context 四类动态值转义（+28 行）。安全修复允许涨。"
+    },
+    {
+      "date": "2026-11-03",
+      "delta": 14,
+      "reason": "空置信不再落 0：UNKNOWN_CONFIDENCE 单一常量，文本/JSON 两条路径共用（+14 行，含说明）。数据质量修复允许涨。"
     }
   ],
-  "coreLines": 7548,
+  "coreLines": 7562,
   "pluginLines": 2315,
   "files": {
     "analyze.ts": 255,
@@ -64,7 +69,7 @@
     "consolidate.ts": 369,
     "context.ts": 136,
     "dimension-text.ts": 31,
-    "extract.ts": 538,
+    "extract.ts": 552,
     "inject-text.ts": 27,
     "profile-prompt.ts": 119,
     "prompts.ts": 448,
