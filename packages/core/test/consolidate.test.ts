@@ -340,3 +340,19 @@ test('profile gates: the same sentence twice is folded, a paraphrase is left to 
   );
   assert.equal(lines.length, 1);
 });
+test('profile gates: a semicolon-welded line is rejected, the split version passes', () => {
+  // The real output of the first merge: three ideas welded with semicolons.
+  const allowed = new Set(['fc_a', 'fc_b', 'fc_c']);
+  const welded = parseProfileMerge('画像: 设指标促成长；记忆按想起概率衰减 | 来源=fc_a', allowed);
+  assert.equal(welded.length, 0);
+
+  const split = parseProfileMerge(
+    [
+      '画像: 设指标促成长 | 来源=fc_a',
+      '画像: 记忆按想起概率衰减 | 来源=fc_b',
+      '画像: 教训按作用域和复现衰减 | 来源=fc_c',
+    ].join('\n'),
+    allowed,
+  );
+  assert.equal(split.length, 3);
+});

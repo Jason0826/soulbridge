@@ -229,6 +229,8 @@ const PROFILE_HEDGE = /有时候|有时|通常|大部分时候|一般来说|一�
 const PROFILE_ABSOLUTE = /一切|所有|总是|从不/;
 /** A fragment has no subject; completing it would be invention. */
 const PROFILE_FRAGMENT = /^(每次|因为|然后|所以|但是|而且|并且)/;
+/** One judgment per line. A semicolon is how three unrelated points get welded together. */
+const PROFILE_MULTI_CLAUSE = /[；;]/;
 
 function profileBigrams(text: string): Set<string> {
   const clean = text.replace(/[\s，。、；：！？,.;:!?"'（）()]/g, '');
@@ -264,7 +266,8 @@ export function parseProfileMerge(raw: string, allowed: Set<string>): ProfileLin
     if (!match) continue;
     const [statementPart, ...fields] = match[1].split('|').map((part) => part.trim());
     const statement = (statementPart ?? '').trim();
-    if (statement.length < 6 || statement.length > 40) continue;
+    if (statement.length < 6 || statement.length > 32) continue;
+    if (PROFILE_MULTI_CLAUSE.test(statement)) continue;
     if (PROFILE_HEDGE.test(statement) || PROFILE_ABSOLUTE.test(statement)) continue;
     if (PROFILE_FRAGMENT.test(statement)) continue;
     const sourceField = fields.find((field) => field.startsWith('来源'));
