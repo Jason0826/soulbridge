@@ -215,7 +215,7 @@ test('commit: writes entities, facts and slots; repeats are refused, not duplica
   store.close();
 });
 
-test('commit: a fact with neither slot nor time is refused and reported', () => {
+test('commit: a fact with neither slot nor time is kept (the gate labels, not filters)', () => {
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
   const result = soul.commitDrafts({
@@ -224,34 +224,33 @@ test('commit: a fact with neither slot nor time is refused and reported', () => 
     gaps: [],
     by: 'rules',
   });
-  assert.equal(result.facts.length, 0);
-  assert.equal(result.skipped[0].reason, 'no slots and no time');
+  // A live trace showed 45 of 103 drafted facts deleted by this gate, 40 of them for a
+  // single bad slot. The sentence is the thing worth keeping; how it can be found is
+  // recorded separately (droppedSlots / holderFallbacks), never by deleting it.
+  assert.equal(result.facts.length, 1);
+  assert.equal(result.skipped.length, 0);
   store.close();
 });
 
-test('commit: a fact needs a key back, and time counts as one', () => {
+test('commit: time or a holder makes a fact easier to find, but neither is required', () => {
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
-  // Nothing to find it by: no participant, no time. That is a fragment of
-  // dialogue, not a memory.
   const bare = soul.commitDrafts({
     entities: [],
     facts: [{ statement: '今天很热', source: 'told', confidence: 0.6, slots: [] }],
     gaps: [],
     by: 'rules',
   });
-  assert.equal(bare.facts.length, 0);
-  assert.deepEqual(bare.skipped.map((entry) => entry.reason), ['no slots and no time']);
+  assert.equal(bare.facts.length, 1, '没有参与者也没有时间，仍然是一句可以按原文找回的话');
 
-  // A slot with no entity and no time is the case this gate exists for.
   const loose = soul.commitDrafts({
     entities: [],
     facts: [{ statement: '有些闷', source: 'told', confidence: 0.6, slots: [{ slot: '感受', value: { kind: 'text', value: '闷' } }] }],
     gaps: [],
     by: 'rules',
   });
-  assert.equal(loose.facts.length, 0);
-  assert.deepEqual(loose.skipped.map((entry) => entry.reason), ['no anchor (entity or time)']);
+  assert.equal(loose.facts.length, 1);
+  assert.equal(loose.facts[0].slots.length, 1, '文本槽位保留，只是不能按实体检索');
 
   // No participant, but a time. Frame semantics calls the missing participant
   // null-instantiated, and impersonal statements are legitimate facts, so this
@@ -346,7 +345,7 @@ test('commit: a fact in someone\'s mind carries that holder and opens no gap', (
   store.close();
 });
 
-test('commit: an undeclared holder is a typo, not a person', () => {
+test('commit: an unknown holder falls back to the world layer, not to a deleted fact', () => {
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
   const result = soul.commitDrafts({
@@ -363,7 +362,8 @@ test('commit: an undeclared holder is a typo, not a person', () => {
     gaps: [],
     by: 'rules',
   });
-  assert.equal(result.facts.length, 0);
-  assert.equal(result.skipped[0].reason, 'undeclared holder: 用户');
+  assert.equal(result.facts.length, 1);
+  assert.deepEqual(result.holderFallbacks.map((entry) => entry.holder), ['用户']);
+  assert.equal(result.facts[0].holder, 'world');
   store.close();
 });

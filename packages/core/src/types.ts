@@ -314,8 +314,15 @@ export interface CommitResult {
   entities: Entity[];
   facts: Fact[];
   gaps: Gap[];
-  /** Drafts refused by the gate, with the reason. */
+  /** Drafts refused outright: unreadable statements and exact duplicates. */
   skipped: Array<{ what: string; reason: string }>;
+  /**
+   * Slots that named something undeclared: the words are kept as text and no entity
+   * is created. Recorded so degradation is visible instead of silent.
+   */
+  droppedSlots: Array<{ fact: string; slot: string; value: string }>;
+  /** Holders that were not known: the fact stays, in the world layer. */
+  holderFallbacks: Array<{ fact: string; holder: string }>;
 }
 
 export type SlotValue =

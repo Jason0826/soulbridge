@@ -88,6 +88,7 @@ import type {
   Entity,
   EntityDraft,
   ExtractDraft,
+  SlotValue,
   ConclusionDraft,
   Fact,
   ThreadAttribution,
@@ -451,15 +452,19 @@ export class Soul {
   }
 
   /**
-   * Drafts → database, through the gate.
+   * Drafts → database.
    *
-   * Entities are resolved by (type, name) and never guessed; a fact without a
-   * statement is refused; a repeated statement with the same time expression is
-   * treated as the same fact. Everything refused is reported, not swallowed.
+   * The gate is a labeller, not a filter. A sentence that parses is kept: an
+   * undeclared entity in a slot is kept as text (no entity is created), an unknown
+   * holder falls back to the world layer, and only an unreadable statement or an
+   * exact duplicate is refused. Everything degraded or refused is reported, so the
+   * loss is visible instead of silent.
    */
   commitDrafts(draft: ExtractDraft, options: { turnId?: string; at?: number } = {}): CommitResult {
     const entities = new Map<string, Entity>();
     const skipped: CommitResult['skipped'] = [];
+    const droppedSlots: CommitResult['droppedSlots'] = [];
+    const holderFallbacks: CommitResult['holderFallbacks'] = [];
     const at = options.at ?? Date.now();
 
     // One entity per name, whatever its declared type: the same 核桃 appearing as
@@ -506,42 +511,38 @@ export class Soul {
         skipped.push({ what: 'fact', reason: 'empty statement' });
         return null;
       }
-      if (factDraft.slots.length === 0 && factDraft.at === undefined && factDraft.atText === undefined) {
-        skipped.push({ what: statement, reason: 'no slots and no time' });
-        return null;
+      // Every readable sentence is kept. The gate used to reject a fact when one of
+      // its slots named an undeclared entity (40 of 45 refusals in a live trace) or
+      // when it had no slot and no time (5 more) — one bad slot deleted the sentence.
+      //
+      // A slot names an entity only when that name was declared or is already known.
+      // Otherwise the words are kept as text: the sentence survives, the store does
+      // not fill up with "仅在电话里说" as a person, and nothing is invented.
+      const slots: Array<{ slot: string; value: SlotValue }> = [];
+      for (const slot of factDraft.slots) {
+        if (slot.value.kind !== 'entity') {
+          slots.push({ slot: slot.slot, value: slot.value });
+          continue;
+        }
+        const name = slot.value.entityName.trim();
+        if (declared.has(name) || byName.has(name)) {
+          const entity = ensureEntity(name, slot.value.entityType ?? 'person');
+          slots.push({ slot: slot.slot, value: { kind: 'entity', entityId: entity.id } });
+          continue;
+        }
+        slots.push({ slot: slot.slot, value: { kind: 'text', value: name } });
+        droppedSlots.push({ fact: statement, slot: slot.slot, value: name });
       }
-      // A fact needs a way back, not necessarily an entity. "天冷了" has no
-      // participant and is still a fact; FrameNet calls this null instantiation,
-      // and impersonal predicates ("下雨了") are the classic zero-argument case.
-      // What a memory cannot survive is having no key at all: no entity, no time.
-      const anchored = factDraft.slots.some((slot) => slot.value.kind === 'entity')
-        || factDraft.at !== undefined
-        || factDraft.atText !== undefined;
-      if (!anchored) {
-        skipped.push({ what: statement, reason: 'no anchor (entity or time)' });
-        return null;
-      }
-      // A slot may only point at an entity that was declared or already known.
-      // Without this the slot value itself becomes an entity — the store filled up
-      // with "仅在电话里说" and even a fact id as a person.
-      const stray = factDraft.slots.find(
-        (slot) => slot.value.kind === 'entity' && !declared.has(slot.value.entityName) && !byName.has(slot.value.entityName),
-      );
-      if (stray) {
-        const name = stray.value.kind === 'entity' ? stray.value.entityName : '';
-        skipped.push({ what: statement, reason: `undeclared entity: ${name}` });
-        return null;
-      }
-      // Where the fact holds (ADR 0032): `world`, or a named mind. A named holder
-      // must be a declared or known entity — otherwise it is a typo, not a person.
+      // Where the fact holds (ADR 0032): `world`, or a named mind. An unknown holder
+      // means the layer is unknown, which is not a reason to lose the sentence.
       const holderName = factDraft.holder?.trim() || 'world';
       let holder = 'world';
       if (holderName !== 'world') {
-        if (!declared.has(holderName) && !byName.has(holderName)) {
-          skipped.push({ what: statement, reason: `undeclared holder: ${holderName}` });
-          return null;
+        if (declared.has(holderName) || byName.has(holderName)) {
+          holder = ensureEntity(holderName).id;
+        } else {
+          holderFallbacks.push({ fact: statement, holder: holderName });
         }
-        holder = ensureEntity(holderName).id;
       }
 
       const duplicated = recent.some(
@@ -555,17 +556,10 @@ export class Soul {
         return null;
       }
 
-      const slots = factDraft.slots.map((s) => {
-        if (s.value.kind === 'entity') {
-          const entity = ensureEntity(s.value.entityName, s.value.entityType ?? 'person');
-          return { slot: s.slot, value: { kind: 'entity' as const, entityId: entity.id } };
-        }
-        return { slot: s.slot, value: s.value };
-      });
       // The promotion rules read this slot; they must not re-read the statement to
       // guess whether it was a lesson, because that is the semantic call the model
       // already made.
-      if (factDraft.principle) slots.push({ slot: '原则候选', value: { kind: 'text' as const, value: '是' } });
+      if (factDraft.principle) slots.push({ slot: '原则候选', value: { kind: 'text', value: '是' } });
 
       const written = this.store.putFact({
         soulId: this.soulId,
@@ -635,7 +629,7 @@ export class Soul {
       );
     }
 
-    return { entities: [...entities.values()], facts, gaps, skipped };
+    return { entities: [...entities.values()], facts, gaps, skipped, droppedSlots, holderFallbacks };
   }
 
   /** Remember a person/thing/place; calling again just refreshes "last mentioned". */
