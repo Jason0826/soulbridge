@@ -74,14 +74,23 @@ export function buildContext(
     }
   }
 
-  const candidates = store
-    .query({ soulId: request.soulId, userId: request.userId })
-    .filter(
-      (memory) =>
-        (request.types === undefined || request.types.includes(memory.type)) &&
-        (request.minImportance === undefined || memory.importance >= request.minImportance),
-    );
-  const ranked = rank(candidates, request.query ?? '', now);
+  // Anchors come from two places during the migration: concluded judgments and
+  // lessons are facts now (ADR 0032), while the legacy `memories` table is still
+  // read until its rows have been migrated and deleted. The union keeps the
+  // injection stable across that switch instead of dropping every lesson at once.
+  const ANCHOR_TYPES = new Set(['结论', '教训', '原则', '性格']);
+  type Anchor = { id: string; label: string; text: string; score: number };
+  const anchors: Anchor[] = store
+    .facts({ soulId: request.soulId, userId: request.userId, limit: 300 })
+    .filter((fact) => fact.status !== 'superseded' && ANCHOR_TYPES.has(fact.typeName ?? ''))
+    .map((fact) => ({ id: fact.id, label: fact.typeName ?? '事实', text: fact.statement, score: fact.confidence }));
+  for (const memory of store.query({ soulId: request.soulId, userId: request.userId })) {
+    if (request.types !== undefined && !request.types.includes(memory.type)) continue;
+    if (request.minImportance !== undefined && memory.importance < request.minImportance) continue;
+    anchors.push({ id: memory.id, label: memory.type, text: memory.content, score: memory.importance / 10 });
+  }
+  anchors.sort((a, b) => b.score - a.score);
+
   const maxItems = request.maxItems ?? Number.POSITIVE_INFINITY;
 
   let chars = sections.join('\n\n').length;
@@ -89,19 +98,19 @@ export function buildContext(
   const lines: string[] = [];
   const used: string[] = [];
 
-  for (const { memory } of ranked) {
+  for (const anchor of anchors) {
     if (lines.length >= maxItems) {
       dropped += 1;
       continue;
     }
-    const line = `- [${memory.type}] ${memory.content}`;
+    const line = `- [${anchor.label}] ${anchor.text}`;
     const cost = line.length + 1 + 10; // line + newline + section overhead share
     if (chars + cost > maxChars) {
       dropped += 1;
       continue;
     }
     lines.push(line);
-    used.push(memory.id);
+    used.push(anchor.id);
     chars += cost;
   }
 
