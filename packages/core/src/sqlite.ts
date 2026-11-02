@@ -1216,6 +1216,13 @@ export function openSqlite(file: string): SoulStore {
       return added;
     },
 
+    /** Retag a fact, e.g. a lesson that turned out to be a rule (ADR 0033). */
+    setFactTypeName(factId: string, typeName: string): void {
+      withRetry(() =>
+        db.prepare('UPDATE facts SET type_name = ? WHERE id = ?').run(typeName, factId),
+      );
+    },
+
     setFactConfidence(factId: string, confidence: number): void {
       withRetry(() =>
         db.prepare('UPDATE facts SET confidence = ? WHERE id = ?').run(confidence, factId),

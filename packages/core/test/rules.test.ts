@@ -6,7 +6,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fires, parseTrigger, selectRules } from '../src/rules.ts';
+import { fires, parseRuleClassifications, parseTrigger, selectRules } from '../src/rules.ts';
 import { openSqlite } from '../src/sqlite.ts';
 import { Soul } from '../src/index.ts';
 
@@ -92,4 +92,22 @@ test('rules: the store loads rules and skips ones without a usable trigger', () 
   assert.deepEqual(rules.map((item) => item.id), ['r-json']);
   assert.equal(fires(rules[0], '帮我改 package.json'), true);
   store.close();
+});
+test('classifier: a rule keeps its trigger; a bad trigger falls back to profile', () => {
+  const raw = [
+    '规则: fc_a | {"any":["json","package.json"]} | 用 edit 工具改 JSON',
+    '画像: fc_b',
+    '规则: fc_c | not-json | 这条触发条件坏了',
+  ].join('\n');
+  const classified = parseRuleClassifications(raw);
+  assert.deepEqual(
+    classified.map((item) => [item.id, item.kind]),
+    [
+      ['fc_a', 'rule'],
+      ['fc_b', 'profile'],
+      ['fc_c', 'profile'],
+    ],
+  );
+  assert.equal(classified[0].trigger, '{"any":["json","package.json"]}');
+  assert.equal(classified[0].action, '用 edit 工具改 JSON');
 });

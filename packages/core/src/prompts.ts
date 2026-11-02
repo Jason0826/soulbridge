@@ -380,3 +380,49 @@ export function renderRelationPrompt(input: RelationPromptInput): string {
     '关系: 无关',
   ].join('\n\n');
 }
+/* ------------------------------------------------------------------ *
+ * Classifying lessons: rule (triggered) or profile (about a person)
+ * ------------------------------------------------------------------ */
+
+const CLASSIFY_ROLE = `<role>
+你在整理一批"教训"。每条要么是一条**规则**（知道什么时候该做什么），要么是一条**画像**（说的是这个人是什么样）。你只做分类，不改写原文。
+</role>`;
+
+const CLASSIFY_RULES = `<rules>
+- 规则 = 能回答"什么时候该做什么"。它必须有一个具体的触发场景。
+- 画像 = 说的是这个人的偏好、原则、性格，没有触发场景。
+- 触发条件写成 JSON，最多两种条件：
+    {"any":["关键词1","关键词2"]}          消息里出现这些词时触发
+    {"regex":"\\\\.json\\\\b"}             关键词不够具体时用正则
+    {"state":"long-session"}               会话状态（例如长会话、连续空回复）
+- 关键词要具体：1–3 个词，能在真实消息里命中。不要用"代码""工作"这种大词。
+- 动作写一句话，祈使句，不要重复原文全文。
+- 只能输出 <input> 里出现过的 id，不许编。
+</rules>`;
+
+const CLASSIFY_EXAMPLE = `<example>
+<input>
+- fc_a | PowerShell 的 Set-Content 会写入 BOM，改 JSON 一律用 edit 工具
+- fc_b | 用户讨厌同一件事反复讲，换工具又要重新交代
+</input>
+<output>
+规则: fc_a | {"any":["json","package.json","配置"]} | 用 edit 工具或 BOM 安全写入，不要用字符串替换
+画像: fc_b
+</output>
+</example>`;
+
+export interface RuleClassifyPromptInput {
+  items: { id: string; statement: string }[];
+}
+
+/** Classify a batch of lessons into rules (with a trigger) or profile items. */
+export function renderRuleClassifyPrompt(input: RuleClassifyPromptInput): string {
+  const items = input.items.map((item) => `- ${item.id} | ${item.statement.slice(0, 120)}`);
+  return [
+    CLASSIFY_ROLE,
+    CLASSIFY_RULES,
+    CLASSIFY_EXAMPLE,
+    ['<input>', ...items, '</input>'].join('\n'),
+    '<output>',
+  ].join('\n\n');
+}

@@ -92,3 +92,51 @@ export function selectRules(
     .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
     .slice(0, Math.max(0, limit));
 }
+
+/* ------------------------------------------------------------------ *
+ * Classifying lessons: rule (with a trigger) or profile (about a person)
+ * ------------------------------------------------------------------ */
+
+export interface RuleClassification {
+  id: string;
+  kind: 'rule' | 'profile';
+  /** Raw trigger JSON, when this is a rule. */
+  trigger?: string;
+  /** One sentence of what to do, when this is a rule. */
+  action?: string;
+}
+
+const CLASSIFIED = /^(规则|画像)\s*[:：]\s*(.+)$/;
+
+/**
+ * Parse the classifier's answer:
+ *
+ *   规则: fc_x | {"any":["json","package.json"]} | 用 edit 工具改 JSON
+ *   画像: fc_y
+ *
+ * A rule whose trigger does not parse is downgraded to a profile item rather than
+ * becoming an always-on rule — the point of the split is that rules must be
+ * situation-specific.
+ */
+export function parseRuleClassifications(raw: string): RuleClassification[] {
+  const out: RuleClassification[] = [];
+  for (const line of String(raw ?? '').split(/\r?\n/)) {
+    const match = CLASSIFIED.exec(line.trim());
+    if (!match) continue;
+    const parts = match[2].split('|').map((part) => part.trim());
+    const id = parts[0];
+    if (!id || !/^fc_/.test(id)) continue;
+    if (match[1] === '画像') {
+      out.push({ id, kind: 'profile' });
+      continue;
+    }
+    const trigger = parts[1];
+    const action = parts[2];
+    if (!trigger || !parseTrigger(trigger)) {
+      out.push({ id, kind: 'profile' });
+      continue;
+    }
+    out.push({ id, kind: 'rule', trigger, action: action || undefined });
+  }
+  return out;
+}

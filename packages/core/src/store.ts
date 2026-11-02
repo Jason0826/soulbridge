@@ -73,6 +73,7 @@ export interface SoulStore {
   closeIdleThreads(soulId: string, userId: string, sessionId: string, idleTurns: number, idleMs: number, archivedSessionIds: string[], at: number): Array<{ id: string; reason: 'archived' | 'quiet-turns' | 'quiet-time' }>;
   /** Append slots to an existing fact, skipping ones it has. Returns how many were added. */
   addSlots(factId: string, slots: { slot: string; value: SlotValue }[]): number;
+  setFactTypeName(factId: string, typeName: string): void;
   setFactConfidence(factId: string, confidence: number): void;
   /** Count that retrieval surfaced these facts (0019: use slows decay). */
   recordRecalls(factIds: string[], at: number): void;

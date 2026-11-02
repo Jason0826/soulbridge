@@ -30,12 +30,14 @@ export {
   renderConsolidationPrompt,
   renderVerificationPrompt,
   renderRelationPrompt,
+  renderRuleClassifyPrompt,
   renderExtractionPrompt,
 } from './prompts.ts';
 export type {
   ConsolidationPromptInput,
   VerificationPromptInput,
   RelationPromptInput,
+  RuleClassifyPromptInput,
   ExtractionPromptInput,
 } from './prompts.ts';
 export {
@@ -47,8 +49,8 @@ export {
   parseRelationDraft,
 } from './consolidate.ts';
 export type { VerificationDraft, ConclusionRelation } from './consolidate.ts';
-export { fires, parseTrigger, selectRules } from './rules.ts';
-export type { Rule, RuleTrigger } from './rules.ts';
+export { fires, parseRuleClassifications, parseTrigger, selectRules } from './rules.ts';
+export type { Rule, RuleTrigger, RuleClassification } from './rules.ts';
 export { planRetrieval } from './retrieval.ts';
 export type { RetrievalPlan, RetrievalPrimitive } from './retrieval.ts';
 export * from './affect/index.ts';
@@ -678,6 +680,26 @@ export class Soul {
       });
     }
     return out;
+  }
+
+  /**
+   * Apply a rule classification (ADR 0033): retag as 规则 and store its trigger.
+   *
+   * The trigger is what makes the rule injectable later; a rule without one would
+   * have to be always-on, which is exactly what this split exists to avoid.
+   */
+  markRule(factId: string, classification: { trigger: string; action?: string }): void {
+    this.store.setFactTypeName(factId, '规则');
+    const slots: { slot: string; value: { kind: 'text'; value: string } }[] = [
+      { slot: '触发', value: { kind: 'text', value: classification.trigger } },
+    ];
+    if (classification.action) slots.push({ slot: '动作', value: { kind: 'text', value: classification.action } });
+    this.store.addSlots(factId, slots);
+  }
+
+  /** Apply a profile classification: it is about the person, not a triggered rule. */
+  markProfile(factId: string): void {
+    this.store.setFactTypeName(factId, '画像');
   }
 
   /** Which primitive this question needs (0020).
