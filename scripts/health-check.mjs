@@ -142,18 +142,19 @@ if (!existsSync(roadmapPath)) {
   }
 }
 
-// 版本表：handoff 里写的版本应该和 package.json 一致
+// 版本表：state.md 里写的版本应该和 package.json 一致。
+// handoff.md 已删除：两份"现状态"文档必然互相过期，只留 state.md 一份。
 const pkgPath = join(ROOT, 'package.json');
-const handoffPath = join(ROOT, 'docs/handoff.md');
+const handoffPath = join(ROOT, 'docs/state.md');
 if (!existsSync(pkgPath) || !existsSync(handoffPath)) {
-  add('WARN', '文档', '缺少 package.json 或 docs/handoff.md —— 跳过版本一致性检查');
+  add('WARN', '文档', '缺少 package.json 或 docs/state.md —— 跳过版本一致性检查');
 } else {
   const coreVersion = JSON.parse(readFileSync(pkgPath, 'utf8')).version;
-  const handoffCore = /core \| ([0-9.]+)/.exec(readFileSync(handoffPath, 'utf8'))?.[1];
+  const handoffCore = /core ([0-9.]+)/.exec(readFileSync(handoffPath, 'utf8'))?.[1];
   if (!handoffCore) {
-    add('WARN', '文档', 'handoff 里找不到 `core | x.y.z` 版本表 —— 跳过');
+    add('WARN', '文档', 'state.md 里找不到 `core x.y.z` —— 跳过');
   } else if (handoffCore !== coreVersion) {
-    add('FAIL', '文档', `handoff 写 core ${handoffCore}，package.json 是 ${coreVersion}`);
+    add('FAIL', '文档', `state.md 写 core ${handoffCore}，package.json 是 ${coreVersion}`);
   } else {
     add('PASS', '文档', `版本表与 package.json 一致（core ${coreVersion}）`);
   }

@@ -110,8 +110,43 @@ node scripts/review.mjs              # 全系统：表/队列/提示词/文件�
 node scripts/quality.mjs --days 7    # 四个比率
 node scripts/rule-stats.mjs          # 规则总数与触发覆盖
 node scripts/profile-coverage.mjs    # 画像维度覆盖与可追溯
+node scripts/health-check.mjs        # 结构体检（含本文版本表是否与 package.json 一致）
 node scripts/verify-installed.mjs    # 装上去的产物是不是这份代码
 ```
+
+## 八之二、环境与工具
+
+| 东西 | 在哪 |
+|---|---|
+| 重启 DSH | `dsh-plugin-soulbridge/scripts/restart-dsh.ps1`（必须由计划任务 `DshRestartOnce` 拉起，120s 延迟） |
+| 重启日志 | `~/.soulbridge/restart.log` |
+| 插件日志 / 轨迹 | `~/.soulbridge/plugin.log`、`trace.jsonl` |
+| 真实数据 | `~/.soulbridge/soul.db` |
+| 线索验收 | `scripts/abba-check.mjs --topic <词>` |
+| 队列文件 | `pending-extract / pending-classify / pending-profile / pending-threads.json` |
+
+## 八之三、踩过的坑（每一条都真踩过）
+
+| 坑 | 结论 |
+|---|---|
+| 用时间猜轮次边界 | 轮的边界是 `turn/end` 事件，不是静默 |
+| 宿主 `turn_no` 当轮次计数 | 它每次用户发言跳 10–30，**要数 turns 行** |
+| 用实体名兜底 | 不认识的名字仍然是主体，不能落到"上次聊到哪" |
+| 用 `type_name` 分类 | 16 种标签碎片化；结构（holder + 时间）才是分类 |
+| 中文全文检索 | FTS5 的 trigram 搜不到 2 字词；用二元分词 |
+| PowerShell 改代码 | 模板字符串会被吃掉、`\n` 变字面量；**用 edit 工具** |
+| 改完就重启 | profile 装的是**副本**，必须先 `verify-installed.mjs` |
+| 把测试跑通当 review | 局部验收 ≠ 整体一致，见审计第七节 |
+
+## 八之四、约定（必须遵守）
+
+1. 改动前解释：为什么、怎么做、影响
+2. 需求说明 → 文献 → 边界 → 声明 → 验收
+3. 改动前后各跑一次 `review.mjs`，输出要贴进交付物
+4. 发版前 `npm test` fail 0，且 `verify-installed.mjs` 通过
+5. 失败排查先保存原始输出，不猜
+6. 报数据，不报感觉
+
 
 ## 九、我说错过的判断（供你校准）
 

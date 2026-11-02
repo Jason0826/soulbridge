@@ -24,7 +24,8 @@
 | DSH 运行时已验证的事实 | [dsh-runtime.md](dsh-runtime.md) |
 | 为什么模型环节要这么验收 | [eval-boundary-0027.md](eval-boundary-0027.md) |
 | [protocol.md](protocol.md) | 占位文件，只为不让旧链接 404；协议内容在 [spec/protocol.v0.md](spec/protocol.v0.md) |
-| 新会话从哪开始 | [handoff.md](handoff.md) |
+| 新会话从哪开始 | [state.md](state.md)（唯一现状态文档） |
+| 全系统审计与 review 方法 | [audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md) |
 
 ## 两个"锚"的分工
 
@@ -45,7 +46,7 @@
 
 | 主题 | 权威文档 |
 |---|---|
-| 现状态、版本、已知的坑 | [handoff.md](handoff.md) · [state.md](state.md) |
+| 现状态、版本、已知的坑 | [state.md](state.md) |
 | 代码与模型的边界 | [adr/0027](adr/0027-code-vs-model-boundary.md) · [adr/0029](adr/0029-extraction-is-the-models-job.md) · [adr/0030](adr/0030-core-adapter-boundary.md) |
 | 模型环节怎么验收 | [adr/0031](adr/0031-model-dependency-acceptance.md) |
 | **记忆分两层、时间与精度** | [adr/0032](adr/0032-two-layers-of-memory.md) |
