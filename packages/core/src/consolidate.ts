@@ -223,13 +223,39 @@ export interface ProfileLine {
 }
 
 const PROFILE_LINE = /^画像\s*[:：]\s*(.+)$/;
+/** Hedged lines describe a mood, not a person; the merge has not happened yet. */
+const PROFILE_HEDGE = /有时候|有时|通常|大部分时候|一般来说|一般说/;
+/** Over-generalisation: no single set of observations supports an "always". */
+const PROFILE_ABSOLUTE = /一切|所有|总是|从不/;
+/** A fragment has no subject; completing it would be invention. */
+const PROFILE_FRAGMENT = /^(每次|因为|然后|所以|但是|而且|并且)/;
+
+function profileBigrams(text: string): Set<string> {
+  const clean = text.replace(/[\s，。、；：！？,.;:!?"'（）()]/g, '');
+  const out = new Set<string>();
+  for (let i = 0; i < clean.length - 1; i += 1) out.add(clean.slice(i, i + 2));
+  return out;
+}
+
+function profileSimilarity(a: string, b: string): number {
+  const left = profileBigrams(a);
+  const right = profileBigrams(b);
+  if (left.size === 0 || right.size === 0) return 0;
+  let shared = 0;
+  for (const gram of left) if (right.has(gram)) shared += 1;
+  return shared / (left.size + right.size - shared);
+}
 
 /**
  * Parse the merged profile.
  *
- * Every line must cite sources that were actually offered: a profile statement with
- * no evidence is an assumption, and the whole point of merge-with-sources is that a
- * reader can walk back to what it came from.
+ * Three things are rejected by code rather than hoped for: a line with no source is
+ * an assumption, a hedged or absolute line is a failed merge, and a fragment is not
+ * a judgment. Near-duplicates are folded, because "the same thing said twice" is the
+ * exact failure the merge exists to fix.
+ *
+ * What code cannot check is direction ("先" becoming "后"). That needs the separate
+ * verification pass, and it is why this parser is not the last gate.
  */
 export function parseProfileMerge(raw: string, allowed: Set<string>): ProfileLine[] {
   const out: ProfileLine[] = [];
@@ -238,13 +264,17 @@ export function parseProfileMerge(raw: string, allowed: Set<string>): ProfileLin
     if (!match) continue;
     const [statementPart, ...fields] = match[1].split('|').map((part) => part.trim());
     const statement = (statementPart ?? '').trim();
-    if (statement.length < 4 || statement.length > 60) continue;
+    if (statement.length < 6 || statement.length > 40) continue;
+    if (PROFILE_HEDGE.test(statement) || PROFILE_ABSOLUTE.test(statement)) continue;
+    if (PROFILE_FRAGMENT.test(statement)) continue;
     const sourceField = fields.find((field) => field.startsWith('来源'));
     const sources = (sourceField?.replace(/^来源\s*[=＝]\s*/, '') ?? '')
       .split(/[,，、;；\s]+/)
       .map((id) => id.trim())
       .filter((id) => allowed.has(id));
     if (sources.length === 0) continue;
+    const duplicate = out.some((kept) => profileSimilarity(kept.statement, statement) >= 0.7);
+    if (duplicate) continue;
     out.push({ statement, sources });
   }
   return out;

@@ -311,3 +311,32 @@ test('profile: merging supersedes the sources and keeps the trail', () => {
   assert.equal(store.fact('f1')?.supersededBy, written[0].id, 'source points at the merge');
   store.close();
 });
+test('profile gates: the three bad lines from the live merge are rejected', () => {
+  // These are the actual outputs of the first live merge; each is a different failure.
+  const allowed = new Set(['fc_a', 'fc_b', 'fc_c', 'fc_d']);
+  const lines = parseProfileMerge(
+    [
+      '画像: 每次因为换工具，换模型而要重复去讲 | 来源=fc_a', // fragment
+      '画像: 有时候希望先讨论 | 来源=fc_b', // hedged
+      '画像: 一切事情都要先验证 | 来源=fc_c', // absolute
+      '画像: 先验证再动手，不靠推测 | 来源=fc_d', // good
+    ].join('\n'),
+    allowed,
+  );
+  assert.deepEqual(lines.map((line) => line.statement), ['先验证再动手，不靠推测']);
+});
+
+test('profile gates: the same sentence twice is folded, a paraphrase is left to the model', () => {
+  // Code folds what overlaps at the character level. "一轮对话要当成整体" vs
+  // "一轮对话要当成一个整体" only reaches 0.64, so paraphrase-level dedupe stays the
+  // prompt's job — pretending the rule can do it would be the same hope as before.
+  const allowed = new Set(['fc_a', 'fc_b']);
+  const lines = parseProfileMerge(
+    [
+      '画像: 用户要机制不靠自觉 | 来源=fc_a',
+      '画像: 用户要机制，不靠自觉 | 来源=fc_b',
+    ].join('\n'),
+    allowed,
+  );
+  assert.equal(lines.length, 1);
+});

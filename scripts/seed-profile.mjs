@@ -15,6 +15,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 const HOME = process.env.SOULBRIDGE_HOME ?? join(homedir(), '.soulbridge');
 const apply = process.argv.includes('--apply');
+const includeSuperseded = process.argv.includes('--include-superseded');
 if (!apply && !process.argv.includes('--dry-run')) {
   console.error('pass --dry-run or --apply');
   process.exit(2);
