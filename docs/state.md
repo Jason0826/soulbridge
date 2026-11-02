@@ -96,7 +96,7 @@
 
 | 文档 | 状态 |
 |---|---|
-| `state.md`（本文） | ✅ 已更新到 22:05；`review.mjs` 会比对它与代码最后提交，落后就 WARN |
+| `state.md`（本文） | ✅ 已更新到 22:05；`health-check.mjs` 4.7 会比对它与代码最后提交，落后就 WARN |
 | `audit/2026-11-02-whole-system.md` | ✅ 8 次改动各自缺的 review、5 条结构缺口、收敛顺序 |
 | `roadmap.md` | ✅ 已按本文缺口重写（R1–R5），旧编号 N0–N3 作废 |
 | `mvp.md` | ✅ 状态列已改；判据未动 |
@@ -107,7 +107,7 @@
 ```powershell
 cd D:\git-workspace\repos\soulbridge
 
-node scripts/review.mjs              # 全系统：表/队列/提示词/文件大小/词汇
+node scripts/health-check.mjs        # 全系统：规模/测试/声明/文档/结构漂移（唯一入口）
 node scripts/quality.mjs --days 7    # 四个比率
 node scripts/rule-stats.mjs          # 规则总数与触发覆盖
 node scripts/profile-coverage.mjs    # 画像维度覆盖与可追溯
@@ -143,7 +143,7 @@ node scripts/verify-installed.mjs    # 装上去的产物是不是这份代码
 
 1. 改动前解释：为什么、怎么做、影响
 2. 需求说明 → 文献 → 边界 → 声明 → 验收
-3. 改动前后各跑一次 `review.mjs`，输出要贴进交付物
+3. 改动前后各跑一次 `health-check.mjs`，输出要贴进交付物
 4. 发版前 `npm test` fail 0，且 `verify-installed.mjs` 通过
 5. 失败排查先保存原始输出，不猜
 6. 报数据，不报感觉
