@@ -65,19 +65,20 @@ test('threads: quiet is counted in turns, not in turn-number distance', () => {
   const fresh = store.openThread({ ...S, sessionId: 'sess', topic: '刚聊的', openedAt: 2000, turnNo: 20 });
 
   // Two turns happened after the old thread's last turn; the fresh one is one behind.
-  const closed = store.closeIdleThreads(S.soulId, S.userId, 'sess', 2, 5000);
+  const closed = store.closeIdleThreads(S.soulId, S.userId, 'sess', 2, 30 * 60_000, 5000);
   assert.deepEqual(closed, [oldThread.id]);
   assert.equal(store.thread(fresh.id)?.status, 'open');
 
   // Idempotent.
-  assert.deepEqual(store.closeIdleThreads(S.soulId, S.userId, 'sess', 2, 6000), []);
+  assert.deepEqual(store.closeIdleThreads(S.soulId, S.userId, 'sess', 2, 30 * 60_000, 6000), []);
   store.close();
 });
 
 test('threads: a topic from another session closes, because that session ended', () => {
   const store = openSqlite(':memory:');
   const other = store.openThread({ ...S, sessionId: 'old-session', topic: '上个会话的', openedAt: 1000, turnNo: 5 });
-  assert.deepEqual(store.closeIdleThreads(S.soulId, S.userId, 'new-session', 6, 9000), [other.id]);
+  // The other session's last turn was long ago, so it counts as finished.
+  assert.deepEqual(store.closeIdleThreads(S.soulId, S.userId, 'new-session', 6, 30 * 60_000, 9_000_000), [other.id]);
   assert.equal(store.thread(other.id)?.status, 'closed');
   store.close();
 });
@@ -129,5 +130,17 @@ test('lastClosedThread: the newest finished topic, with its conclusion and last 
   assert.equal(last?.thread.id, thread.id);
   assert.equal(last?.conclusion?.statement, '用户要求先有机制');
   assert.deepEqual(last?.turns.map((turn) => turn.userText), ['第一轮', '第二轮']);
+  store.close();
+});
+test('threads: a live parallel session keeps its topics open', () => {
+  const store = openSqlite(':memory:');
+  // A second window is open and active: it must not be closed just because the
+  // conversation moved to another session.
+  store.putTurn({ ...S, id: 'o1', sessionId: 'other', turnNo: 1, startedAt: 9_000_000, userText: '那边的对话', steps: [] });
+  const live = store.openThread({ ...S, sessionId: 'other', topic: '还在另一个窗口聊', openedAt: 8_000_000, turnNo: 1 });
+
+  const closed = store.closeIdleThreads(S.soulId, S.userId, 'current', 6, 30 * 60_000, 9_100_000);
+  assert.deepEqual(closed, []);
+  assert.equal(store.thread(live.id)?.status, 'open');
   store.close();
 });

@@ -567,8 +567,8 @@ export class Soul {
    * Deterministic: `idleTurns` is a number of turns, not a guess about meaning.
    * Returns the closed ids so the caller can run consolidation on them.
    */
-  closeIdleThreads(sessionId: string, idleTurns = 6, at = Date.now()): string[] {
-    return this.store.closeIdleThreads(this.soulId, this.userId, sessionId, idleTurns, at);
+  closeIdleThreads(sessionId: string, idleTurns = 6, idleMs = 30 * 60_000, at = Date.now()): string[] {
+    return this.store.closeIdleThreads(this.soulId, this.userId, sessionId, idleTurns, idleMs, at);
   }
 
   /** The thread the previous turn belonged to, for the attribution candidate list. */
