@@ -63,6 +63,7 @@ export type { Rule, RuleTrigger, RuleClassification } from './rules.ts';
 export { planRetrieval } from './retrieval.ts';
 export type { RetrievalPlan, RetrievalPrimitive } from './retrieval.ts';
 export * from './affect/index.ts';
+export { escapeBlockText, escapeAttr } from './inject-text.ts';
 export { measureStyle } from './style/measure.ts';
 export type { StyleMetrics } from './style/measure.ts';
 export * from './storage/config.ts';

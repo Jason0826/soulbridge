@@ -6,11 +6,14 @@
  *  - every injected memory id is reported in `used`, so injection is auditable
  *  - the affect section is opt-in by confidence, capped in size, and only ever
  *    contains whitelisted sentences (ADR 0014)
+ *  - every dynamic value is escaped before it joins a block: a statement containing
+ *    `</memories>` otherwise ends the envelope and can forge a `<rules>` block
  */
 import type { ContextRequest, ContextResult, Emotion } from './types.ts';
 import type { SoulStore } from './store.ts';
 import { FACT_STATUS } from './config/status.ts';
 import { ANCHOR_TYPES } from './config/labels.ts';
+import { escapeAttr, escapeBlockText } from './inject-text.ts';
 import { selectDirectives } from './affect/directives.ts';
 
 export const DEFAULT_MAX_CHARS = 1200;
@@ -50,12 +53,14 @@ export function buildContext(
 
   if (request.includeSoul !== false) {
     const since = identity ? timeTogether(identity.createdAt, now) : '你刚开始认识这个用户';
-    sections.push(`<soul name="${name}">\n你是${name}，一个持续成长的伙伴。${since}。\n</soul>`);
+    // The name comes from configuration, but every attribute goes through one rule.
+    const safeName = escapeAttr(name);
+    sections.push(`<soul name="${safeName}">\n你是${safeName}，一个持续成长的伙伴。${since}。\n</soul>`);
   }
 
   const styles = request.includeStyle === false ? [] : styleDirectives(emotion);
   if (styles.length > 0) {
-    sections.push(`<style>\n${styles.map((s) => `- ${s}`).join('\n')}\n</style>`);
+    sections.push(`<style>\n${escapeBlockText(styles.map((s) => `- ${s}`).join('\n'))}\n</style>`);
   }
 
   // Affect: newest sample only, and only when it is confident and recent enough.
@@ -66,8 +71,8 @@ export function buildContext(
     const directives = selectDirectives(latest);
     if (directives.length > 0) {
       const section =
-        `<affect confidence="${latest.confidence.toFixed(2)}" analyzer="${latest.analyzer}">\n` +
-        `${directives.map((d) => `- ${d.text}`).join('\n')}\n</affect>`;
+        `<affect confidence="${latest.confidence.toFixed(2)}" analyzer="${escapeAttr(latest.analyzer)}">\n` +
+        `${escapeBlockText(directives.map((d) => `- ${d.text}`).join('\n'))}\n</affect>`;
       const usedSoFar = sections.join('\n\n').length;
       if (section.length <= AFFECT_BUDGET && usedSoFar + section.length + 2 <= maxChars) {
         sections.push(section);
@@ -106,7 +111,9 @@ export function buildContext(
       dropped += 1;
       continue;
     }
-    const line = `- [${anchor.label}] ${anchor.text}`;
+    // Escaping can lengthen a line (one `&lt;` is four characters), so cost is charged
+    // on the escaped text — the budget has to measure what actually gets injected.
+    const line = `- [${escapeBlockText(anchor.label)}] ${escapeBlockText(anchor.text)}`;
     const cost = line.length + 1 + 10; // line + newline + section overhead share
     if (chars + cost > maxChars) {
       dropped += 1;
