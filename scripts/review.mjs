@@ -52,13 +52,16 @@ for (const table of tables) {
   else ok(`${table}: 写 ${writes} / 读 ${reads}`);
 }
 
-/* 2. Duplicated plumbing: each queue re-implements the same five functions. */
+/* 2. Duplicated plumbing: each queue re-implements the same file handling. */
 console.log('\nqueues (plugin)');
 try {
   const plugin = readFileSync(join(PLUGIN, 'index.js'), 'utf8');
-  const queues = [...plugin.matchAll(/function read(\w+)Queue\(/g)].map((m) => m[1]);
-  ok(`队列实现 ${queues.length} 套: ${queues.join(', ')}`);
-  if (queues.length > 1) note(`${queues.length} 套队列代码形状相同，应合并为 1 套`);
+  const queues = [...plugin.matchAll(/const read(\w+)Queue = \(\) => readQueueFile/g)].map((m) => m[1]);
+  const sharedIO = /function readQueueFile\(/.test(plugin) && /function writeQueueFile\(/.test(plugin);
+  ok(`队列 ${queues.length} 套: ${queues.join(', ')}`);
+  if (!sharedIO) note('队列的文件读写各写各的，应共用一套 IO');
+  else if (queues.length < 2) note('队列 IO 已共用，但套数对不上（检查是否漏了某条队列）');
+  else ok(`共用 1 套 IO，${queues.length} 套各自保留语义（cap/keep/key）`);
   const lines = plugin.split('\n').length;
   if (lines > 1200) note(`插件单文件 ${lines} 行（>1200 行时职责已不可读）`);
   else ok(`插件单文件 ${lines} 行`);
