@@ -2,7 +2,7 @@
 
 - 状态：Accepted
 - 日期：2026-11-01
-- 关联：[ADR 0001](../adr/0001-soul-layer-only.md)（只做 soul 层）、[ADR 0019](0019-repo-conventions.md)、[ADR 0027](0027-code-vs-model-boundary.md)、[ADR 0029](0029-extraction-is-the-models-job.md)
+- 关联：[ADR 0001](0001-positioning.md)（只做 soul 层）、[ADR 0019](0019-steering-files.md)（仓库约定归仓库）、[ADR 0027](0027-code-vs-model-boundary.md)、[ADR 0029](0029-extraction-is-the-models-job.md)
 
 ## 背景
 

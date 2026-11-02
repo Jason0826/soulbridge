@@ -1,6 +1,10 @@
+> **⚠ 已废弃（2026-11-02）** —— 本文的设计已被 **ADR 0032 两层记忆** 取代。
+> 事件不再需要 kind 枚举，靠 holder + 时间定位。
+> 保留仅作历史记录，**不要按本文实现**。当前权威文档见 [docs/README.md](../README.md)。
+
 # 需求说明：事件模型（用公开标注体系验证）
 
-- 状态：Draft
+- 状态：**Superseded（2026-11-02，→ ADR 0032 两层记忆）**
 - 日期：2026-11-01
 - 关联：[0011 会话层](0011-conversation-layer.md)、[0012 人物层](0012-people-layer.md)、[0009 §4.6](0009-schema-redesign.md)
 - 验证数据：DuEE 1.0 事件 schema（65 类事件 / 121 角色），来源 `data/DuEE1.0/duee_event_schema.json`

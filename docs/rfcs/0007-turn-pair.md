@@ -1,6 +1,10 @@
+> **⚠ 已废弃（2026-11-02）** —— 本文的设计已被 **0014 轮与步骤** 取代。
+> turn_pair 只作为历史表保留，新写入走 turns + steps。
+> 保留仅作历史记录，**不要按本文实现**。当前权威文档见 [docs/README.md](../README.md)。
+
 # RFC 0007：turn_pair —— 以交流为单位的记忆
 
-- 状态：Proposed
+- 状态：**Superseded（2026-11-02，→ 0014 轮与步骤）**
 - 日期：2026-10-31
 - 需求说明：[briefs/0010-memory-unit.md](../briefs/0010-memory-unit.md)
 - 阶段：[S2](../stages/s2-memory-unit.md)（MVP1）

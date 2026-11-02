@@ -1,191 +1,85 @@
 # 交接（Handoff）
 
 > 新会话从这里开始读。读完这份 + 注入的记忆，再决定要不要动代码。
+> 本文只写"现在是什么状态"；设计与理由在 [adr/](adr/) 和 [briefs/](briefs/)。
 
 ## 一句话
 
 `soulbridge` 是给 agent 装的人格层（四个动词：context / observe / recall / reflect），
 零运行时依赖，DSH 是第一个宿主。
 
-## 现在在做什么
+## 现在的能力（2026-11-02）
 
-**S1 已提前收口（2026-10-31）** —— 触发「观察设计未产生可用数据」。
+```
+对话 → turns + steps（含 reasoning，只存不注入）
+     → 抽取：模型填表 + 闸门 → entities / facts / gaps
+     → 线索：一轮属于一条线索（A B A 可跨中断续上），闭合后归纳
+     → 结论：两阶段（起草 + 独立验证），≥2 证据，可被取代
+     → 检索：主体优先路由（实体 / 连续性 / 时间 / 相关），按层取
+     → 注入：消息通道（不进系统提示词），实体时间线按问题排序
+     → 复习：被召回一次记一次，衰减变慢
+```
 
-- 四条判据里两条**无法判定**：判据 2 抽不了（日志不记注入内容）、判据 1 的时间尺度与实际使用模式不匹配
-- 判据 3 的数据源精度 **11%**（28 条"纠正"里 25 条是否定词误判）
-- 工程底线（注入不回写 / 蒸馏失败 4.0% / 无重复注入）**全绿**
-- 结论：S1 没证明记忆有用，也没证明没用——**它证明了现在的观察方法测不出来**
-- 完整收尾记录：[stages/s1-dsh-memory.md](stages/s1-dsh-memory.md)
+## 版本与安装
 
-**下一步（按优先级）：先修观察手段 → 再定「一条记忆是什么」（[briefs/0010](briefs/0010-memory-unit.md)）→ 最后谈功能。**
-
-## 版本
-
-| 组件 | 版本 | 状态 |
+| 组件 | 版本 | 说明 |
 |---|---|---|
-| core | 0.0.25 | `turn_pairs` 存储（schema v4）；已 overlay 进 profile |
-| dsh-plugin | 0.0.37 | 配对写入 `turn_pairs`（`turn/end` 为主，2s 静默兜底）；已 overlay 进 profile |
+| core | **0.0.61** | schema **v8**（facts 带 recall_count / last_recalled_at） |
+| dsh-plugin | **0.0.74** | 路由 + 实体时间线 + 去重注入 + 归纳三步 |
 
-> `turn_pairs` 已在写（真机 2 行起），但 **pre-step 还在读 `memories`**——召回切换是下一步，也是唯一的行为切换点。
+profile：`~/.dsh/profiles/desktop`（`node_modules/soulbridge`、`node_modules/dsh-plugin-soulbridge`）。
 
-> 2026-10-31 overlay 前的旧版本备份在 `profiles/desktop/soulbridge-overlay-bak-20261031-150143`。
+**安装规则：装完必须验证能 import，不能只信版本号。**
+`node --experimental-strip-types scripts/verify-installed.mjs`
 
-## 机制速览（都在跑）
+## 今天定下的三件事（会影响你怎么改代码）
 
-| 机制 | 位置 | 说明 |
-|---|---|---|
-| 自动观察 | 插件 `session/event` | 每条用户消息 → `observe`：规则优先，漏了才问模型 |
-| 注入 | 两层 | `systemPrompt.section` 放锚点（importance ≥8，≤3 条）；`agent/pre-step` **只注入 `<memories>`，无匹配则不注入**（0.0.34），日志带 `ids` |
-| 工具 | `soul_recall` / `soul_remember` | **只有新建会话才看得到**（工具集在会话创建时固定） |
-| 写入闸门 | core | shape → semantic → budget，`committed` 表示真的落库 |
-| 纠正证据 | core + 插件 | `detectCorrection`（L1 规则 + L2 结构）；真机已有 **29 行**，但 `structural:negation` 精度约 **11%**（25/28 是否定词误判）→ 判据 3 只数 `rule:` 层 |
-| 时效 | core | `validUntil` 过期不注入；`supersede` 是**手动 API**，没有业务调用者 |
+1. **ADR 0031**：每个模型环节必须有四件套——闸门 / 地板 / 度量 / 可逆。缺一件不许进主干。
+2. **ADR 0032**：记忆分两层。`holder=world` 是世界层（必须可定位），`holder=<实体>` 是人物层（某人的看法）。`type_name` 只是描述，**代码不许靠它路由**。
+3. **0019/0020**：全部保留、不删除；衰减的是"被想起的概率"（幂律 + 复习）；检索是漏斗（定向 → 收钩子 → 按需下潜），上下文有预算。
 
-## 已知问题（记在 backlog，未修）
+## 已知的坑（都踩过）
 
-- **affect 基本失灵**：`同事被裁员，内心空了一块` → `none`；`我不喜欢缩写` → `joy`（B4）。词表 75 词，真实句 7 个里 6 个零命中
-- **不记日常**：只看长期事实/偏好，当前兴趣和近期事件不记（B1）
-- 测试句和真实使用不可区分，靠 `测试：` 前缀约定
-- **情绪状态已饱和**：`bond=2.0`（上限）、`tension=0.03`、其余四维从未变化 → "像朋友聊天"成了常量。设计见 [briefs/0006](briefs/0006-emotion-dynamics.md)
-- **没有"证据等级"**：不知道一条记忆是用户原话、规则抽的，还是模型归纳的（[briefs/0007](briefs/0007-retrieval-scoring.md)）
-- **schema 有死字段**：`visibility` 恒为 private、`vividness` 永不变化、`valid_until`/`superseded_by` 全 NULL。重设计见 [briefs/0009](briefs/0009-schema-redesign.md)
-
-## 已排查：空回复 / 推理重复字（2026-10-31，结论已修正）
-
-**现象**：某会话到 137 轮后，轨迹里出现大量重复字，最终文本为空；换新会话即恢复。
-
-**已排除**（都有实测）：
-
-| 假设 | 否定证据 |
+| 坑 | 结论 |
 |---|---|
-| API 共用 / 限流 | 同账号同 provider 同模型，换会话不改变配额与路由 |
-| 上下文太长 | `cacheRead` 增量 + `inputTokens` ≈ 1.5–7.4K token，离上限很远 |
-| 记忆注入干扰 | `injectEnabled:false` 关掉注入后，同样的长输入**仍然空回复** |
-| 内容触发（长引用） | 后续**短句也空**，说明与输入内容无关 |
-| 我们的记忆被污染 | `turn_pairs` 共 35 条，assistant 为空的 **0 条** |
+| 用时间猜轮次边界 | 轮的边界是 `turn/end` 事件，不是静默 |
+| 宿主 turn_no 当轮次计数 | 它每次用户发言跳 10–30，**要数 turns 行** |
+| 用实体名兜底 | 不认识的名字仍然是主体，不能落到"上次聊到哪" |
+| 用 `type_name` 分类 | 16 种标签碎片化；结构（holder + 时间）才是分类 |
+| 中文全文检索 | FTS5 的 trigram 搜不到 2 字词；用二元分词 |
+| PowerShell 改代码 | 模板字符串会被吃掉、`\n` 变字面量；**用 edit 工具** |
 
-**观察到的模式（未定论）**
-
-该会话 137 条记录里 12 条空回复，先零星、后密集：
-
-```
-turn 108, 112, 125     零星
-turn 127–137           几乎全空（9/11）
-```
-
-**但这不是"新会话就好"** —— 会话创建时间对比如下，正常那个反而**更老**：
-
-| 会话 | 创建 | 轮数 | 状态 |
-|---|---|---|---|
-| 9f56 | 10-26 | 187 | 正常 |
-| 079d | 10-30 | 137 | 空回复 |
-
-也不是确定性的：turn 108 和 109 是**同一句话**，108 空、109 正常回答。
-
-所以"历史自我强化"只是**可能**的放大机制，不是起点。
-
-**怎么判定**：`~/.soulbridge/trace.jsonl` 的 `{"event":"message"}` 里的 `replyChars`。
-
-> ⚠️ `replyChars=0` 也可能只是**工具调用步骤**（没有正文）。必须同时看那一步有没有 `tool/call`。
-
-**暂时处理**：连续两轮空回复就换一个会话，不纠结原因。
-**未解**：起点。要往下查需要在宿主侧记录每次请求的组成（消息条数、块类型），我们没有这个数据。
-
-## 设计债（2026-10-31 更新）
-
-**设计仍然跑在实现前面**：`briefs/0005`–`0010` 除 0008 外全是 Draft，没有一行实现。
-这不是问题，但要记着——**声明多于能力时，最容易高估自己**。
-
-| 设计 | 状态 | 前置条件 |
-|---|---|---|
-| 0005 评估 harness | Draft | 需要消费者；S1 收尾后 |
-| 0006 情绪动力学 | Draft | 先修状态饱和（bug 级） |
-| 0007 检索骨架 | Draft | 需要 `evidence` 写入路径 |
-| 0008 纠正检测 | **已实现**（core + 插件 0.0.33 起） | 精度待修：`structural` 仅约 11% |
-| 0009 schema 重设计 | Draft | 先定 `valid_until` 写入路径 |
-| 0010 记忆单元 | Draft | 先定 `turn_pair` 落地 + 归纳 |
-
-## 环境与工具（新会话先看这一节）
+## 环境与工具
 
 | 东西 | 在哪 |
 |---|---|
-| **DSH profile（真机跑的那份）** | `D:\DSH\home\profiles\desktop`（`~/.dsh/profiles/desktop` 指向同一份存储）|
-| 装进 profile 的包 | 上面 `node_modules/soulbridge`、`node_modules/dsh-plugin-soulbridge` |
-| **重启 DSH** | `dsh-plugin-soulbridge/scripts/restart-dsh.ps1` |
-| 重启日志 | `~/.soulbridge/restart.log`；取消用哨兵文件 `~/.soulbridge/restart.cancel` |
-| 回滚插件 | `dsh-plugin-soulbridge/scripts/rollback.ps1`；profile 清单工具 `profile-manifest.ps1` |
+| 重启 DSH | `dsh-plugin-soulbridge/scripts/restart-dsh.ps1`（必须由计划任务拉起，120s 延迟） |
+| 重启日志 | `~/.soulbridge/restart.log` |
 | 结构体检 | `soulbridge/scripts/health-check.mjs` |
-| 字段审计 | `soulbridge/scripts/field-audit.mjs` |
-| **观察报告** | `soulbridge/scripts/observation-report.mjs`（只读，算 S1 四条判据的数据）|
-| 真实数据 | `~/.soulbridge/soul.db`、`plugin.log`、`restart.log` |
+| 质量比率 | `soulbridge/scripts/quality.mjs --days 7`（四个比率，ADR 0031） |
+| 线索验收 | `soulbridge/scripts/abba-check.mjs --topic <词>` |
+| 真实数据 | `~/.soulbridge/soul.db`、`plugin.log`、`trace.jsonl` |
 
-**重启脚本的关键约束**：
+## 当前数字（2026-11-02）
 
-- 它**必须由计划任务拉起**，不能直接从 app 里跑——桌面端把子进程放进 job object，脚本会跟 app 一起被杀
-- 默认 `DelaySeconds=180`（等 3 分钟再杀进程），`-SoulbridgeHome` 可把它指向临时库做实验
-- 连续启动失败会走 fallback：从 profile 里摘掉 soulbridge bundle，保证 app 还能起来
-- `schtasks` 在 agent 沙箱里跑不了（会报 "The system cannot find the path specified"），所以**重启这一步要人来触发**
+```
+事实密度 0.3 条/轮 · 抽取走模型 94.9% · 结论支持率 100%(5/5) · 情绪非零率 2.1%(FAIL)
+线索 23 条 · 归属覆盖率 42% · 无实体锚点 0%
+```
+
+**唯一的红是情绪**（词典 2 字命中率低），还没重做。
+
+## 下一步（按优先级）
+
+1. **抽取按 ADR 0032 改**：世界层要时间，人物层要 holder；用同一批 26 句验收
+2. 时间归一（"上周三" → 日期），否则"上周下雨那天"仍答不出
+3. 情绪重做（模型判定，不再靠词典）
+4. 结论去重的簇合并（等结论到 20 条）
 
 ## 约定（必须遵守）
 
 1. 改动前解释：为什么、怎么做、影响
-2. 设计先写需求说明（`docs/briefs/`），再 RFC，再实现
-3. 新方向先改阶段文件，调入必须调出
-4. 发版前必须看到 `fail 0`
-5. 测试消息带 `测试：` 前缀
-6. 失败排查先保存原始输出，不猜
-
-## 下一步
-
-**S2 未开工，但效果目标已定：[MVP1](mvp.md)——关掉再打开，它能接上上次聊的。**
-
-按阶段规则 1，开工前先写 S2 阶段文件，效果目标引用 MVP1。
-
-MVP 顺序**不能跳**：MVP1 交流记忆 → MVP2 画像 → MVP3 触发动作。
-（MVP1 之前也讨论过"记忆召回后触发动作"，那是 MVP3，现在做没有地基。）
-
-当前状态：
-
-1. core 0.0.24 / plugin 0.0.34 已 overlay 并重启生效——**全是 bug 修复，没有新功能**
-2. `prestep` 日志开始带 `ids`，判据 2 **第一次可回溯抽查**（等几天数据）
-3. [0010](briefs/0010-memory-unit.md) 定义了条目与注入分工，**未实现**
-
-**MVP1 需要 `turn_pair` 落库**（0010 §4），所以 S2 的第一步是写它的 RFC，不是改代码。
-
-## 最近变化（2026-10-31）
-
-- **BM25 检索**（core 0.0.24）：`relevance` 从命中比例换成 IDF + 长度归一化。真机 60 条记忆 / 298 条 query：那条 18202 字的进入 top3 的比例 **85% → 15%**，top1 平均 12150 → 1099 字
-- **S1 提前收口**：判据 2 无法抽查、判据 3 数据源精度 11%。收尾记录见 [stages/s1-dsh-memory.md](stages/s1-dsh-memory.md)
-- **注入修复**（plugin 0.0.34）：无匹配不再注入 88 字符空块；只注入 `<memories>`，不再重复 `<soul>/<style>`；日志带 `ids`
-- **判据 3 统计口径**：只数 `rule:` 层（`structural:negation` 约 11% 精度）
-- **0010 记忆单元**：`turn_pair` + 三轴 + 注入分工（设计，未实现）
-- 本次之前的记录（2026-10-30）：纠正检测、ADR 0026、0009 schema、工具脚本
-
-## 从哪看起
-
-- 现在该做什么 → **S2 未定**，见上面"下一步"
-- 当前设计 → [briefs/0010](briefs/0010-memory-unit.md)
-- 为什么这么做 → `docs/adr/`、`docs/rfcs/`
-- 以后做什么 → [roadmap.md](roadmap.md)、[backlog.md](backlog.md)
-- 怎么发版 → [runbook.md](runbook.md)
-
-## turn_pair 覆盖率（2026-11-01 实测）
-
-`turn_pairs` 功能在 **0.0.35（10-31 10:15）** 才上线，日志里 336 条用户消息大部分在那之前，
-所以"324 轮只有 37 条 = 11%"是**错误的分母**。
-
-上线之后的真实数字：
-
-| 项 | 数量 |
-|---|---|
-| 用户消息 | 50 |
-| 写入成功 | **37（74%）** |
-| 丢弃（本轮无文字回复） | 11（22%） |
-
-丢弃逻辑在 RFC 0007 §2.2：没有正文的轮次不写空 pair。
-实际丢掉的都是**只执行了操作、没有文字回复**的轮次——用户说了话，但那一轮的记忆里没有它。
-
-**待定**：这类轮次要不要记？
-- A 保持现状（只记有正文）
-- B 记录用户消息 + 占位说明（"(本轮只有操作，无文字)"）
-- C 记录但标成 operation，不进常规召回
+2. 需求说明 → ADR → 实现 → 验证
+3. 发版前 `npm test` 必须 fail 0，且 `verify-installed.mjs` 通过
+4. 失败排查先保存原始输出，不猜
+5. 报数据，不报感觉

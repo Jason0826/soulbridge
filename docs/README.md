@@ -21,6 +21,8 @@
 | 质量红线、设计交付四问 | [quality.md](quality.md) |
 | 架构总览 | [architecture.md](architecture.md) |
 | 外部证据与阅读笔记 | [references.md](references.md) |
+| DSH 运行时已验证的事实 | [dsh-runtime.md](dsh-runtime.md) |
+| 为什么模型环节要这么验收 | [eval-boundary-0027.md](eval-boundary-0027.md) |
 | [protocol.md](protocol.md) | 占位文件，只为不让旧链接 404；协议内容在 [spec/protocol.v0.md](spec/protocol.v0.md) |
 | 新会话从哪开始 | [handoff.md](handoff.md) |
 
@@ -36,6 +38,38 @@
 ## 与 steering 文件的边界
 
 仓库级 `AGENTS.md` / `CLAUDE.md` 不属于这份地图：仓库约定归仓库，个人经验归 soulbridge（见 [ADR 0019](adr/0019-steering-files.md)）。这里不生成、不接管它们。
+
+## 当前权威（2026-11-02）
+
+改动前先读这几份，**它们冲突时以 ADR 为准**：
+
+| 主题 | 权威文档 |
+|---|---|
+| 现状态、版本、已知的坑 | [handoff.md](handoff.md) · [state.md](state.md) |
+| 代码与模型的边界 | [adr/0027](adr/0027-code-vs-model-boundary.md) · [adr/0029](adr/0029-extraction-is-the-models-job.md) · [adr/0030](adr/0030-core-adapter-boundary.md) |
+| 模型环节怎么验收 | [adr/0031](adr/0031-model-dependency-acceptance.md) |
+| **记忆分两层、时间与精度** | [adr/0032](adr/0032-two-layers-of-memory.md) |
+| 存什么、怎么衰减 | [briefs/0019](briefs/0019-memory-selection.md) |
+| 怎么从有限窗口里取 | [briefs/0020](briefs/0020-retrieval-funnel.md) |
+| 抽取与归纳 | [briefs/0016](briefs/0016-extraction-consolidation.md) |
+| 线索（跨中断的话题） | [briefs/0017](briefs/0017-topic-threads.md) |
+
+## 已废弃（不要照做）
+
+下面这些保留了历史，但**设计已被取代**。每份文件顶部都有横幅，状态行写了接替者。
+
+| 废弃文档 | 被谁取代 |
+|---|---|
+| [briefs/0010 记忆单元](briefs/0010-memory-unit.md) | 轮与步骤（0014）+ 线索（0017） |
+| [rfcs/0007 turn_pair](rfcs/0007-turn-pair.md) | 轮与步骤（0014） |
+| [briefs/0011 会话层](briefs/0011-conversation-layer.md) | 线索（0017） |
+| [briefs/0012 人物层](briefs/0012-people-layer.md) | ADR 0032 |
+| [briefs/0013 事件模型](briefs/0013-event-model.md) | ADR 0032 |
+| [spec/model.v0](spec/model.v0.md) | ADR 0032 |
+| [briefs/0007 检索排序](briefs/0007-retrieval-scoring.md) | 0019 + 0020 |
+| [briefs/0009 schema 重设计](briefs/0009-schema-redesign.md) | ADR 0032 |
+
+**维护规则**：一个设计被推翻时，不是删掉旧文件，而是①顶部加废弃横幅 ②状态行写接替者 ③在这张表里登记。删掉历史等于丢掉"为什么当初错了"。
 
 ## 维护规则
 
