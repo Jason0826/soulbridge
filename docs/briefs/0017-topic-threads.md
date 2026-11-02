@@ -1,6 +1,6 @@
 # 需求说明：主题线索（threads）
 
-- 状态：Draft
+- 状态：**Accepted（2026-11-02，A B A 验收 PASS）**
 - 日期：2026-11-01
 - 关联：[0016 提取与归纳](./0016-extraction-consolidation.md)、[dsh-runtime](../dsh-runtime.md)
 - 由来：用户指出的单位错误——**一问一答不是一章**，用它做归纳等于"读了两三章就说懂整本书"
