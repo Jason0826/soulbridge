@@ -11,10 +11,15 @@
       "date": "2026-11-02",
       "delta": 48,
       "reason": "唯一声明：维度名、准入定义、排序行、示例里的维度值从两个 prompt 收进 dimensions.ts 并改为渲染（新增 48 行，删掉散落副本）。结构修复允许涨，下次重构还回去。"
+    },
+    {
+      "date": "2026-11-02",
+      "delta": 56,
+      "reason": "插件失败路径修复：collectText 失败即抛错、归纳草稿区分「明确无」与「读不出来」、验证 3 次上限。bug 修复允许涨，功能新增不允许。"
     }
   ],
   "coreLines": 7422,
-  "pluginLines": 2223,
+  "pluginLines": 2279,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,

@@ -217,6 +217,7 @@ draft.operations=[]  facts=1  →  落库 0 条，skipped=[]
 | 2 | 合并 prompt 示例补 `维度=` | `consolidate.test.ts`「示例必须能过自己的闸门」 | 通过 0 行 → **2 行** |
 | 3 | 去重不再折叠正反句（极性不同不算重复） | `consolidate.test.ts`「正反句永不折叠」 | 保留 1 条 → **2 条** |
 | 4 | JSON 形状的抽取不再被空 `operations` 遮蔽 | `promotion.test.ts`「JSON draft 不被静默丢弃」 | 落库 0 条 → **1 条** |
+| 5 | 插件：模型调用失败被吞成空串（`collectText` 只认 text-delta）——现在失败即抛错；`readConsolidationReply` 区分"明确说无"与"读不出来"；归纳草稿读不出来改为退队重试；验证阶段最多 3 次后带 trace 放弃 | `test/llm-failures.test.mjs` +5 条（去掉抛错，两条红） | 失败 → 空串 → 被当"无结论"丢弃：现在变成退队重试 |
 
 - core 241 测试全过（+6）；`review-probes.mjs` 前 5 段全部变成期望值。
 - 顺带删掉 `context.ts` 一个从未使用的 `rank` import。
