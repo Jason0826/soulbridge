@@ -564,11 +564,23 @@ export class Soul {
   /**
    * Close topics the conversation has moved past.
    *
-   * Deterministic: `idleTurns` is a number of turns, not a guess about meaning.
-   * Returns the closed ids so the caller can run consolidation on them.
+   * Three signals, in order of strength: the host's archive list (the user said
+   * this session is done), turns elapsed inside the running session, and — only
+   * as a fallback — silence in another session.
    */
-  closeIdleThreads(sessionId: string, idleTurns = 6, idleMs = 30 * 60_000, at = Date.now()): string[] {
-    return this.store.closeIdleThreads(this.soulId, this.userId, sessionId, idleTurns, idleMs, at);
+  closeIdleThreads(
+    sessionId: string,
+    options: { idleTurns?: number; idleMs?: number; archivedSessionIds?: string[]; at?: number } = {},
+  ): string[] {
+    return this.store.closeIdleThreads(
+      this.soulId,
+      this.userId,
+      sessionId,
+      options.idleTurns ?? 6,
+      options.idleMs ?? 30 * 60_000,
+      options.archivedSessionIds ?? [],
+      options.at ?? Date.now(),
+    );
   }
 
   /** The thread the previous turn belonged to, for the attribution candidate list. */

@@ -1048,17 +1048,15 @@ export function openSqlite(file: string): SoulStore {
     /**
      * Close topics the conversation has moved past.
      *
-     * Two different questions, deliberately answered differently:
+     * Three different signals, each honest about what it knows:
      *
-     *   - Inside the running session, quiet is counted in **turns** (rows), not in
-     *     the numeric distance between turn numbers. The host's turn number is not
-     *     a per-exchange counter — it jumps by 10–30 per user message — so
-     *     `currentTurn - lastTurn >= 6` closed a topic one message after it opened.
-     *   - For another session, the honest signal is **inactivity**, not "a
-     *     different session appeared": several windows can be open at once, and
-     *     switching back must not have closed the topics of a live session. A
-     *     session is treated as finished when nothing happened in it for
-     *     `idleMs`.
+     *   - Inside the running session, quiet is counted in **turns** (rows), because
+     *     the host's turn number is not a per-exchange counter (it jumps by 10–30).
+     *   - A session the host reports as **archived** is finished by the user's own
+     *     declaration — that is the strongest signal available.
+     *   - Otherwise another session counts as finished only after `idleMs` of
+     *     silence: several windows can be open at once, and switching must not
+     *     close a live session's topics.
      */
     closeIdleThreads(
       soulId: string,
@@ -1066,25 +1064,33 @@ export function openSqlite(file: string): SoulStore {
       sessionId: string,
       idleTurns: number,
       idleMs: number,
+      archivedSessionIds: string[],
       at: number,
     ): string[] {
-      const stale = db
+      const archived = new Set(archivedSessionIds);
+      const open = db
         .prepare(
-          `SELECT t.id FROM threads t
-           WHERE t.soul_id = ? AND t.user_id = ? AND t.status = 'open'
-             AND (
-               (t.session_id = ?
-                 AND (SELECT COUNT(*) FROM turns x
-                      WHERE x.session_id = t.session_id
-                        AND x.turn_no > COALESCE(t.last_turn_no, 0)) >= ?)
-               OR
-               (t.session_id <> ?
-                 AND COALESCE((SELECT MAX(started_at) FROM turns x WHERE x.session_id = t.session_id),
-                              t.opened_at) <= ?)
-             )`,
+          `SELECT t.id AS id, t.session_id AS session_id,
+                  COALESCE((SELECT MAX(x.started_at) FROM turns x WHERE x.session_id = t.session_id),
+                           t.opened_at) AS last_activity,
+                  (SELECT COUNT(*) FROM turns x
+                   WHERE x.session_id = t.session_id
+                     AND x.turn_no > COALESCE(t.last_turn_no, 0)) AS quiet_turns
+           FROM threads t
+           WHERE t.soul_id = ? AND t.user_id = ? AND t.status = 'open'`,
         )
-        .all(soulId, userId, sessionId, Math.max(1, idleTurns), sessionId, at - Math.max(60_000, idleMs)) as Row[];
-      const ids = stale.map((row) => String(row.id));
+        .all(soulId, userId) as Row[];
+
+      const cutoff = at - Math.max(60_000, idleMs);
+      const ids = open
+        .filter((row) => {
+          const threadSession = String(row.session_id);
+          if (threadSession === sessionId) return Number(row.quiet_turns) >= Math.max(1, idleTurns);
+          if (archived.has(threadSession)) return true;
+          return Number(row.last_activity) <= cutoff;
+        })
+        .map((row) => String(row.id));
+
       const close = db.prepare("UPDATE threads SET status = 'closed', closed_at = ? WHERE id = ?");
       for (const id of ids) withRetry(() => close.run(at, id));
       return ids;

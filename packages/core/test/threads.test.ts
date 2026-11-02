@@ -65,12 +65,12 @@ test('threads: quiet is counted in turns, not in turn-number distance', () => {
   const fresh = store.openThread({ ...S, sessionId: 'sess', topic: '刚聊的', openedAt: 2000, turnNo: 20 });
 
   // Two turns happened after the old thread's last turn; the fresh one is one behind.
-  const closed = store.closeIdleThreads(S.soulId, S.userId, 'sess', 2, 30 * 60_000, 5000);
+  const closed = store.closeIdleThreads(S.soulId, S.userId, 'sess', 2, 30 * 60_000, [], 5000);
   assert.deepEqual(closed, [oldThread.id]);
   assert.equal(store.thread(fresh.id)?.status, 'open');
 
   // Idempotent.
-  assert.deepEqual(store.closeIdleThreads(S.soulId, S.userId, 'sess', 2, 30 * 60_000, 6000), []);
+  assert.deepEqual(store.closeIdleThreads(S.soulId, S.userId, 'sess', 2, 30 * 60_000, [], 6000), []);
   store.close();
 });
 
@@ -78,7 +78,7 @@ test('threads: a topic from another session closes, because that session ended',
   const store = openSqlite(':memory:');
   const other = store.openThread({ ...S, sessionId: 'old-session', topic: '上个会话的', openedAt: 1000, turnNo: 5 });
   // The other session's last turn was long ago, so it counts as finished.
-  assert.deepEqual(store.closeIdleThreads(S.soulId, S.userId, 'new-session', 6, 30 * 60_000, 9_000_000), [other.id]);
+  assert.deepEqual(store.closeIdleThreads(S.soulId, S.userId, 'new-session', 6, 30 * 60_000, [], 9_000_000), [other.id]);
   assert.equal(store.thread(other.id)?.status, 'closed');
   store.close();
 });
@@ -139,8 +139,27 @@ test('threads: a live parallel session keeps its topics open', () => {
   store.putTurn({ ...S, id: 'o1', sessionId: 'other', turnNo: 1, startedAt: 9_000_000, userText: '那边的对话', steps: [] });
   const live = store.openThread({ ...S, sessionId: 'other', topic: '还在另一个窗口聊', openedAt: 8_000_000, turnNo: 1 });
 
-  const closed = store.closeIdleThreads(S.soulId, S.userId, 'current', 6, 30 * 60_000, 9_100_000);
+  const closed = store.closeIdleThreads(S.soulId, S.userId, 'current', 6, 30 * 60_000, [], 9_100_000);
   assert.deepEqual(closed, []);
   assert.equal(store.thread(live.id)?.status, 'open');
+  store.close();
+});
+test('threads: an archived session closes at once, however recent its turns are', () => {
+  const store = openSqlite(':memory:');
+  // The user archived the session: that is a declaration, not an inference, so
+  // recency must not override it.
+  store.putTurn({ ...S, id: 'a1', sessionId: 'archived-session', turnNo: 900, startedAt: 9_000_000, userText: '刚说过的话', steps: [] });
+  const thread = store.openThread({ ...S, sessionId: 'archived-session', topic: '归档会话里的话题', openedAt: 8_000_000, turnNo: 900 });
+
+  const closed = store.closeIdleThreads(
+    S.soulId,
+    S.userId,
+    'current',
+    6,
+    30 * 60_000,
+    ['archived-session'],
+    9_100_000,
+  );
+  assert.deepEqual(closed, [thread.id]);
   store.close();
 });

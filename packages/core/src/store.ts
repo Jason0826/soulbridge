@@ -69,7 +69,7 @@ export interface SoulStore {
   thread(id: string): TurnThread | null;
   closeThread(id: string, at: number, summaryFactId?: string): void;
   /** Close threads whose last turn is at least idleTurns behind now; returns the ids. */
-  closeIdleThreads(soulId: string, userId: string, sessionId: string, idleTurns: number, idleMs: number, at: number): string[];
+  closeIdleThreads(soulId: string, userId: string, sessionId: string, idleTurns: number, idleMs: number, archivedSessionIds: string[], at: number): string[];
   /** The thread the previous turn belonged to, if any. */
   threadBefore(sessionId: string, turnNo: number): string | null;
   /** The most recently closed thread, or null when none has closed yet. */
