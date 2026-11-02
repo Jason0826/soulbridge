@@ -248,6 +248,44 @@ if (!existsSync(readmePath)) {
   else add('PASS', '文档', `顶层文档均已进索引（${topLevelDocs.length} 份）`);
 }
 
+// ---------- 4.7 文档是否落后于代码 ----------
+// "改动必须同步更新文档"以前只是口头约定。判据：state.md 自带「最后核对」时间戳，
+// 代码自带最后提交时间；代码更新则文档落后。
+// 只看改行为的路径（packages/ 与插件 index.js）——文档自己的提交不能把文档比旧。
+const PLUGIN_REPO = 'D:/git-workspace/repos/dsh-plugin-soulbridge';
+function lastCodeCommit(repo, paths) {
+  const out = spawnSync('git', ['log', '-1', '--format=%cI', '--', paths], { cwd: repo, encoding: 'utf8' });
+  return out.status === 0 ? out.stdout.trim() : '';
+}
+const stateDocPath = join(ROOT, 'docs/state.md');
+const stamped = existsSync(stateDocPath)
+  ? /最后核对：\*\*(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})\*\*/.exec(readFileSync(stateDocPath, 'utf8'))
+  : null;
+if (!stamped) {
+  add('WARN', '文档', 'state.md 缺 `最后核对：**YYYY-MM-DD HH:MM**` 时间戳，无法判断是否落后于代码');
+} else {
+  const docAt = Date.parse(`${stamped[1]}T${stamped[2]}:00`);
+  const newest = [
+    ['core', lastCodeCommit(ROOT, 'packages')],
+    ['plugin', lastCodeCommit(PLUGIN_REPO, 'index.js')],
+  ]
+    .filter(([, at]) => at)
+    .map(([name, at]) => [name, Date.parse(at)])
+    .filter(([, at]) => Number.isFinite(at))
+    .sort((a, b) => b[1] - a[1])[0];
+  if (!newest) {
+    add('WARN', '文档', '取不到代码最后提交时间，跳过文档新鲜度检查');
+  } else if (newest[1] > docAt + 60_000) {
+    add(
+      'FAIL',
+      '文档',
+      `state.md 核对于 ${stamped[1]} ${stamped[2]}，但 ${newest[0]} 代码在 ${new Date(newest[1]).toISOString()} 之后还改过 —— 文档落后于代码`,
+    );
+  } else {
+    add('PASS', '文档', `state.md 与代码同步（核对 ${stamped[1]} ${stamped[2]}）`);
+  }
+}
+
 // 时间炸弹：测试里写死的日期，超过 30 天就会变成"过去"
 const FIXTURE_MAX_AGE_MS = 30 * 86_400_000;
 const staleFixtures = [];
