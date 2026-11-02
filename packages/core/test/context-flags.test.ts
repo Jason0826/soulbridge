@@ -30,3 +30,31 @@ test('context: includeSoul/includeStyle=false yields the anchors alone', () => {
   assert.match(anchors.text, /<memories>/);
   store.close();
 });
+
+test('context: includeAffect=false keeps the affect block out of a stable prompt', () => {
+  const { store, soul } = seed();
+  // A confident, directive-producing sample. Without the flag it is injected.
+  store.saveAffect(
+    's1',
+    'u1',
+    {
+      analyzer: 'model',
+      hits: [{ word: '累', category: 'sadness', weight: 1 } as never],
+      dominant: 'sadness',
+      intensity: 7,
+      valence: -0.6,
+      arousal: 0.4,
+      features: { fillers: 0, hedges: 0, vague: 0, tokens: 10, density: 1 },
+      confidence: 0.9,
+      abstain: false,
+    },
+    Date.now(),
+  );
+  const withAffect = soul.context({ track: false, includeAnchors: false });
+  assert.match(withAffect.text, /<affect /, 'a confident sample is injected by default');
+
+  const without = soul.context({ track: false, includeAnchors: false, includeAffect: false });
+  assert.doesNotMatch(without.text, /<affect/, 'the section must be able to exclude affect');
+  assert.equal(without.affect, undefined);
+  store.close();
+});

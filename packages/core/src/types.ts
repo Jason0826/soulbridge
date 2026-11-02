@@ -491,6 +491,15 @@ export interface ContextRequest {
   /** Include the style block. Defaults to true. */
   includeStyle?: boolean;
   /**
+   * Include the affect block. Defaults to true.
+   *
+   * Same reason as includeStyle: the affect sample changes almost every turn, so a
+   * host that puts context() output into a stable system prompt must exclude it —
+   * otherwise every turn appends a new prompt version. Affects belong in the
+   * per-turn message channel, which is where the adapter puts them.
+   */
+  includeAffect?: boolean;
+  /**
    * Include the anchor memories block. Defaults to true.
    *
    * Hosts put this in the system prompt, which DSH appends as a new prompt

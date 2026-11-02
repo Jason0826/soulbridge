@@ -59,8 +59,9 @@ export function buildContext(
   }
 
   // Affect: newest sample only, and only when it is confident and recent enough.
+  // Excluded on request: a stable prompt cannot carry a value that changes every turn.
   let affectMeta: ContextResult['affect'];
-  const [latest] = store.recentAffect(request.soulId, request.userId, now - AFFECT_WINDOW_MS);
+  const [latest] = request.includeAffect === false ? [] : store.recentAffect(request.soulId, request.userId, now - AFFECT_WINDOW_MS);
   if (latest) {
     const directives = selectDirectives(latest);
     if (directives.length > 0) {

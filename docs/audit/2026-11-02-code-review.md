@@ -218,6 +218,7 @@ draft.operations=[]  facts=1  →  落库 0 条，skipped=[]
 | 3 | 去重不再折叠正反句（极性不同不算重复） | `consolidate.test.ts`「正反句永不折叠」 | 保留 1 条 → **2 条** |
 | 4 | JSON 形状的抽取不再被空 `operations` 遮蔽 | `promotion.test.ts`「JSON draft 不被静默丢弃」 | 落库 0 条 → **1 条** |
 | 5 | 插件：模型调用失败被吞成空串（`collectText` 只认 text-delta）——现在失败即抛错；`readConsolidationReply` 区分"明确说无"与"读不出来"；归纳草稿读不出来改为退队重试；验证阶段最多 3 次后带 trace 放弃 | `test/llm-failures.test.mjs` +5 条（去掉抛错，两条红） | 失败 → 空串 → 被当"无结论"丢弃：现在变成退队重试 |
+| 6 | `section` 里带着 `<affect>`（每轮变 → DSH 每轮追加一个 prompt 版本）→ core 新增 `includeAffect` 开关，插件 section 调用传 false；affect 仍走每轮消息通道 | `context-flags.test.ts` +1（默认注入/可排除）；插件 `section-stability.test.mjs` +2（变异：删掉参数 → 红） | 每轮一个新 prompt 版本 → section 文本稳定 |
 
 - core 241 测试全过（+6）；`review-probes.mjs` 前 5 段全部变成期望值。
 - 顺带删掉 `context.ts` 一个从未使用的 `rank` import。
