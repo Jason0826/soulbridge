@@ -29,16 +29,24 @@ export { parseThreadLine } from './extract.ts';
 export {
   renderConsolidationPrompt,
   renderVerificationPrompt,
+  renderRelationPrompt,
   renderExtractionPrompt,
 } from './prompts.ts';
-export type { ConsolidationPromptInput, VerificationPromptInput, ExtractionPromptInput } from './prompts.ts';
+export type {
+  ConsolidationPromptInput,
+  VerificationPromptInput,
+  RelationPromptInput,
+  ExtractionPromptInput,
+} from './prompts.ts';
 export {
   gateConclusion,
   conclusionSlots,
+  normalizeStatement,
   parseConclusionDraft,
   parseVerificationDraft,
+  parseRelationDraft,
 } from './consolidate.ts';
-export type { VerificationDraft } from './consolidate.ts';
+export type { VerificationDraft, ConclusionRelation } from './consolidate.ts';
 export * from './affect/index.ts';
 export { measureStyle } from './style/measure.ts';
 export type { StyleMetrics } from './style/measure.ts';
@@ -535,9 +543,23 @@ export class Soul {
    */
   recordConclusion(
     draft: ConclusionDraft,
-    options: { allowed: string[] },
-  ): { ok: boolean; reason?: string; fact?: Fact; superseded?: string } {
+    options: { allowed: string[]; mergeInto?: string },
+  ): { ok: boolean; reason?: string; fact?: Fact; superseded?: string; merged?: string } {
     const allowed = new Set(options.allowed);
+    // A restatement is merged, not written again: the held conclusion keeps its
+    // wording and gains the evidence, so it gets stronger instead of duplicated.
+    // Only evidence from this batch counts — a merge must be backed the same way
+    // a new conclusion would be.
+    if (options.mergeInto) {
+      const evidence = draft.evidence.filter((id) => allowed.has(id));
+      if (evidence.length >= 2) {
+        const merge = this.mergeEvidence(options.mergeInto, evidence);
+        if (merge.ok) return { ok: true, merged: options.mergeInto };
+        // A merge target that moved on is not an error; fall through and write the
+        // conclusion normally rather than losing it.
+      }
+    }
+
     const old = draft.supersedes ? this.store.fact(draft.supersedes) : null;
     const gate = gateConclusion({ draft, allowed, existing: old });
     if (!gate.ok) return { ok: false, reason: gate.reason };
@@ -630,6 +652,51 @@ export class Soul {
       .map((turn) => ({ turnNo: turn.turn, userText: turn.userText }));
     return { thread, conclusion, turns };
   }
+  /**
+   * Conclusions worth comparing a new one against.
+   *
+   * Ordered by shared evidence first, then recency: two conclusions drawn from
+   * the same facts are the likeliest restatements, and the recency tail catches
+   * the ones whose evidence was reworded.
+   */
+  conclusionCandidates(evidence: string[], limit = 8): Array<{ id: string; statement: string; evidence: number }> {
+    const wanted = new Set(evidence);
+    return this.conclusions(200)
+      .map((fact) => {
+        const ids = evidenceOf(fact);
+        return { fact, shared: ids.filter((id) => wanted.has(id)).length, evidence: ids.length };
+      })
+      .sort((a, b) => b.shared - a.shared)
+      .slice(0, limit)
+      .map((entry) => ({ id: entry.fact.id, statement: entry.fact.statement, evidence: entry.evidence }));
+  }
+
+  /**
+   * Fold new evidence into a held conclusion.
+   *
+   * The statement is not rewritten: keeping it makes the merge auditable, and a
+   * richer statement is the model's job at the next natural revision, not this
+   * function's.
+   */
+  mergeEvidence(into: string, evidence: string[]): { ok: boolean; reason?: string; added?: number } {
+    const target = this.store.fact(into);
+    if (!target) return { ok: false, reason: 'target-missing' };
+    if (target.typeName !== '结论') return { ok: false, reason: 'target-not-conclusion' };
+    if (target.status === 'superseded') return { ok: false, reason: 'target-superseded' };
+
+    const held = evidenceOf(target);
+    const heldSet = new Set(held);
+    const added = this.store.addSlots(
+      into,
+      conclusionSlots(evidence.filter((id) => !heldSet.has(id))),
+    );
+    // Confidence follows evidence count, as the gate does; never lower it.
+    const total = new Set([...held, ...evidence]).size;
+    const confidence = total >= 5 ? 0.85 : total >= 3 ? 0.7 : target.confidence;
+    this.store.setFactConfidence(into, Math.max(target.confidence, confidence));
+    return { ok: true, added };
+  }
+
   /** Current conclusions, newest first. Superseded ones are history, not state. */
   conclusions(limit = 20): Fact[] {
     return this.store
@@ -976,4 +1043,12 @@ function sharesRun(a: string, b: string, minRun: number): boolean {
     }
   }
   return false;
+}
+
+/** The fact ids a conclusion cites, in slot order. */
+function evidenceOf(fact: Fact): string[] {
+  return fact.slots
+    .filter((slot) => slot.slot === '证据' && slot.value.kind === 'fact')
+    .map((slot) => (slot.value.kind === 'fact' ? slot.value.factId : ''))
+    .filter(Boolean);
 }

@@ -33,6 +33,7 @@ import type {
   ThreadSpec,
   TurnThread,
   TurnSpec,
+  SlotValue,
   TurnStep,
 } from './types.ts';
 import type { SoulStore } from './store.ts';
@@ -1156,6 +1157,50 @@ export function openSqlite(file: string): SoulStore {
       const slots = slotsOfRows(db, rows.map((row) => String(row.id)));
       return rows.map((row) => rowToFact(row, slots));
     },
+    /**
+     * Append slots to an existing fact, skipping ones it already has.
+     *
+     * Used when a duplicate conclusion is merged into the held one: the holder
+     * keeps its statement, and gains the new evidence so it gets stronger rather
+     * than being restated.
+     */
+    addSlots(factId: string, slots: { slot: string; value: SlotValue }[]): number {
+      const existing = new Set(
+        (
+          db
+            .prepare("SELECT ref_fact_id, value_text, slot FROM fact_slots WHERE fact_id = ?")
+            .all(factId) as Row[]
+        ).map((row) => `${String(row.slot)}|${String(row.ref_fact_id ?? row.value_text ?? '')}`),
+      );
+      const insert = db.prepare(
+        `INSERT INTO fact_slots (fact_id, slot, value_type, entity_id, value_num, value_text, ref_fact_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      );
+      let added = 0;
+      for (const s of slots) {
+        const key = `${s.slot}|${s.value.kind === 'fact' ? s.value.factId : s.value.kind === 'entity' ? s.value.entityId : s.value.kind === 'text' ? s.value.value : String(s.value.value)}`;
+        if (existing.has(key)) continue;
+        insert.run(
+          factId,
+          s.slot,
+          s.value.kind,
+          s.value.kind === 'entity' ? s.value.entityId : null,
+          s.value.kind === 'number' ? s.value.value : null,
+          s.value.kind === 'text' ? s.value.value : null,
+          s.value.kind === 'fact' ? s.value.factId : null,
+        );
+        existing.add(key);
+        added += 1;
+      }
+      return added;
+    },
+
+    setFactConfidence(factId: string, confidence: number): void {
+      withRetry(() =>
+        db.prepare('UPDATE facts SET confidence = ? WHERE id = ?').run(confidence, factId),
+      );
+    },
+
     stepsOf(turnId: string): TurnStep[] {
       const rows = db
         .prepare('SELECT * FROM steps WHERE turn_id = ? ORDER BY idx ASC')

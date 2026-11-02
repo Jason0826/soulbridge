@@ -328,3 +328,50 @@ export function renderVerificationPrompt(input: VerificationPromptInput): string
     '判定: 支持 | 依据=<id>,<id> | 理由=哪条事实的哪个片段支撑了它',
   ].join('\n\n');
 }
+
+/* ------------------------------------------------------------------ *
+ * Duplicate handling: is this conclusion new, or a restatement?
+ * ------------------------------------------------------------------ */
+
+const RELATION_ROLE = `<role>
+你是结论库的守门人。给出一条新结论和几条已有的结论，你只回答一件事：**新结论和其中哪一条是什么关系**。
+你不评价哪条更好，不修改任何一条的措辞。
+</role>`;
+
+const RELATION_RULES = `<rules>
+- 重复 = 说的是同一件事，只是措辞或证据不同。例如"用户要机制不要 hope"和"用户倾向方法论依据而不是 prompt 的 hope"。
+- 细化 = 新结论包含旧结论，但更具体或有新条件。例如旧"用户讨厌重复"、新"用户讨厌同一件事反复交代"。
+- 矛盾 = 两者不能同时成立。例如"用户喜欢被反复确认"和"用户讨厌反复确认"。
+- 无关 = 说的是不同的事，哪怕话题相近。
+- 关系必须在 <existing> 里选一个 id，或者写"无关"。
+- 只能引用 <existing> 里出现过的 id，不许编。
+</rules>`;
+
+export interface RelationPromptInput {
+  conclusion: string;
+  existing: { id: string; statement: string; evidence: number }[];
+}
+
+/**
+ * Stage three: the duplicate check.
+ *
+ * String matching can only catch the same text; a restatement like "用户要机制
+ * 不要 hope" versus "用户倾向方法论依据而不是 prompt 的 hope" needs meaning. The
+ * output is a fixed vocabulary so the caller can gate it.
+ */
+export function renderRelationPrompt(input: RelationPromptInput): string {
+  const existing = input.existing.map(
+    (fact) => `  ${fact.id} | 证据=${fact.evidence} 条 | ${fact.statement}`,
+  );
+  return [
+    RELATION_ROLE,
+    RELATION_RULES,
+    `<new>${input.conclusion}</new>`,
+    ['<existing>', ...existing, '</existing>'].join('\n'),
+    '<output>',
+    '关系: 重复 <id> | 理由=…',
+    '关系: 细化 <id> | 理由=…',
+    '关系: 矛盾 <id> | 理由=…',
+    '关系: 无关',
+  ].join('\n\n');
+}

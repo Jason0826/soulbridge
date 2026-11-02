@@ -18,6 +18,7 @@ import type {
   Memory,
   QuerySpec,
   SessionSummary,
+  SlotValue,
   TurnPair,
   TurnPairSpec,
   TurnFindResult,
@@ -70,6 +71,9 @@ export interface SoulStore {
   closeThread(id: string, at: number, summaryFactId?: string): void;
   /** Close threads whose last turn is at least idleTurns behind now; returns the ids. */
   closeIdleThreads(soulId: string, userId: string, sessionId: string, idleTurns: number, idleMs: number, archivedSessionIds: string[], at: number): Array<{ id: string; reason: 'archived' | 'quiet-turns' | 'quiet-time' }>;
+  /** Append slots to an existing fact, skipping ones it has. Returns how many were added. */
+  addSlots(factId: string, slots: { slot: string; value: SlotValue }[]): number;
+  setFactConfidence(factId: string, confidence: number): void;
   /** The thread the previous turn belonged to, if any. */
   threadBefore(sessionId: string, turnNo: number): string | null;
   /** The most recently closed thread, or null when none has closed yet. */

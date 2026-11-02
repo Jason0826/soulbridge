@@ -132,3 +132,57 @@ export function parseVerificationDraft(raw: string): VerificationDraft | null {
   }
   return null;
 }
+
+/* ------------------------------------------------------------------ *
+ * Duplicate handling: the new conclusion vs the conclusions we hold
+ * ------------------------------------------------------------------ */
+
+/**
+ * Normalise a statement for the one check a rule can make safely.
+ *
+ * This is deliberately narrow: it only catches text that is *the same text*, so a
+ * hit cannot be wrong. Everything about meaning is the model's call, because
+ * "same topic, different words" is exactly where string matching lies.
+ */
+export function normalizeStatement(statement: string): string {
+  return String(statement ?? '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[\s，。、；：！？,.;:!?"'“”‘’（）()【】\[\]…—–\-\/\\]+/g, '');
+}
+
+export interface ConclusionRelation {
+  kind: 'duplicate' | 'refine' | 'conflict' | 'unrelated';
+  target?: string;
+  reason?: string;
+}
+
+const RELATION = /^关系\s*[:：]\s*(.+)$/;
+const FACT_ID = /(fc_[a-z0-9_]+)/i;
+
+/**
+ * Parse the relation check:
+ *
+ *   关系: 重复 fc_abc | 理由=说的是同一件事，只是措辞不同
+ *   关系: 细化 fc_abc | 理由=新结论多了"只在紧急时"
+ *   关系: 矛盾 fc_abc | 理由=一个说喜欢重复讲，一个说讨厌
+ *   关系: 无关
+ *
+ * A named id that we do not hold is not an error — the caller treats it as
+ * unrelated, which only ever writes the new conclusion and never deletes one.
+ */
+export function parseRelationDraft(raw: string): ConclusionRelation | null {
+  for (const line of String(raw ?? '').split(/\r?\n/)) {
+    const match = RELATION.exec(line.trim());
+    if (!match) continue;
+    const body = match[1];
+    const head = body.split('|')[0] ?? '';
+    const target = FACT_ID.exec(body)?.[1];
+    const reason = /理由\s*[:：=]\s*(.+)$/.exec(body)?.[1]?.trim();
+    if (/重复|duplicate/i.test(head)) return { kind: 'duplicate', target, reason };
+    if (/细化|refine/i.test(head)) return { kind: 'refine', target, reason };
+    if (/矛盾|conflict/i.test(head)) return { kind: 'conflict', target, reason };
+    if (/无关|unrelated/i.test(head)) return { kind: 'unrelated', reason };
+  }
+  return null;
+}

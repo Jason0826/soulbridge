@@ -2,7 +2,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openSqlite } from '../src/sqlite.ts';
 import { Soul } from '../src/index.ts';
-import { gateConclusion, parseConclusionDraft, parseVerificationDraft } from '../src/consolidate.ts';
+import {
+  gateConclusion,
+  normalizeStatement,
+  parseConclusionDraft,
+  parseRelationDraft,
+  parseVerificationDraft,
+} from '../src/consolidate.ts';
 import { renderConsolidationPrompt, renderVerificationPrompt } from '../src/prompts.ts';
 
 const base = { soulId: 's1', userId: 'u1' };
@@ -152,4 +158,87 @@ test('prompts: a threaded consolidation shows the turns and demands the ending',
   assert.match(prompt, /<thread>/);
   assert.match(prompt, /3\. 用户：回到三层怎么落地/);
   assert.match(prompt, /覆盖到最后一次回来/);
+});
+/* ---------------- duplicate handling ---------------- */
+
+test('relation: the four kinds parse from one fixed vocabulary', () => {
+  assert.deepEqual(parseRelationDraft('关系: 重复 fc_abc | 理由=同一件事'), {
+    kind: 'duplicate',
+    target: 'fc_abc',
+    reason: '同一件事',
+  });
+  assert.equal(parseRelationDraft('关系: 细化 fc_def | 理由=多了条件')?.kind, 'refine');
+  assert.equal(parseRelationDraft('关系: 矛盾 fc_ghi')?.kind, 'conflict');
+  assert.deepEqual(parseRelationDraft('关系: 无关'), { kind: 'unrelated', reason: undefined });
+  assert.equal(parseRelationDraft('看不懂'), null);
+});
+
+test('normalizeStatement: only catches the same text, never a paraphrase', () => {
+  assert.equal(normalizeStatement('用户讨厌反复交代。'), normalizeStatement('用户讨厌反复交代'));
+  assert.notEqual(normalizeStatement('用户讨厌反复交代'), normalizeStatement('用户讨厌重复劳动'));
+});
+
+test('conclusions: a restatement merges its evidence instead of duplicating', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  store.putFact({ soulId: 's1', userId: 'u1', id: 'f1', statement: '用户说工具切换很烦' });
+  store.putFact({ soulId: 's1', userId: 'u1', id: 'f2', statement: '用户说要机制不要 hope' });
+  store.putFact({ soulId: 's1', userId: 'u1', id: 'f3', statement: '用户说要方法论依据' });
+
+  const first = soul.recordConclusion(
+    { statement: '用户要机制不要 hope', evidence: ['f1', 'f2'], confidence: 0.6 },
+    { allowed: ['f1', 'f2'] },
+  );
+  assert.equal(first.ok, true);
+
+  const merged = soul.recordConclusion(
+    { statement: '用户倾向方法论依据而不是 prompt 的 hope', evidence: ['f2', 'f3'], confidence: 0.6 },
+    { allowed: ['f2', 'f3'], mergeInto: first.fact?.id },
+  );
+  assert.equal(merged.ok, true);
+  assert.equal(merged.merged, first.fact?.id);
+  assert.equal(merged.fact, undefined);
+
+  // One conclusion holds all three facts; its wording was not rewritten.
+  const held = soul.conclusions(10);
+  assert.equal(held.length, 1);
+  assert.equal(held[0].statement, '用户要机制不要 hope');
+  assert.deepEqual(
+    held[0].slots.filter((slot) => slot.slot === '证据').map((slot) => slot.value.kind === 'fact' && slot.value.factId),
+    ['f1', 'f2', 'f3'],
+  );
+  assert.ok(held[0].confidence >= 0.7);
+  store.close();
+});
+
+test('conclusions: merging never grows evidence from outside the batch', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  store.putFact({ soulId: 's1', userId: 'u1', id: 'f1', statement: 'a' });
+  store.putFact({ soulId: 's1', userId: 'u1', id: 'f2', statement: 'b' });
+  store.putFact({ soulId: 's1', userId: 'u1', id: 'x9', statement: '不在本批' });
+  const first = soul.recordConclusion({ statement: '用户在工具切换时容易不耐烦', evidence: ['f1', 'f2'], confidence: 0.6 }, { allowed: ['f1', 'f2'] });
+
+  const merged = soul.recordConclusion(
+    { statement: '用户在工具切换时容易不耐烦', evidence: ['f1', 'f2', 'x9'], confidence: 0.6 },
+    { allowed: ['f1', 'f2'], mergeInto: first.fact?.id },
+  );
+  assert.equal(merged.merged, first.fact?.id);
+  const held = soul.conclusions(10)[0];
+  const ids = held.slots.filter((slot) => slot.slot === '证据').map((slot) => slot.value.kind === 'fact' && slot.value.factId);
+  assert.deepEqual(ids, ['f1', 'f2']);
+  store.close();
+});
+
+test('conclusions: candidates put shared evidence first', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  for (const id of ['f1', 'f2', 'f3', 'f4']) store.putFact({ soulId: 's1', userId: 'u1', id, statement: id });
+  const unrelated = soul.recordConclusion({ statement: '用户对认证问题的关注点比较具体', evidence: ['f3', 'f4'], confidence: 0.6 }, { allowed: ['f3', 'f4'] });
+  const related = soul.recordConclusion({ statement: '用户对工具切换的忍耐度很低', evidence: ['f1', 'f2'], confidence: 0.6 }, { allowed: ['f1', 'f2'] });
+
+  const candidates = soul.conclusionCandidates(['f1', 'f2'], 5);
+  assert.equal(candidates[0].id, related.fact?.id);
+  assert.equal(candidates[1].id, unrelated.fact?.id);
+  store.close();
 });
