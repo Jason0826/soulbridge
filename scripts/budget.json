@@ -36,9 +36,14 @@
       "date": "2026-11-03",
       "delta": 40,
       "reason": "WAL 备份改 VACUUM INTO + 完整性校验 + 坏备份挪走（+40 行，含说明）。数据安全修复允许涨。"
+    },
+    {
+      "date": "2026-11-03",
+      "delta": 26,
+      "reason": "迁移的原子性：整个升级 + 版本号包 BEGIN IMMEDIATE/COMMIT，失败 ROLLBACK；v5 只在 turn 新插入时写 step（+26 行，含说明）。数据安全修复允许涨。"
     }
   ],
-  "coreLines": 7494,
+  "coreLines": 7513,
   "pluginLines": 2304,
   "files": {
     "analyze.ts": 255,
@@ -60,7 +65,7 @@
     "reflect.ts": 411,
     "retrieval.ts": 116,
     "scoring.ts": 170,
-    "sqlite.ts": 1664,
+    "sqlite.ts": 1683,
     "config.ts": 96,
     "merge.ts": 41,
     "steering.ts": 103,

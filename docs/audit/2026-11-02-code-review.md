@@ -227,3 +227,4 @@ draft.operations=[]  facts=1  →  落库 0 条，skipped=[]
 | 7 | `distill` / `extract` 双开关：`makeLlm` 看 distill，四个阶段看 extract，默认配置（distill=rules）静默关掉整条 LLM 管线 → 统一为 extract 一个开关；无模型时分类/归纳**不入队**，避免顶点被 cap 丢新项 | `config-switch.test.mjs` 5 条（行为 + 守卫）；变异：去掉 usesModel 判断 → 红 | 默认安装从"静默变哑"变成 extract=llm 全通 |
 | 8 | 实体刷新用空值覆盖 aliases/attrs：`putEntity` 无条件写 `excluded.aliases`，只传名字的刷新会清空别名，`latestAbout` 从此只认全名 → 刷新时读旧行、别名并集、属性合并 | `entity-refresh.test.ts` 4 条；变异：改回 `spec.aliases ?? []` → 3 条红 | 刷新后别名丢失 → 保留并累积 |
 | 9 | WAL 备份可能拷出损坏的库：`wal_checkpoint` 的 busy 返回值被丢弃，另一个连接占着旧快照时只回填部分帧；已存在的坏备份还永不重做 → 改 `VACUUM INTO`（读穿 WAL）+ 打开备份做 `integrity_check`，坏备份挪到 `.corrupt-*` 并拒绝升级 | `wal-backup.test.ts` 2 条（旧快照 + 坏备份）；变异：回到旧实现 → 快照那条红 | 备份「有」→「有效」 |
+| 10 | v5 迁移可重入：迁移与版本号不在一个事务里（中断后半迁移），且 step 无条件插入（steps 无唯一键）→ 整个升级 + 版本号包 `BEGIN IMMEDIATE`/`COMMIT`，失败 ROLLBACK；只在 turn 新插入时写 step | `migration-rerun.test.ts`：迁移后把版本回拨到 4 再 open，断言 steps 仍为 1 条；变异：改回无条件插入 → 红 | 中断重跑会重复一步 → 不再重复 |

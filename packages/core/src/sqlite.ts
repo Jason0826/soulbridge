@@ -384,7 +384,7 @@ export function upgradeToV5(db: DatabaseSync): void {
   for (const row of rows) {
     const id = String(row.id);
     const assistant = String(row.assistant_text ?? '');
-    insertTurn.run(
+    const inserted = insertTurn.run(
       id,
       String(row.soul_id),
       String(row.user_id),
@@ -396,7 +396,10 @@ export function upgradeToV5(db: DatabaseSync): void {
       assistant,
       Number(row.created_at),
     );
-    if (assistant.length > 0) insertStep.run(id, assistant, Number(row.at));
+    // Only a freshly inserted turn gets a step. The migration can be re-run after an
+    // interruption before the version bump, and steps has no unique key — writing it
+    // unconditionally appended a second copy of the same reply on every retry.
+    if (Number(inserted.changes) > 0 && assistant.length > 0) insertStep.run(id, assistant, Number(row.at));
   }
 }
 
@@ -471,14 +474,30 @@ export function openSqlite(file: string): SoulStore {
   }
   if (version < SCHEMA_VERSION) {
     backupBeforeUpgrade(db, file, version);
-    if (version < 2) upgradeToV2(db);
-    if (version < 3) upgradeToV3(db);
-    if (version < 5) upgradeToV5(db);
-    if (version < 7) upgradeToV7(db);
-  if (version < 8) upgradeToV8(db);
-  if (version < 9) upgradeToV9(db);
-    // v6 adds tables only; SCHEMA creates them on every open, nothing to copy.
-    setVersion(db, SCHEMA_VERSION);
+    // All upgrades and the version bump commit together. Before this, an interruption
+    // left the version at the old value with half the migration applied, so the next
+    // open re-ran it against its own output (v5 appended duplicate steps).
+    // VACUUM INTO in the backup runs before the transaction: it cannot run inside one.
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      if (version < 2) upgradeToV2(db);
+      if (version < 3) upgradeToV3(db);
+      if (version < 5) upgradeToV5(db);
+      if (version < 7) upgradeToV7(db);
+      if (version < 8) upgradeToV8(db);
+      if (version < 9) upgradeToV9(db);
+      // v6 adds tables only; SCHEMA creates them on every open, nothing to copy.
+      setVersion(db, SCHEMA_VERSION);
+      db.exec('COMMIT');
+    } catch (error) {
+      try {
+        db.exec('ROLLBACK');
+      } catch {
+        /* the error below is the one worth reporting */
+      }
+      db.close();
+      throw error;
+    }
   }
 
   const stmtPut = db.prepare(`
