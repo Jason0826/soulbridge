@@ -7,6 +7,7 @@ import {
   normalizeStatement,
   parseConclusionDraft,
   parseRelationDraft,
+  readVerification,
   parseVerificationDraft,
 } from '../src/consolidate.ts';
 import { renderConsolidationPrompt, renderVerificationPrompt } from '../src/prompts.ts';
@@ -271,4 +272,18 @@ test('conclusions: candidates match by entity even when evidence is disjoint', (
   const byEntity = soul.conclusionCandidates([], 5);
   assert.equal(byEntity.length, 1, 'a conclusion about 小林 is found through its entity');
   store.close();
+});
+test('verification: an empty or unparseable reply is a retry, not a rejection', () => {
+  // The draft was never checked; dropping it would lose a thread for nothing.
+  assert.equal(readVerification('').kind, 'retry');
+  assert.equal(readVerification('   ').kind, 'retry');
+  assert.equal(readVerification('我看不懂').kind, 'retry');
+
+  const supported = readVerification('判定: 支持 | 理由=两条事实都提到');
+  assert.equal(supported.kind, 'verdict');
+  if (supported.kind === 'verdict') assert.equal(supported.verdict.verdict, 'supported');
+
+  const unsupported = readVerification('判定: 不支持 | 理由=只有一条提到');
+  assert.equal(unsupported.kind, 'verdict');
+  if (unsupported.kind === 'verdict') assert.equal(unsupported.verdict.verdict, 'unsupported');
 });

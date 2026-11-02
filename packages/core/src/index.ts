@@ -47,6 +47,7 @@ export {
   parseConclusionDraft,
   parseVerificationDraft,
   parseRelationDraft,
+  readVerification,
 } from './consolidate.ts';
 export type { VerificationDraft, ConclusionRelation } from './consolidate.ts';
 export { fires, parseRuleClassifications, parseTrigger, selectRules } from './rules.ts';
@@ -270,7 +271,10 @@ export class Soul {
       metadata: input.metadata ?? {},
       createdAt: at,
     }, input.steps);
-    return id;
+    // A repeat is dropped by the unique (session, turn) index, so the generated id
+    // may be a phantom. Return the id that is actually stored: the caller enqueues
+    // extraction with it, and a phantom id made the queue drop the turn as missing.
+    return this.store.turnByTurnNo(input.sessionId, input.turn)?.id ?? id;
   }
 
   /**

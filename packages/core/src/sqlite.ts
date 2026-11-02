@@ -1313,6 +1313,12 @@ export function openSqlite(file: string): SoulStore {
       return scored.slice(0, limit).map((entry) => entry.fact);
     },
 
+    turnByTurnNo(sessionId: string, turnNo: number): TurnPair | null {
+      const row = db
+        .prepare('SELECT * FROM turns WHERE session_id = ? AND turn_no = ? LIMIT 1')
+        .get(sessionId, turnNo) as Row | undefined;
+      return row ? rowToTurnPair(row) : null;
+    },
     stepsOf(turnId: string): TurnStep[] {
       const rows = db
         .prepare('SELECT * FROM steps WHERE turn_id = ? ORDER BY idx ASC')

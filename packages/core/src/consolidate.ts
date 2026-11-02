@@ -196,3 +196,20 @@ export function parseRelationDraft(raw: string): ConclusionRelation | null {
   }
   return null;
 }
+/**
+ * Read a verifier's answer, keeping "we could not read it" separate from "no".
+ *
+ * An empty or unparseable reply is not evidence against a conclusion — it is the
+ * documented stream-gone failure. Collapsing it to `unsupported` silently discards
+ * a draft that was never actually checked (and before this, it also lost the
+ * thread). Only a parsed verdict may drop a conclusion.
+ */
+export function readVerification(
+  raw: string,
+): { kind: 'verdict'; verdict: VerificationDraft } | { kind: 'retry'; reason: string } {
+  const text = String(raw ?? '').trim();
+  if (!text) return { kind: 'retry', reason: 'empty reply' };
+  const verdict = parseVerificationDraft(text);
+  if (!verdict) return { kind: 'retry', reason: 'unparseable verdict' };
+  return { kind: 'verdict', verdict };
+}

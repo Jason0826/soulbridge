@@ -79,6 +79,8 @@ export interface SoulStore {
   recordRecalls(factIds: string[], at: number): void;
   /** Facts about one entity, newest event first; predicate narrows within it. */
   latestAbout(soulId: string, userId: string, entityName: string, options?: { predicate?: string; query?: string; limit?: number; now?: number }): Fact[];
+  /** A turn by (session, turn number) — how a repeat gets its real id. */
+  turnByTurnNo(sessionId: string, turnNo: number): TurnPair | null;
   /** The thread the previous turn belonged to, if any. */
   threadBefore(sessionId: string, turnNo: number): string | null;
   /** The most recently closed thread, or null when none has closed yet. */
