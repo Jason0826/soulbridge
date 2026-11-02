@@ -260,6 +260,14 @@ export interface FactDraft {
   atPrecision?: AtPrecision;
   source: FactSource;
   confidence: number;
+  /**
+   * The model's yes/no answer to "is this an experience about how to work?".
+   *
+   * A classification input, not a score: the promotion rules (brief 0023) read it to
+   * decide whether the experience may be promoted to a rule or a profile line.
+   * Absent means no — a wrongly promoted lesson is worse than an unrecorded one.
+   */
+  principle?: boolean;
   slots: Array<{ slot: string; value: DraftSlotValue }>;
 }
 

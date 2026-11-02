@@ -243,6 +243,38 @@ export class Soul {
   }
 
   /**
+   * Was this turn one the user corrected?
+   *
+   * A correction is the highest-signal moment a lesson has: being told you were
+   * wrong is the consequence the experience comes with (brief 0023, T1). The link
+   * is the user's own words — corrections do not carry a turn id, and inventing a
+   * time window would misattribute a nearby turn.
+   */
+  wasCorrectedTurn(turnId: string): boolean {
+    const turn = this.store.turn(turnId);
+    const text = (turn?.userText ?? '').trim();
+    if (!text) return false;
+    return this.store
+      .recentCorrections(this.soulId, this.userId, 50)
+      .some((correction) => (correction.userText ?? '').trim() === text);
+  }
+
+  /**
+   * The experiences of one turn that were flagged as lessons, and nothing else.
+   *
+   * Promotion reads the flag, never the statement: whether a sentence is "about how
+   * to work" is the semantic call the extractor already made, and re-deriving it in
+   * code would be the guess ADR 0027 forbids.
+   */
+  promotionCandidates(turnId: string): Fact[] {
+    return this.store.factsByTurns([turnId]).filter((fact) =>
+      fact.slots.some(
+        (slot) => slot.slot === '原则候选' && slot.value.kind === 'text' && slot.value.value === '是',
+      ),
+    );
+  }
+
+  /**
    * Store one exchange (RFC 0007). Idempotent on `(sessionId, turn)`: a repeat is
    * ignored by the store, so this returns nothing — there is no id worth handing
    * back that would also be correct on a repeat.
@@ -528,6 +560,10 @@ export class Soul {
         }
         return { slot: s.slot, value: s.value };
       });
+      // The promotion rules read this slot; they must not re-read the statement to
+      // guess whether it was a lesson, because that is the semantic call the model
+      // already made.
+      if (factDraft.principle) slots.push({ slot: '原则候选', value: { kind: 'text' as const, value: '是' } });
 
       const written = this.store.putFact({
         soulId: this.soulId,

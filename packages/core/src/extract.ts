@@ -339,6 +339,9 @@ function parseFactDraft(obj: Record<string, unknown>): FactDraft | null {
     atPrecision: precision,
     source: (SOURCES.has(source) ? source : 'told') as FactDraft['source'],
     confidence: typeof obj.confidence === 'number' ? Math.min(1, Math.max(0, obj.confidence)) : 0.6,
+    // Only an explicit yes counts: the field is read by the promotion rules, and a
+    // default-yes would promote every observation to a lesson.
+    ...(obj.principle === true ? { principle: true } : {}),
     slots,
   };
 }
@@ -484,15 +487,18 @@ export function parseLineDraft(raw: string): Record<string, unknown> | null {
       const conf = Number(confidence);
       if (Number.isFinite(conf)) fact.confidence = conf;
 
-      // 持有= and 精度= are keyed so the positional fields stay backward
+      // 持有= / 精度= / 原则候选= are keyed so the positional fields stay backward
       // compatible; anything else in the tail is the slot list.
       let slotText: string | undefined;
       for (const part of rest) {
-        const keyed = /^(持有|精度|槽位)\s*[=＝]\s*(.*)$/.exec(part);
+        const keyed = /^(持有|精度|原则候选|槽位)\s*[=＝]\s*(.*)$/.exec(part);
         if (keyed) {
           if (keyed[1] === '持有') fact.holder = keyed[2].trim();
           else if (keyed[1] === '精度') fact.at_precision = keyed[2].trim();
-          else slotText = keyed[2].trim();
+          else if (keyed[1] === '原则候选') {
+            // Only 是 promotes. "否" and anything else is the safe default.
+            if (/^(是|yes|true)$/i.test(keyed[2].trim())) fact.principle = true;
+          } else slotText = keyed[2].trim();
           continue;
         }
         if (part && slotText === undefined) slotText = part;
