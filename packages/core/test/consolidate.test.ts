@@ -8,6 +8,7 @@ import {
   parseConclusionDraft,
   parseRelationDraft,
   readVerification,
+  parseProfileMerge,
   parseVerificationDraft,
 } from '../src/consolidate.ts';
 import { renderConsolidationPrompt, renderVerificationPrompt } from '../src/prompts.ts';
@@ -286,4 +287,27 @@ test('verification: an empty or unparseable reply is a retry, not a rejection', 
   const unsupported = readVerification('判定: 不支持 | 理由=只有一条提到');
   assert.equal(unsupported.kind, 'verdict');
   if (unsupported.kind === 'verdict') assert.equal(unsupported.verdict.verdict, 'unsupported');
+});
+test('profile: merged lines keep only sources that were offered', () => {
+  const allowed = new Set(['fc_a', 'fc_b']);
+  const lines = parseProfileMerge(
+    ['画像: 要机制不要靠自觉 | 来源=fc_a,fc_b', '画像: 凭空来的判断 | 来源=fc_zzz', '画像: 短 | 来源=fc_a'].join('\n'),
+    allowed,
+  );
+  assert.equal(lines.length, 1);
+  assert.deepEqual(lines[0].sources, ['fc_a', 'fc_b']);
+});
+
+test('profile: merging supersedes the sources and keeps the trail', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  store.putFact({ soulId: 's1', userId: 'u1', id: 'f1', statement: '用户要机制不要 prompt', typeName: '画像', holder: 'self' });
+  store.putFact({ soulId: 's1', userId: 'u1', id: 'f2', statement: '结构化输出优先工具解析', typeName: '画像', holder: 'self' });
+
+  const written = soul.applyProfileMerge([{ statement: '要机制，不靠 prompt 自觉', sources: ['f1', 'f2'] }]);
+  assert.equal(written.length, 1);
+  assert.equal(soul.profile(8).length, 1, 'the merged line is the active profile');
+  assert.equal(store.fact('f1')?.status, 'superseded');
+  assert.equal(store.fact('f1')?.supersededBy, written[0].id, 'source points at the merge');
+  store.close();
 });

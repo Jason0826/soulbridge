@@ -31,6 +31,7 @@ export {
   renderVerificationPrompt,
   renderRelationPrompt,
   renderRuleClassifyPrompt,
+  renderProfileMergePrompt,
   renderExtractionPrompt,
 } from './prompts.ts';
 export type {
@@ -38,6 +39,7 @@ export type {
   VerificationPromptInput,
   RelationPromptInput,
   RuleClassifyPromptInput,
+  ProfileMergePromptInput,
   ExtractionPromptInput,
 } from './prompts.ts';
 export {
@@ -48,8 +50,11 @@ export {
   parseVerificationDraft,
   parseRelationDraft,
   readVerification,
+  parseProfileMerge,
 } from './consolidate.ts';
 export type { VerificationDraft, ConclusionRelation } from './consolidate.ts';
+export type { ProfileLine } from './consolidate.ts';
+import type { ProfileLine } from './consolidate.ts';
 export { fires, parseRuleClassifications, parseTrigger, selectRules } from './rules.ts';
 export type { Rule, RuleTrigger, RuleClassification } from './rules.ts';
 export { planRetrieval } from './retrieval.ts';
@@ -715,6 +720,50 @@ export class Soul {
    */
   markUnclassified(factId: string): void {
     this.store.setFactTypeName(factId, '待修');
+  }
+
+  /** The judgments about the person that are waiting to be merged. */
+  profileItems(limit = 60): Fact[] {
+    return this.store
+      .facts({ soulId: this.soulId, userId: this.userId, limit: 500 })
+      .filter((fact) => fact.typeName === '画像' && fact.status !== 'superseded')
+      .slice(0, limit);
+  }
+
+  /**
+   * Replace a pile of judgments with the merged ones.
+   *
+   * Each merged line becomes a 画像 fact citing its sources, and every source it
+   * covers is superseded — not deleted, so the audit trail survives the compression.
+   */
+  applyProfileMerge(lines: ProfileLine[]): Fact[] {
+    const written: Fact[] = [];
+    for (const line of lines) {
+      const fact = this.store.putFact({
+        soulId: this.soulId,
+        userId: this.userId,
+        statement: line.statement,
+        typeName: '画像',
+        holder: 'self',
+        confidence: 0.8,
+        slots: line.sources.map((id) => ({ slot: '来源', value: { kind: 'fact' as const, factId: id } })),
+      });
+      written.push(fact);
+      for (const sourceId of line.sources) {
+        const source = this.store.fact(sourceId);
+        if (source && source.status !== 'superseded') this.store.supersedeFact(sourceId, fact.id);
+      }
+    }
+    return written;
+  }
+
+  /** The merged profile, strongest first — what is injected every turn. */
+  profile(limit = 8): Fact[] {
+    return this.store
+      .facts({ soulId: this.soulId, userId: this.userId, limit: 500 })
+      .filter((fact) => fact.typeName === '画像' && fact.status !== 'superseded')
+      .sort((a, b) => b.confidence - a.confidence || b.createdAt - a.createdAt)
+      .slice(0, limit);
   }
 
   /** Which primitive this question needs (0020).

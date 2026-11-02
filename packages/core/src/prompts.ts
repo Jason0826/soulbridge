@@ -432,3 +432,48 @@ export function renderRuleClassifyPrompt(input: RuleClassifyPromptInput): string
     '<output>',
   ].join('\n\n');
 }
+/* ------------------------------------------------------------------ *
+ * Profile merging: many judgments → a few that hold up
+ * ------------------------------------------------------------------ */
+
+const PROFILE_ROLE = `<role>
+你在整理一组"关于这个人的判断"。它们现在又碎又重复，你要把它们合并成更少、更准的句子。
+你不添加新判断，只压缩已有的。
+</role>`;
+
+const PROFILE_RULES = `<rules>
+- 同义的合成一条；具体的保留，笼统的删掉。
+- 不要写"有时候…有时候…"这种和稀泥的句子——两个都保留，不如分成两条。
+- 每条不超过 30 字，陈述或祈使，不要编号。
+- 合并后 5–8 条；撑不起就少写，不要用空话凑数。
+- 每条必须给来源：来源=fc_xxx,fc_yyy，只能引用 <input> 里出现过的 id。
+- 输入里没有的新判断，不许出现。
+</rules>`;
+
+const PROFILE_EXAMPLE = `<example>
+<input>
+- fc_a | 用户认为改 prompt 不能有效让模型输出 JSON，主张用工具解析
+- fc_b | 结构化输出优先工具解析/模板填充，不靠 prompt 直出 JSON
+- fc_c | 用户很讨厌一件事反复讲，换工具又要重新交代
+</input>
+<output>
+画像: 要机制，不要靠 prompt 的自觉 | 来源=fc_a,fc_b
+画像: 讨厌重复交代，工具换了也不该重讲 | 来源=fc_c
+</output>
+</example>`;
+
+export interface ProfileMergePromptInput {
+  items: { id: string; statement: string }[];
+}
+
+/** Compress a pile of judgments about the person into a few that hold. */
+export function renderProfileMergePrompt(input: ProfileMergePromptInput): string {
+  const items = input.items.map((item) => `- ${item.id} | ${item.statement.slice(0, 120)}`);
+  return [
+    PROFILE_ROLE,
+    PROFILE_RULES,
+    PROFILE_EXAMPLE,
+    ['<input>', ...items, '</input>'].join('\n'),
+    '<output>',
+  ].join('\n\n');
+}

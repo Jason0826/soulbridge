@@ -213,3 +213,39 @@ export function readVerification(
   if (!verdict) return { kind: 'retry', reason: 'unparseable verdict' };
   return { kind: 'verdict', verdict };
 }
+/* ------------------------------------------------------------------ *
+ * Profile merging
+ * ------------------------------------------------------------------ */
+
+export interface ProfileLine {
+  statement: string;
+  sources: string[];
+}
+
+const PROFILE_LINE = /^画像\s*[:：]\s*(.+)$/;
+
+/**
+ * Parse the merged profile.
+ *
+ * Every line must cite sources that were actually offered: a profile statement with
+ * no evidence is an assumption, and the whole point of merge-with-sources is that a
+ * reader can walk back to what it came from.
+ */
+export function parseProfileMerge(raw: string, allowed: Set<string>): ProfileLine[] {
+  const out: ProfileLine[] = [];
+  for (const line of String(raw ?? '').split(/\r?\n/)) {
+    const match = PROFILE_LINE.exec(line.trim());
+    if (!match) continue;
+    const [statementPart, ...fields] = match[1].split('|').map((part) => part.trim());
+    const statement = (statementPart ?? '').trim();
+    if (statement.length < 4 || statement.length > 60) continue;
+    const sourceField = fields.find((field) => field.startsWith('来源'));
+    const sources = (sourceField?.replace(/^来源\s*[=＝]\s*/, '') ?? '')
+      .split(/[,，、;；\s]+/)
+      .map((id) => id.trim())
+      .filter((id) => allowed.has(id));
+    if (sources.length === 0) continue;
+    out.push({ statement, sources });
+  }
+  return out;
+}
