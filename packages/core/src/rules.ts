@@ -8,6 +8,7 @@
  * The whole thing is a pure function over (rule, user message, session state) so
  * it can be tested without a database or a model call.
  */
+import { PROFILE_DIMENSIONS } from './consolidate.ts';
 
 export interface RuleTrigger {
   /** Substring keywords; any one is enough. */
@@ -110,12 +111,20 @@ export interface RuleClassification {
   trigger?: string;
   /** One sentence of what to do, when this is a rule. */
   action?: string;
+  /**
+   * Which lens the person statement belongs to, when this is a profile item.
+   *
+   * Absent when the model did not say or named something that is not a dimension:
+   * the merge step refuses to merge unlabelled items rather than guess, so a wrong
+   * dimension here would silently file the judgment under the wrong lens.
+   */
+  dimension?: string;
   /** Why it could not be classified, when pending. */
   reason?: string;
 }
 
 const CLASSIFIED = /^(规则|画像|待修)\s*[:：]\s*(.+)$/;
-const KEY_FIELD = /^(关键词|正则|状态|动作|原因)\s*[=＝]\s*(.*)$/;
+const KEY_FIELD = /^(关键词|正则|状态|动作|原因|维度)\s*[=＝]\s*(.*)$/;
 
 /**
  * Parse the classifier's answer. Line-table, not JSON — the model fills fields and
@@ -148,7 +157,11 @@ export function parseRuleClassifications(raw: string): RuleClassification[] {
     }
 
     if (kindLabel === '画像') {
-      out.push({ id, kind: 'profile' });
+      const dimension = fields.get('维度');
+      // A dimension the merge step does not know is not a dimension; keeping it out
+      // leaves the item unlabelled, which is visible, instead of mislabelled.
+      const known = dimension && (PROFILE_DIMENSIONS as readonly string[]).includes(dimension);
+      out.push({ id, kind: 'profile', ...(known ? { dimension } : {}) });
       continue;
     }
     if (kindLabel === '待修') {

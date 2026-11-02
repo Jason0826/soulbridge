@@ -120,3 +120,24 @@ test('classifier: a keyed line becomes a rule; no condition becomes 待修', () 
   assert.deepEqual(JSON.parse(classified[2].trigger ?? '{}'), { state: 'long-session' });
   assert.equal(classified[3].reason, '规则缺少触发条件');
 });
+
+test('classifier: a profile line carries its dimension, and only a real one', () => {
+  // The dimension decided here is what the merge step later cuts batches along, so
+  // it has to travel with the classification instead of being guessed downstream.
+  const classified = parseRuleClassifications(
+    [
+      '画像: fc_a | 维度=沟通偏好',
+      '画像: fc_b | 维度=胡说八道',
+      '画像: fc_c',
+    ].join('\n'),
+  );
+  assert.equal(classified[0].dimension, '沟通偏好');
+  // An invented dimension is not a dimension: the item stays unlabelled, which the
+  // merge log reports, instead of being filed under a lens nobody defined.
+  assert.equal(classified[1].dimension, undefined);
+  assert.equal(classified[2].dimension, undefined);
+  assert.deepEqual(
+    classified.map((item) => item.kind),
+    ['profile', 'profile', 'profile'],
+  );
+});

@@ -27,7 +27,14 @@ const PROFILE_METHOD = `<method>
 6. 排序：价值观 > 工作方式 > 沟通偏好 > 情绪 > 人际关系 > 生活兴趣 > 边界。
 </method>`;
 
-const PROFILE_DIMENSIONS_BLOCK = `<dimensions>
+/**
+ * What each dimension admits, in one place.
+ *
+ * Two model stages ask about dimensions — the merge ("which lens is this line") and
+ * the classifier ("which lens is this lesson") — and they must mean the same thing.
+ * A second copy would drift the first time either is edited.
+ */
+export const PROFILE_DIMENSIONS_BLOCK = `<dimensions>
 每个维度是什么，决定什么算一条、什么不算：
 - 价值观：超越具体情境、值得追求的目标（Schwartz）。"想把事做对"算；"这个接口用 POST"不算。
 - 工作方式：面对任务时的稳定做法。"先验证再动手"算；"这次改了 A 文件"不算。

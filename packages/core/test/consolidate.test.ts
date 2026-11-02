@@ -14,7 +14,7 @@ import {
   isDerivedProfileLine,
   parseVerificationDraft,
 } from '../src/consolidate.ts';
-import { renderConsolidationPrompt, renderVerificationPrompt } from '../src/prompts.ts';
+import { renderConsolidationPrompt, renderVerificationPrompt, renderRuleClassifyPrompt } from '../src/prompts.ts';
 
 const base = { soulId: 's1', userId: 'u1' };
 
@@ -425,6 +425,41 @@ test('profile: a line that cites a source is derived, marker or not', () => {
   assert.equal(isDerivedProfileLine({ slots: [{ slot: '合并' }] }), true);
   assert.equal(isDerivedProfileLine({ slots: [{ slot: '维度' }] }), false);
   assert.equal(isDerivedProfileLine({}), false);
+});
+
+test('profile: marking a lesson writes the dimension the merge will cut along', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  store.putFact({ ...base, id: 'f1', statement: '讨厌同一件事反复讲', typeName: '教训', holder: 'self' });
+  store.putFact({ ...base, id: 'f2', statement: '先验证再动手', typeName: '教训', holder: 'self' });
+  store.putFact({ ...base, id: 'f3', statement: '边界不明的一句', typeName: '教训', holder: 'self' });
+
+  soul.markProfile('f1', { dimension: '沟通偏好' });
+  soul.markProfile('f2', { dimension: '不存在的维度' });
+  soul.markProfile('f3');
+
+  const dimension = (id: string) => store.fact(id)?.slots.find((slot) => slot.slot === '维度')?.value;
+  assert.deepEqual(dimension('f1'), { kind: 'text', value: '沟通偏好' });
+  // An invalid dimension writes nothing rather than a wrong label: an unlabelled
+  // judgment waits, a mislabelled one would be merged into the wrong lens.
+  assert.equal(dimension('f2'), undefined);
+  assert.equal(dimension('f3'), undefined);
+  // All three are profile items and none is derived, so all wait to be merged; the
+  // unlabelled ones are reported by the merge step, not merged blindly.
+  assert.equal(soul.profileItems().length, 3);
+  store.close();
+});
+
+test('profile prompt: the classifier and the merge share one definition of a dimension', () => {
+  const merge = renderProfileMergePrompt({ items: [{ id: 'fc_a', statement: '先验证再动手' }] });
+  const classify = renderRuleClassifyPrompt({ items: [{ id: 'fc_a', statement: '先验证再动手' }] });
+  // Two copies of "什么算价值观" would drift the first time either is edited, so
+  // the classifier renders the merge prompt's block instead of retyping it.
+  for (const line of ['超越具体情境', '自愿投入时间', '必须贴着原话']) {
+    assert.ok(merge.includes(line), `merge prompt missing ${line}`);
+    assert.ok(classify.includes(line), `classify prompt missing ${line}`);
+  }
+  assert.match(classify, /画像: id \| 维度=/);
 });
 
 test('profile: derived lines are not offered back as merge input', () => {

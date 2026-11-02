@@ -53,6 +53,7 @@ export {
   parseProfileMerge,
   groupProfileCandidates,
   isDerivedProfileLine,
+  PROFILE_DIMENSIONS,
 } from './consolidate.ts';
 export type { VerificationDraft, ConclusionRelation } from './consolidate.ts';
 export type { ProfileLine, ProfileCandidate, ProfileGroup } from './consolidate.ts';
@@ -107,7 +108,7 @@ import { parseTrigger } from './rules.ts';
 import type { Rule } from './rules.ts';
 import { planRetrieval } from './retrieval.ts';
 import type { RetrievalPlan } from './retrieval.ts';
-import { gateConclusion, conclusionSlots, isDerivedProfileLine } from './consolidate.ts';
+import { gateConclusion, conclusionSlots, isDerivedProfileLine, PROFILE_DIMENSIONS } from './consolidate.ts';
 import { buildContext } from './context.ts';
 import { reflect, ruleExtract, nextEmotion } from './reflect.ts';
 import { rank, tokenize } from './scoring.ts';
@@ -709,8 +710,16 @@ export class Soul {
   }
 
   /** Apply a profile classification: it is about the person, not a triggered rule. */
-  markProfile(factId: string): void {
+  markProfile(factId: string, options: { dimension?: string } = {}): void {
     this.store.setFactTypeName(factId, '画像');
+    // The dimension is written here because this is the moment the model decided
+    // which lens the judgment belongs to. The merge step cuts its batches along
+    // this value later, so a missing dimension is a judgment that can never be
+    // merged — visible in the merge log as 未标注, not silently guessed.
+    const dimension = options.dimension;
+    if (dimension && (PROFILE_DIMENSIONS as readonly string[]).includes(dimension)) {
+      this.store.addSlots(factId, [{ slot: '维度', value: { kind: 'text', value: dimension } }]);
+    }
   }
 
   /**

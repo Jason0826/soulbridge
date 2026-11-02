@@ -13,6 +13,7 @@
  *   - wrap the data, never inline it next to the instructions
  *   - end with the output anchor
  */
+import { PROFILE_DIMENSIONS_BLOCK } from './profile-prompt.ts';
 
 export interface KnownEntityPrompt {
   id: string;
@@ -403,6 +404,8 @@ const CLASSIFY_RULES = `<rules>
 
 - 关键词不要用"代码""工作"这种大词，它们每天都会出现。
 - 只能输出 <input> 里出现过的 id，不许编。
+- 画像那一行必须带维度：维度=价值观|工作方式|沟通偏好|情绪|人际关系|生活兴趣|边界。
+  维度决定这条判断以后跟谁合并，选错等于把它归到别的类别里，所以拿不准时按下面 <dimensions> 的定义选，不要自己造词。
 </rules>`;
 
 const CLASSIFY_EXAMPLE = `<example>
@@ -412,7 +415,7 @@ const CLASSIFY_EXAMPLE = `<example>
 </input>
 <output>
 规则: fc_a | 关键词=json,package.json,配置 | 动作=用 edit 工具或 BOM 安全写入，不要用字符串替换
-画像: fc_b
+画像: fc_b | 维度=沟通偏好
 </output>
 </example>`;
 
@@ -426,8 +429,11 @@ export function renderRuleClassifyPrompt(input: RuleClassifyPromptInput): string
   return [
     CLASSIFY_ROLE,
     CLASSIFY_RULES,
+    // The definitions are rendered from the merge prompt's copy, not retyped here:
+    // two copies of "what counts as 价值观" would drift the first time one is edited.
+    PROFILE_DIMENSIONS_BLOCK,
     CLASSIFY_EXAMPLE,
-    '<format>每行：规则: id | 关键词=… | 动作=… / 画像: id / 待修: id | 原因=…</format>',
+    '<format>每行：规则: id | 关键词=… | 动作=… ／ 画像: id | 维度=… ／ 待修: id | 原因=…</format>',
     ['<input>', ...items, '</input>'].join('\n'),
     '<output>',
   ].join('\n\n');
