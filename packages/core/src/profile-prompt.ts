@@ -27,6 +27,17 @@ const PROFILE_METHOD = `<method>
 6. 排序：价值观 > 工作方式 > 沟通偏好 > 情绪 > 人际关系 > 生活兴趣 > 边界。
 </method>`;
 
+const PROFILE_DIMENSIONS_BLOCK = `<dimensions>
+每个维度是什么，决定什么算一条、什么不算：
+- 价值观：超越具体情境、值得追求的目标（Schwartz）。"想把事做对"算；"这个接口用 POST"不算。
+- 工作方式：面对任务时的稳定做法。"先验证再动手"算；"这次改了 A 文件"不算。
+- 沟通偏好：希望信息以什么形式、什么节奏出现。"整轮对话当整体"算。
+- 情绪：对具体事件的感受与强度。"被反复确认会烦"算；"今天天气"不算。
+- 人际关系：与特定人的位置和距离（温暖 × 支配）。"她最近压力大"算。
+- 生活兴趣：自愿投入时间的事。"喜欢爬山"算。
+- 边界：明确说过的"不要"。没有公认分类学，必须贴着原话，不许概括。
+</dimensions>`;
+
 const PROFILE_RULES = `<rules>
 - 每条 6–32 字，一句一个判断，不编号。
 - 一条只讲一件事。禁止用分号把几件事连成一条——那等于没拆。
@@ -78,6 +89,7 @@ export function renderProfileMergePrompt(input: ProfileMergePromptInput): string
   return [
     PROFILE_ROLE,
     PROFILE_METHOD,
+    PROFILE_DIMENSIONS_BLOCK,
     PROFILE_RULES,
     PROFILE_EXAMPLES,
     PROFILE_EXAMPLE,

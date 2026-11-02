@@ -51,6 +51,7 @@
 | **记忆分两层、时间与精度** | [adr/0032](adr/0032-two-layers-of-memory.md) |
 | **规则 / 画像 / 记忆三层，锚点退场** | [adr/0033](adr/0033-rules-profile-memory.md) |
 | 存什么、怎么衰减 | [briefs/0019](briefs/0019-memory-selection.md) |
+| **画像的维度与准入** | [briefs/0021](briefs/0021-profile-dimensions.md) |
 | 怎么从有限窗口里取 | [briefs/0020](briefs/0020-retrieval-funnel.md) |
 | 抽取与归纳 | [briefs/0016](briefs/0016-extraction-consolidation.md) |
 | 线索（跨中断的话题） | [briefs/0017](briefs/0017-topic-threads.md) |

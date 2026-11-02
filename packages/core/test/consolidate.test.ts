@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { renderProfileMergePrompt } from '../src/profile-prompt.ts';
 import { openSqlite } from '../src/sqlite.ts';
 import { Soul } from '../src/index.ts';
 import {
@@ -357,4 +358,11 @@ test('profile gates: a semicolon-welded line is rejected, the split version pass
     allowed,
   );
   assert.equal(split.length, 3);
+});
+test('profile prompt: dimension definitions travel with the request', () => {
+  const prompt = renderProfileMergePrompt({ items: [{ id: 'fc_a', statement: '先验证再动手' }] });
+  // Without the definitions the model invents what "价值观" means.
+  assert.match(prompt, /超越具体情境/);
+  assert.match(prompt, /边界：明确说过的/);
+  assert.match(prompt, /维度=价值观/);
 });
