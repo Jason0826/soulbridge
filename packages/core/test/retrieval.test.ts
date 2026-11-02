@@ -104,3 +104,55 @@ test('router: pronouns and particles are not subjects', () => {
   assert.equal(subjectCandidate('和你说过'), undefined);
   assert.equal(subjectCandidate('和 c 吃饭是什么时候'), 'c');
 });
+test('latestAbout: relevance to the question beats plain recency', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  const a = store.putEntity({ soulId: 's1', userId: 'u1', type: 'person', name: 'a', seenAt: 1 });
+  const now = Date.parse('2026-11-02T00:00:00Z');
+  const day = 86_400_000;
+  store.putFact({
+    soulId: 's1',
+    userId: 'u1',
+    id: 'old-meal',
+    statement: '用户和a一起吃火锅',
+    at: now - 100 * day,
+    slots: [{ slot: '对象', value: { kind: 'entity', entityId: a.id } }],
+  });
+  store.putFact({
+    soulId: 's1',
+    userId: 'u1',
+    id: 'new-job',
+    statement: 'a换了工作',
+    at: now - day,
+    slots: [{ slot: '对象', value: { kind: 'entity', entityId: a.id } }],
+  });
+
+  // Recency alone would return the job; the question is about the meal.
+  assert.equal(soul.latestAbout('a', { limit: 1 })[0]?.id, 'new-job');
+  assert.equal(soul.latestAbout('a', { query: '上次和a吃火锅是什么时候', limit: 1 })[0]?.id, 'old-meal');
+  store.close();
+});
+
+test('latestAbout: a frequently recalled fact decays more slowly', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  const a = store.putEntity({ soulId: 's1', userId: 'u1', type: 'person', name: 'a', seenAt: 1 });
+  const now = Date.parse('2026-11-02T00:00:00Z');
+  const day = 86_400_000;
+  // Same age, so the only difference is practice: use must be what moves it.
+  for (const [id, daysAgo] of [['practiced', 30], ['fresh', 30]] as const) {
+    store.putFact({
+      soulId: 's1',
+      userId: 'u1',
+      id,
+      statement: 'a搬家了',
+      at: now - daysAgo * day,
+      slots: [{ slot: '对象', value: { kind: 'entity', entityId: a.id } }],
+    });
+  }
+  for (let i = 0; i < 20; i += 1) store.recordRecalls(['practiced'], now);
+
+  const ranked = soul.latestAbout('a', { query: '搬家', limit: 2 });
+  assert.equal(ranked[0]?.id, 'practiced', 'use slows decay');
+  store.close();
+});

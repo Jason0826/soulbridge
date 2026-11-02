@@ -77,7 +77,7 @@ export interface SoulStore {
   /** Count that retrieval surfaced these facts (0019: use slows decay). */
   recordRecalls(factIds: string[], at: number): void;
   /** Facts about one entity, newest event first; predicate narrows within it. */
-  latestAbout(soulId: string, userId: string, entityName: string, options?: { predicate?: string; limit?: number }): Fact[];
+  latestAbout(soulId: string, userId: string, entityName: string, options?: { predicate?: string; query?: string; limit?: number; now?: number }): Fact[];
   /** The thread the previous turn belonged to, if any. */
   threadBefore(sessionId: string, turnNo: number): string | null;
   /** The most recently closed thread, or null when none has closed yet. */

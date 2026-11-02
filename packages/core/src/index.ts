@@ -636,7 +636,7 @@ export class Soul {
   }
 
   /** The entity timeline: what is known about one person/thing, newest first. */
-  latestAbout(entityName: string, options: { predicate?: string; limit?: number } = {}): Fact[] {
+  latestAbout(entityName: string, options: { predicate?: string; query?: string; limit?: number } = {}): Fact[] {
     return this.store.latestAbout(this.soulId, this.userId, entityName, options);
   }
 

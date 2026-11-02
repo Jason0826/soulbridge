@@ -1233,14 +1233,28 @@ export function openSqlite(file: string): SoulStore {
      * never look outside the subject: answering about b when asked about a is the
      * one error worse than saying nothing.
      */
+    /**
+     * The entity timeline: facts about one person/thing, ranked.
+     *
+     * This is the primitive behind "上次和 a 吃饭". Recency alone is not enough — an
+     * entity with a thousand facts would return its three most recent ones, which
+     * answers "what happened to a lately", not "the meal". So the ranking is
+     * relevance to the question × power-law recency × recall practice, the same
+     * weights the relevance primitive uses (0019, 0020).
+     *
+     * It must never look outside the subject: answering about b when asked about a
+     * is the one error worse than saying nothing.
+     */
     latestAbout(
       soulId: string,
       userId: string,
       entityName: string,
-      options: { predicate?: string; limit?: number } = {},
+      options: { predicate?: string; query?: string; limit?: number; now?: number } = {},
     ): Fact[] {
       const limit = Math.max(1, options.limit ?? 5);
       const predicate = options.predicate?.trim();
+      // Bounded so a long-lived entity cannot make this unbounded.
+      const CANDIDATES = 500;
       const rows = db
         .prepare(
           `SELECT DISTINCT f.* FROM facts f
@@ -1260,10 +1274,27 @@ export function openSqlite(file: string): SoulStore {
           predicate ?? null,
           predicate ? `%${predicate}%` : null,
           predicate ? `%${predicate}%` : null,
-          limit,
+          CANDIDATES,
         ) as Row[];
       const slots = slotsOfRows(db, rows.map((row) => String(row.id)));
-      return rows.map((row) => rowToFact(row, slots));
+      const facts = rows.map((row) => rowToFact(row, slots));
+
+      const query = options.query?.trim();
+      if (!query) return facts.slice(0, limit);
+
+      const now = options.now ?? Date.now();
+      const queryTokens = tokenize(query);
+      const stats = buildCorpusStats(facts.map((fact) => tokenize(fact.statement)));
+      const scored = facts.map((fact) => {
+        const relevanceScore = bm25(queryTokens, tokenize(fact.statement), stats);
+        const ageDays = Math.max(0, (now - (fact.at ?? fact.createdAt)) / 86_400_000);
+        // Power law, not exponential: the tail of a memory stays reachable (0019).
+        const decay = 1 / Math.sqrt(1 + ageDays);
+        const practice = 1 + 0.2 * Math.log(1 + fact.recallCount);
+        return { fact, score: relevanceScore * decay * practice };
+      });
+      scored.sort((a, b) => b.score - a.score);
+      return scored.slice(0, limit).map((entry) => entry.fact);
     },
 
     stepsOf(turnId: string): TurnStep[] {
