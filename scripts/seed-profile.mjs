@@ -5,9 +5,13 @@
  * the same thing. Merging compresses them into a handful, and each merged line keeps
  * the ids it came from so a reader can walk back.
  *
+ * Merged lines are derived and are excluded by default: re-merging a compression is
+ * cascading compression and produces thinner lines than the set it came from.
+ *
  *   node scripts/seed-profile.mjs --dry-run
  *   node scripts/seed-profile.mjs --apply
  *   node scripts/seed-profile.mjs --apply --include-superseded   # re-test after a bad merge
+ *   node scripts/seed-profile.mjs --apply --include-merged       # deliberately re-compress
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -18,6 +22,7 @@ const HOME = process.env.SOULBRIDGE_HOME ?? join(homedir(), '.soulbridge');
 const apply = process.argv.includes('--apply');
 const includeSuperseded = process.argv.includes('--include-superseded');
 const onlySuperseded = process.argv.includes('--only-superseded');
+const includeMerged = process.argv.includes('--include-merged');
 if (!apply && !process.argv.includes('--dry-run')) {
   console.error('pass --dry-run or --apply');
   process.exit(2);
@@ -29,14 +34,16 @@ const statuses = db
   .all();
 console.log(`profile rows by status: ${statuses.map((row) => `${row.status}=${row.n}`).join(' ')}`);
 
+const notMerged = includeMerged
+  ? ''
+  : "AND NOT EXISTS (SELECT 1 FROM fact_slots s WHERE s.fact_id = facts.id AND s.slot = '合并')";
+const scope = onlySuperseded
+  ? "AND status = 'superseded'"
+  : includeSuperseded
+    ? ''
+    : "AND status != 'superseded'";
 const rows = db
-  .prepare(
-    onlySuperseded
-      ? "SELECT id, statement FROM facts WHERE type_name = '画像' AND status = 'superseded' ORDER BY created_at LIMIT 60"
-      : includeSuperseded
-      ? "SELECT id, statement FROM facts WHERE type_name = '画像' ORDER BY created_at LIMIT 60"
-      : "SELECT id, statement FROM facts WHERE type_name = '画像' AND status != 'superseded' ORDER BY created_at LIMIT 60",
-  )
+  .prepare(`SELECT id, statement FROM facts WHERE type_name = '画像' ${scope} ${notMerged} ORDER BY created_at LIMIT 60`)
   .all();
 db.close();
 

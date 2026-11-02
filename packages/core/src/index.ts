@@ -745,8 +745,13 @@ export class Soul {
         statement: line.statement,
         typeName: '画像',
         holder: 'self',
-        confidence: 0.8,
-        slots: line.sources.map((id) => ({ slot: '来源', value: { kind: 'fact' as const, factId: id } })),
+        // More sources means more observations behind the line, so it ranks first.
+        confidence: Math.min(0.95, 0.6 + 0.05 * line.sources.length),
+        slots: [
+          ...line.sources.map((id) => ({ slot: '来源', value: { kind: 'fact' as const, factId: id } })),
+          // A merged line is not an original: re-merging merged lines loses detail.
+          { slot: '合并', value: { kind: 'text' as const, value: '1' } },
+        ],
       });
       written.push(fact);
       for (const sourceId of line.sources) {
