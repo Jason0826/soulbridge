@@ -1070,6 +1070,15 @@ export function openSqlite(file: string): SoulStore {
         .all(threadId) as Row[];
       return rows.map(rowToTurnPair);
     },
+    lastClosedThread(soulId: string, userId: string): TurnThread | null {
+      const row = db
+        .prepare(
+          `SELECT * FROM threads WHERE soul_id = ? AND user_id = ? AND status = 'closed'
+           ORDER BY COALESCE(closed_at, 0) DESC LIMIT 1`,
+        )
+        .get(soulId, userId) as Row | undefined;
+      return row ? rowToThread(row) : null;
+    },
     factsByTurns(turnIds: string[]): Fact[] {
       if (turnIds.length === 0) return [];
       const placeholders = turnIds.map(() => '?').join(',');

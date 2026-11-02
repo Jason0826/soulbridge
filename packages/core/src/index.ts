@@ -592,6 +592,27 @@ export class Soul {
       facts,
     };
   }
+  /**
+   * What "where were we" means: the last topic that actually finished, its
+   * conclusion, and the last couple of turns.
+   *
+   * A session boundary is not a topic boundary, so this is keyed on the closed
+   * thread, not on the previous session.
+   */
+  lastClosedThread(): {
+    thread: TurnThread;
+    conclusion: Fact | null;
+    turns: Array<{ turnNo: number; userText: string }>;
+  } | null {
+    const thread = this.store.lastClosedThread(this.soulId, this.userId);
+    if (!thread) return null;
+    const conclusion = thread.summaryFactId ? this.store.fact(thread.summaryFactId) : null;
+    const turns = this.store
+      .threadTurns(thread.id)
+      .slice(-2)
+      .map((turn) => ({ turnNo: turn.turn, userText: turn.userText }));
+    return { thread, conclusion, turns };
+  }
   /** Current conclusions, newest first. Superseded ones are history, not state. */
   conclusions(limit = 20): Fact[] {
     return this.store

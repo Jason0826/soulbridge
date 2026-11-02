@@ -88,3 +88,21 @@ test('threadContext: the chapter, in order, with the facts drawn from it', () =>
   assert.deepEqual(context?.facts.map((fact) => fact.id), ['f1', 'f2']);
   store.close();
 });
+test('lastClosedThread: the newest finished topic, with its conclusion and last turns', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  store.putTurn({ ...S, id: 't1', sessionId: 'old', turnNo: 1, startedAt: 1000, userText: '第一轮', steps: [] });
+  store.putTurn({ ...S, id: 't2', sessionId: 'old', turnNo: 2, startedAt: 2000, userText: '第二轮', steps: [] });
+
+  const thread = store.openThread({ ...S, sessionId: 'old', topic: '记忆如何影响行为', openedAt: 1000, turnNo: 2 });
+  store.attachTurn('t1', thread.id);
+  store.attachTurn('t2', thread.id);
+  const fact = store.putFact({ ...S, statement: '用户要求先有机制', typeName: '结论', holder: 'self', sourceTurnId: 't2' });
+  store.closeThread(thread.id, 5000, fact.id);
+
+  const last = soul.lastClosedThread();
+  assert.equal(last?.thread.id, thread.id);
+  assert.equal(last?.conclusion?.statement, '用户要求先有机制');
+  assert.deepEqual(last?.turns.map((turn) => turn.userText), ['第一轮', '第二轮']);
+  store.close();
+});
