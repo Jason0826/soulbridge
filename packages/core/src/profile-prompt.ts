@@ -2,6 +2,8 @@
  * Profile merging: many judgments → a few that hold up
  * ------------------------------------------------------------------ */
 
+import { PROFILE_DIMENSIONS, dimensionChoices, renderDimensionDefinitions } from './dimensions.ts';
+
 const PROFILE_ROLE = `<role>
 你在整理一组"关于这个人的判断"。它们现在又碎又重复，你要把它们合并成更少、更准的句子。
 你不添加新判断，只压缩已有的。
@@ -24,33 +26,24 @@ const PROFILE_METHOD = `<method>
    方向反了比漏掉更糟——那是把人写反了。
 4. 拆开无关：一句里有两个不相干的点 → 拆成两条，不要用"并且"硬连。
 5. 丢弃残句：没有主语、只有半个意思的（"每次…""因为…"）→ 丢弃，不要补全。
-6. 排序：价值观 > 工作方式 > 沟通偏好 > 情绪 > 人际关系 > 生活兴趣 > 边界。
+6. 排序：${PROFILE_DIMENSIONS.join(' > ')}。
 </method>`;
 
 /**
- * What each dimension admits, in one place.
+ * What each dimension admits — rendered from the declaration in dimensions.ts.
  *
- * Two model stages ask about dimensions — the merge ("which lens is this line") and
- * the classifier ("which lens is this lesson") — and they must mean the same thing.
- * A second copy would drift the first time either is edited.
+ * Two model stages ask about dimensions (the merge and the classifier) and they must
+ * mean the same thing. Generating the block means a new dimension appears in both
+ * prompts automatically instead of drifting in whichever copy was not edited.
  */
-export const PROFILE_DIMENSIONS_BLOCK = `<dimensions>
-每个维度是什么，决定什么算一条、什么不算：
-- 价值观：超越具体情境、值得追求的目标（Schwartz）。"想把事做对"算；"这个接口用 POST"不算。
-- 工作方式：面对任务时的稳定做法。"先验证再动手"算；"这次改了 A 文件"不算。
-- 沟通偏好：希望信息以什么形式、什么节奏出现。"整轮对话当整体"算。
-- 情绪：对具体事件的感受与强度。"被反复确认会烦"算；"今天天气"不算。
-- 人际关系：与特定人的位置和距离（温暖 × 支配）。"她最近压力大"算。
-- 生活兴趣：自愿投入时间的事。"喜欢爬山"算。
-- 边界：明确说过的"不要"。没有公认分类学，必须贴着原话，不许概括。
-</dimensions>`;
+export const PROFILE_DIMENSIONS_BLOCK = renderDimensionDefinitions();
 
 const PROFILE_RULES = `<rules>
 - 每条 6–32 字，一句一个判断，不编号。
 - 一条只讲一件事。禁止用分号把几件事连成一条——那等于没拆。
 - 不许出现"有时候/有时/通常/大部分时候"——含糊说明没有真的合并。
 - 不许出现"一切/所有/总是/从不"，除非来源原文里就有。
-- 每行给一个维度：维度=价值观|工作方式|沟通偏好|情绪|人际关系|生活兴趣|边界
+- 每行给一个维度：${dimensionChoices()}
 - 一行只讲一个维度。不同维度必须分行——跨维度拼成一句就是没拆。
 - 每条必须给来源：来源=fc_xxx,fc_yyy，只能引用 <input> 里出现过的 id；没有来源的整行不要。
 - 合并后 5–8 条；宁少不凑。
@@ -81,8 +74,8 @@ const PROFILE_EXAMPLE = `<example>
 - fc_c | 用户很讨厌一件事反复讲，换工具又要重新交代
 </input>
 <output>
-画像: 要机制，不要靠 prompt 的自觉 | 维度=工作方式 | 来源=fc_a,fc_b
-画像: 讨厌重复交代，工具换了也不该重讲 | 维度=沟通偏好 | 来源=fc_c
+画像: 要机制，不要靠 prompt 的自觉 | 维度=${PROFILE_DIMENSIONS[1]} | 来源=fc_a,fc_b
+画像: 讨厌重复交代，工具换了也不该重讲 | 维度=${PROFILE_DIMENSIONS[2]} | 来源=fc_c
 </output>
 </example>`;
 

@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-02 22:50**（core 0.0.77 / plugin 0.0.89）
+最后核对：**2026-11-02 23:00**（core 0.0.78 / plugin 0.0.89）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -16,9 +16,13 @@
 正反句被折叠、JSON 形状抽取被空 operations 遮蔽。core 241 测试全过；
 `scripts/review-probes.mjs` 前 5 段从红变绿。
 
-**退场账**（22:50）：已退场 3 项（turn_pairs 写入、handoff.md、review.mjs），
+**退场账**（23:00）：已退场 3 项（turn_pairs 写入、handoff.md、review.mjs），
 技术债 4 项（memories 写入、distill 开关、锚点容器、JSON 抽取形状）——
 每一项都在 `docs/retirements.json` 里，清干净就翻成 done，复活就 FAIL。
+
+**唯一声明**（23:00）：维度名与准入定义收进 `dimensions.ts`，两个 prompt 与示例改为渲染，
+副本清零；`superseded` 还有 3 处副本（SQL 字面量，改之前要先解决参数绑定，见 declarations.json）。
+登记在 `docs/declarations.json`，`health-check` 第 8 节判定。
 
 ## 一、当前架构（一句话）
 

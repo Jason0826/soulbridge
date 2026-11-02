@@ -51,9 +51,12 @@ const srcLines = srcFiles.reduce((n, f) => n + readFileSync(f, 'utf8').split('\n
 const PLUGIN_ENTRY = 'D:/git-workspace/repos/dsh-plugin-soulbridge/index.js';
 const pluginLines = existsSync(PLUGIN_ENTRY) ? readFileSync(PLUGIN_ENTRY, 'utf8').split('\n').length : 0;
 
+// history 是账的理由：--update-budget 只改数字，不许把"为什么涨"冲掉。
+const previousBudget = existsSync(BUDGET_PATH) ? JSON.parse(readFileSync(BUDGET_PATH, 'utf8')) : null;
 const measuredBudget = {
   date: new Date().toISOString().slice(0, 10),
   note: '棘轮预算：数字是实测值，只能往下调，不能往上调。要加功能导致超限时，先删掉同等规模的东西，再跑 --update-budget。',
+  history: previousBudget?.history ?? [],
   coreLines: srcLines,
   pluginLines,
   files: measuredFiles,

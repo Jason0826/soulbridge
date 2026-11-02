@@ -14,6 +14,7 @@
  *   - end with the output anchor
  */
 import { PROFILE_DIMENSIONS_BLOCK } from './profile-prompt.ts';
+import { dimensionChoices } from './dimensions.ts';
 
 export interface KnownEntityPrompt {
   id: string;
@@ -408,7 +409,7 @@ const CLASSIFY_RULES = `<rules>
 
 - 关键词不要用"代码""工作"这种大词，它们每天都会出现。
 - 只能输出 <input> 里出现过的 id，不许编。
-- 画像那一行必须带维度：维度=价值观|工作方式|沟通偏好|情绪|人际关系|生活兴趣|边界。
+- 画像那一行必须带维度：${dimensionChoices()}。
   维度决定这条判断以后跟谁合并，选错等于把它归到别的类别里，所以拿不准时按下面 <dimensions> 的定义选，不要自己造词。
 </rules>`;
 
@@ -433,8 +434,8 @@ export function renderRuleClassifyPrompt(input: RuleClassifyPromptInput): string
   return [
     CLASSIFY_ROLE,
     CLASSIFY_RULES,
-    // The definitions are rendered from the merge prompt's copy, not retyped here:
-    // two copies of "what counts as 价值观" would drift the first time one is edited.
+    // The definitions are rendered from dimensions.ts, never retyped here: a second
+    // copy of the admission criteria is a copy that stops matching after one edit.
     PROFILE_DIMENSIONS_BLOCK,
     CLASSIFY_EXAMPLE,
     '<format>每行：规则: id | 关键词=… | 动作=… ／ 画像: id | 维度=… ／ 待修: id | 原因=…</format>',

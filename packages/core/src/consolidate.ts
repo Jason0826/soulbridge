@@ -226,20 +226,13 @@ export interface ProfileLine {
 /**
  * The dimensions a profile line can belong to.
  *
- * A person is not one list: work style, communication habits, feelings, relationships
- * and boundaries are different lenses. Without a dimension, a global merge welds
- * unrelated lines together and one busy dimension crowds out the rest.
+ * Declared in dimensions.ts so prompts render it instead of retyping the names —
+ * a second copy is how "add an eighth dimension" becomes a silent drift.
  */
-export const PROFILE_DIMENSIONS = [
-  '价值观',
-  '工作方式',
-  '沟通偏好',
-  '情绪',
-  '人际关系',
-  '生活兴趣',
-  '边界',
-] as const;
-export type ProfileDimension = (typeof PROFILE_DIMENSIONS)[number];
+export { PROFILE_DIMENSIONS } from './dimensions.ts';
+export type { ProfileDimension } from './dimensions.ts';
+import { PROFILE_DIMENSIONS } from './dimensions.ts';
+import type { ProfileDimension } from './dimensions.ts';
 
 const PROFILE_LINE = /^画像\s*[:：]\s*(.+)$/;
 /** Hedged lines describe a mood, not a person; the merge has not happened yet. */
