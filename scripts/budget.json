@@ -31,9 +31,14 @@
       "date": "2026-11-03",
       "delta": 34,
       "reason": "实体刷新不再清空 aliases/attrs：读取旧行、别名取并集、属性合并（+34 行，含注释）。bug 修复允许涨。"
+    },
+    {
+      "date": "2026-11-03",
+      "delta": 40,
+      "reason": "WAL 备份改 VACUUM INTO + 完整性校验 + 坏备份挪走（+40 行，含说明）。数据安全修复允许涨。"
     }
   ],
-  "coreLines": 7452,
+  "coreLines": 7494,
   "pluginLines": 2304,
   "files": {
     "analyze.ts": 255,
@@ -55,7 +60,7 @@
     "reflect.ts": 411,
     "retrieval.ts": 116,
     "scoring.ts": 170,
-    "sqlite.ts": 1622,
+    "sqlite.ts": 1664,
     "config.ts": 96,
     "merge.ts": 41,
     "steering.ts": 103,

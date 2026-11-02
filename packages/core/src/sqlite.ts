@@ -6,7 +6,7 @@
  * Older databases are upgraded in place after a one-off backup; a database
  * from a newer binary is refused instead of being silently written.
  */
-import { copyFileSync, existsSync } from 'node:fs';
+import { copyFileSync, existsSync, renameSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { DEFAULT_EMOTION } from './types.ts';
 import { FACT_STATUS, MEMORY_STATUS } from './config/status.ts';
@@ -403,17 +403,59 @@ export function upgradeToV5(db: DatabaseSync): void {
 /**
  * Copy the database aside before a schema upgrade.
  *
- * In WAL mode the most recent commits can live in the `-wal` sidecar, so a copy
- * of the main file alone can be missing data exactly when it matters. Checkpoint
- * first (TRUNCATE moves the WAL back into the main file and empties it), then
- * copy. Exported for the upgrade test.
+ * The backup is the only way back from a bad migration, so it has to be *valid*,
+ * not merely present. Two failures were possible before: a plain file copy after
+ * `wal_checkpoint(TRUNCATE)` dropped the newest commits when another connection
+ * pinned an old snapshot (the checkpoint returns busy and only partially flushes,
+ * and that return value was ignored), and an existing backup file was trusted
+ * forever even if it was the broken one from an earlier attempt.
+ *
+ * `VACUUM INTO` reads through the WAL and writes a consistent snapshot regardless
+ * of other readers, so it is the primary path; a checkpoint+copy remains as the
+ * fallback, and whatever it produces is opened and integrity-checked. A copy that
+ * fails its own check is moved aside (kept for forensics) and the upgrade refuses
+ * to run — a corrupt backup is worse than none, because it is the one thing we
+ * would trust when everything else failed.
+ *
+ * Exported for the upgrade test.
  */
 export function backupBeforeUpgrade(db: DatabaseSync, file: string, from: number): void {
   if (file === ':memory:' || !existsSync(file)) return;
   const backup = `${file}.bak-v${from}`;
-  if (existsSync(backup)) return;
-  db.exec('PRAGMA wal_checkpoint(TRUNCATE);');
-  copyFileSync(file, backup);
+  if (existsSync(backup)) {
+    if (integrityOf(backup)) return;
+    const corrupt = `${backup}.corrupt-${Date.now()}`;
+    renameSync(backup, corrupt);
+    throw new Error(`existing backup ${backup} is not readable; moved aside to ${corrupt}`);
+  }
+  try {
+    // Quotes are escaped because the path is spliced into SQL; VACUUM INTO takes a
+    // string expression, and binding it is not supported on every SQLite build.
+    db.exec(`VACUUM INTO '${backup.replace(/'/g, "''")}'`);
+  } catch {
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+    copyFileSync(file, backup);
+  }
+  if (!integrityOf(backup)) {
+    const corrupt = `${backup}.corrupt-${Date.now()}`;
+    renameSync(backup, corrupt);
+    throw new Error(`backup for schema v${from} failed its integrity check (kept at ${corrupt})`);
+  }
+}
+
+/** Does this file open and report `integrity_check = ok`? */
+function integrityOf(file: string): boolean {
+  try {
+    const copy = new DatabaseSync(file, { readOnly: true });
+    try {
+      const row = copy.prepare('PRAGMA integrity_check').get() as { integrity_check: string };
+      return row.integrity_check === 'ok';
+    } finally {
+      copy.close();
+    }
+  } catch {
+    return false;
+  }
 }
 
 export function openSqlite(file: string): SoulStore {
