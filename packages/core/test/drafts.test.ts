@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openSqlite } from '../src/sqlite.ts';
 import { Soul } from '../src/index.ts';
-import { extractByRules, extractWithModel, validateDraft } from '../src/extract.ts';
+import { extractByRules, extractWithModel, parseLineDraft, validateDraft } from '../src/extract.ts';
 
 const NOW = new Date('2026-10-31T12:00:00+08:00').getTime();
 
@@ -271,5 +271,99 @@ test('commit: a fact needs a key back, and time counts as one', () => {
     by: 'rules',
   });
   assert.equal(timed.facts.length, 1);
+  store.close();
+});
+/* ---------------- two layers (ADR 0032) ---------------- */
+
+test('line format: 持有 and 精度 are keyed, so old lines still parse', () => {
+  const raw = [
+    '实体: 用户 | self | ',
+    '实体: 小林 | person | 同事',
+    '事实: 小林在 2026-10-24 那周被裁员 | 裁员 | 2026-10-24 | 上周 | told | 0.8 | 持有=world | 精度=day | 被裁员者=小林',
+    '事实: 用户认为改 prompt 没用 | 偏好 | | | told | 0.9 | 持有=用户 | 精度=unknown | 提出者=用户',
+  ].join('\n');
+  const rows = parseLineDraft(raw);
+  const operations = (rows?.operations ?? []) as Array<{ fact: Record<string, unknown> }>;
+  assert.equal(operations.length, 2);
+  const world = operations[0].fact;
+  const mind = operations[1].fact;
+  assert.equal(world.holder, 'world');
+  assert.equal(world.at_precision, 'day');
+  assert.equal(mind.holder, '用户');
+  assert.equal(mind.at_precision, 'unknown');
+  assert.equal((world.slots as unknown[]).length, 1);
+});
+
+test('commit: a world fact with unknown time is kept, and opens a gap', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  const result = soul.commitDrafts({
+    entities: [{ name: 'a', type: 'person' }],
+    facts: [
+      {
+        statement: '用户与a吃了火锅',
+        holder: 'world',
+        atPrecision: 'unknown',
+        source: 'told',
+        confidence: 0.7,
+        slots: [{ slot: '对象', value: { kind: 'entity', entityName: 'a', entityType: 'person' } }],
+      },
+    ],
+    gaps: [],
+    by: 'rules',
+  });
+  assert.equal(result.facts.length, 1, 'unknown time is not a reason to discard');
+  assert.equal(result.facts[0].atPrecision, 'unknown');
+  assert.equal(result.gaps.length, 1, 'the missing date becomes something to ask');
+  assert.match(result.gaps[0].topic, /日期不明/);
+  store.close();
+});
+
+test('commit: a fact in someone\'s mind carries that holder and opens no gap', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  const result = soul.commitDrafts({
+    entities: [
+      { name: '用户', type: 'self' },
+      { name: 'a', type: 'person' },
+    ],
+    facts: [
+      {
+        statement: '用户认为改 prompt 不能让模型稳定输出',
+        holder: '用户',
+        atPrecision: 'unknown',
+        source: 'told',
+        confidence: 0.8,
+        slots: [{ slot: '提出者', value: { kind: 'entity', entityName: '用户', entityType: 'self' } }],
+      },
+    ],
+    gaps: [],
+    by: 'rules',
+  });
+  assert.equal(result.facts.length, 1);
+  assert.match(result.facts[0].holder, /^en_/, 'holder is an entity id, not a word');
+  assert.equal(result.gaps.length, 0, 'a stance has no event time to ask about');
+  store.close();
+});
+
+test('commit: an undeclared holder is a typo, not a person', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  const result = soul.commitDrafts({
+    entities: [{ name: 'a', type: 'person' }],
+    facts: [
+      {
+        statement: '用户觉得这个方案可行',
+        holder: '用户',
+        source: 'told',
+        confidence: 0.6,
+        slots: [{ slot: '提出者', value: { kind: 'entity', entityName: 'a', entityType: 'person' } }],
+      },
+    ],
+    gaps: [],
+    by: 'rules',
+  });
+  assert.equal(result.facts.length, 0);
+  assert.equal(result.skipped[0].reason, 'undeclared holder: 用户');
   store.close();
 });

@@ -252,9 +252,12 @@ export type DraftSlotValue =
 
 export interface FactDraft {
   statement: string;
+  /** world or a person's name — where the fact holds (ADR 0032). */
+  holder?: string;
   typeName?: string;
   at?: number;
   atText?: string;
+  atPrecision?: AtPrecision;
   source: FactSource;
   confidence: number;
   slots: Array<{ slot: string; value: DraftSlotValue }>;
@@ -334,6 +337,8 @@ export interface Fact {
   /** The fuzzy time expression as said ("上周三"), when `at` is approximate. */
   atText?: string;
   atEnd?: number;
+  /** Locatability, not precision: unknown is a value (ADR 0032). */
+  atPrecision?: AtPrecision;
   placeId?: string;
   status: FactStatus;
   confidence: number;
@@ -348,6 +353,9 @@ export interface Fact {
   slots: FactSlot[];
 }
 
+/** How exactly a fact is located in time (ADR 0032). */
+export type AtPrecision = 'day' | 'range' | 'relative' | 'unknown';
+
 export interface FactSpec {
   id?: string;
   soulId: string;
@@ -358,6 +366,7 @@ export interface FactSpec {
   at?: number;
   atText?: string;
   atEnd?: number;
+  atPrecision?: AtPrecision;
   placeId?: string;
   status?: FactStatus;
   confidence?: number;

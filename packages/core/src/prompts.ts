@@ -58,13 +58,18 @@ const EXTRACTION_SCHEMA = `<output-format>
 可以只写其中几行；什么都记不住就只写：无
 
 实体: 名字 | 类型 | 关系
-事实: 陈述 | 类型名 | 日期(YYYY-MM-DD) | 时间原文 | 来源 | 置信(0-1) | 槽位
+事实: 陈述 | 类型名 | 日期(YYYY-MM-DD) | 时间原文 | 来源 | 置信(0-1) | 持有=world或人名 | 精度=day/range/relative/unknown | 槽位
 缺口: 主题 | 张力(0-1) | 相关实体
 线索: 继续 <id>        或        线索: 新 | 一句话主题
 
 填写说明：
 - 类型只能是 person / thing / place / self；关系可空。
 - 陈述要自包含（15–80 字），把代词换成名字，保留数字和专有名词。
+- **持有**：世界上发生的事（换了工作、吃了饭、约定了暗号）写「持有=world」；
+  某人的看法、偏好、要求、担心（"用户认为…"）写那个人的名字，且这个人必须在本轮声明的实体里。
+  人物层的事实不写日期。
+- **精度**：日期换算出来写 day；只知道周/月写 range；只有相对说法（"初次见面""上次"）写 relative；
+  完全不知道写 unknown。**没有时间就写 unknown，绝不要编日期。**
 - 日期换算不出来就留空，把原话写进"时间原文"。
 - 来源：experienced（亲历）/ told（听说的）/ inferred（推断的）。
 - 槽位写成 名称=值，多个用 ; 隔开；值是数字就写数字，是实体就写实体名。
@@ -74,7 +79,7 @@ const EXTRACTION_SCHEMA = `<output-format>
   没有任何候选线索时，这一行只可能是"新"。
 - 示例：
 实体: 小林 | person | 同事
-事实: 小林在 2026-10-24 那周被裁员 | 裁员 | 2026-10-24 | 上周 | told | 0.8 | 被裁员者=小林
+事实: 小林在 2026-10-24 那周被裁员 | 裁员 | 2026-10-24 | 上周 | told | 0.8 | 持有=world | 精度=day | 被裁员者=小林
 缺口: 小林后来有着落吗 | 0.6 | 小林
 线索: 继续 th_ab12
 </output-format>`;
@@ -120,11 +125,11 @@ const EXTRACTION_EXAMPLES = `<examples>
 <example>
 <source>我同事小林上周被裁员了，挺难受的</source>
 <output>实体: 小林 | person | 同事
-事实: 小林在 2026-10-24 那周被裁员 | 裁员 | 2026-10-24 | 上周 | told | 0.8 | 被裁员者=小林</output>
+事实: 小林在 2026-10-24 那周被裁员 | 裁员 | 2026-10-24 | 上周 | told | 0.8 | 持有=world | 精度=day | 被裁员者=小林</output>
 </example>
 <example>
 <source>这个 bug 我上周就修好了</source>
-<output>事实: 用户说他在 2026-10-24 那周修好了这个 bug | 修复 | 2026-10-24 | 上周 | experienced | 0.7 | 修复者=用户</output>
+<output>事实: 用户说他在 2026-10-24 那周修好了这个 bug | 修复 | 2026-10-24 | 上周 | experienced | 0.7 | 持有=world | 精度=day | 修复者=用户</output>
 </example>
 <example>
 <source>好的，谢谢</source>
@@ -136,7 +141,7 @@ const EXTRACTION_EXAMPLES = `<examples>
 </example>
 <example>
 <source>我讨厌同一件事反复讲，换个工具又要重新说一遍</source>
-<output>事实: 用户讨厌同一件事反复讲，换工具也不想重复交代 | 偏好 | | | experienced | 0.9 | 偏好主体=用户</output>
+<output>事实: 用户讨厌同一件事反复讲，换工具也不想重复交代 | 偏好 | | | experienced | 0.9 | 持有=用户 | 精度=unknown | 偏好主体=用户</output>
 </example>
 </examples>`;
 

@@ -443,6 +443,8 @@ export class Soul {
     for (const draftEntity of draft.entities) ensureEntity(draftEntity.name, draftEntity.type);
 
     const facts: Fact[] = [];
+    // Declared before writeFact: a fact whose time is unknown opens a gap inside it.
+    const gaps: Gap[] = [];
     const recent = this.store.facts({ soulId: this.soulId, userId: this.userId, limit: 50 });
 
     /** One gate for every write path: legacy facts and operation payloads share it. */
@@ -478,13 +480,25 @@ export class Soul {
         skipped.push({ what: statement, reason: `undeclared entity: ${name}` });
         return null;
       }
-      const duplicate = recent.some(
+      // Where the fact holds (ADR 0032): `world`, or a named mind. A named holder
+      // must be a declared or known entity — otherwise it is a typo, not a person.
+      const holderName = factDraft.holder?.trim() || 'world';
+      let holder = 'world';
+      if (holderName !== 'world') {
+        if (!declared.has(holderName) && !byName.has(holderName)) {
+          skipped.push({ what: statement, reason: `undeclared holder: ${holderName}` });
+          return null;
+        }
+        holder = ensureEntity(holderName).id;
+      }
+
+      const duplicated = recent.some(
         (f) =>
           f.statement === statement &&
           (f.atText ?? '') === (factDraft.atText ?? '') &&
           Math.abs((f.at ?? f.createdAt) - (factDraft.at ?? at)) < 86400000,
       );
-      if (duplicate) {
+      if (duplicated) {
         skipped.push({ what: statement, reason: 'duplicate' });
         return null;
       }
@@ -501,15 +515,33 @@ export class Soul {
         soulId: this.soulId,
         userId: this.userId,
         statement,
+        holder,
         typeName: factDraft.typeName,
         at: factDraft.at,
         atText: factDraft.atText,
+        atPrecision: factDraft.atPrecision,
         source: factDraft.source,
         confidence: factDraft.confidence,
         sourceTurnId: options.turnId,
         slots,
       });
       facts.push(written);
+      // Known to have happened, unknown when: keep the memory and turn the missing
+      // date into something to ask about later, instead of inventing one.
+      if (holder === 'world' && written.atPrecision === 'unknown') {
+        const subject = slots.find((slot) => slot.value.kind === 'entity');
+        gaps.push(
+          this.store.putGap({
+            soulId: this.soulId,
+            userId: this.userId,
+            aboutEntityId: subject?.value.kind === 'entity' ? subject.value.entityId : undefined,
+            aboutFactId: written.id,
+            topic: `日期不明：${statement.slice(0, 20)}`,
+            tension: 0.3,
+            openedAt: at,
+          }),
+        );
+      }
       return written;
     };
 
@@ -525,7 +557,6 @@ export class Soul {
       }
     }
 
-    const gaps: Gap[] = [];
     for (const gapDraft of draft.gaps) {
       const about = gapDraft.aboutEntityName
         ? ensureEntity(gapDraft.aboutEntityName)

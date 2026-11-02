@@ -294,6 +294,8 @@ function extractJson(raw: string): unknown {
 }
 
 const ENTITY_TYPES = new Set(['person', 'thing', 'place', 'self']);
+const PRECISIONS = new Set(['day', 'range', 'relative', 'unknown']);
+
 const SOURCES = new Set(['experienced', 'told', 'inferred']);
 const OPS = new Set(['add', 'supersede', 'update', 'noop']);
 
@@ -315,11 +317,26 @@ function parseFactDraft(obj: Record<string, unknown>): FactDraft | null {
     }
   }
   const source = String(obj.source ?? 'told');
+  const holderRaw = typeof obj.holder === 'string' ? obj.holder.trim() : '';
+  const precisionRaw = typeof obj.at_precision === 'string' ? obj.at_precision.trim() : '';
+  const at = typeof obj.at === 'number' ? obj.at : undefined;
+  const atText = typeof obj.at_text === 'string' ? obj.at_text : undefined;
+  const precision =
+    precisionRaw && PRECISIONS.has(precisionRaw)
+      ? (precisionRaw as FactDraft['atPrecision'])
+      : at !== undefined
+        ? 'day'
+        : atText
+          ? 'relative'
+          : 'unknown';
   return {
     statement,
+    // `world` unless the model named a mind; the commit gate resolves the name.
+    holder: holderRaw || 'world',
     typeName: typeof obj.type_name === 'string' ? obj.type_name : undefined,
-    at: typeof obj.at === 'number' ? obj.at : undefined,
-    atText: typeof obj.at_text === 'string' ? obj.at_text : undefined,
+    at,
+    atText,
+    atPrecision: precision,
     source: (SOURCES.has(source) ? source : 'told') as FactDraft['source'],
     confidence: typeof obj.confidence === 'number' ? Math.min(1, Math.max(0, obj.confidence)) : 0.6,
     slots,
@@ -457,7 +474,7 @@ export function parseLineDraft(raw: string): Record<string, unknown> | null {
     }
 
     if (kind === '事实') {
-      const [statement, typeName, at, atText, source, confidence, slotText] = parts;
+      const [statement, typeName, at, atText, source, confidence, ...rest] = parts;
       if (!statement) continue;
       const fact: Record<string, unknown> = { statement };
       if (typeName) fact.type_name = typeName;
@@ -466,6 +483,21 @@ export function parseLineDraft(raw: string): Record<string, unknown> | null {
       if (source) fact.source = source;
       const conf = Number(confidence);
       if (Number.isFinite(conf)) fact.confidence = conf;
+
+      // 持有= and 精度= are keyed so the positional fields stay backward
+      // compatible; anything else in the tail is the slot list.
+      let slotText: string | undefined;
+      for (const part of rest) {
+        const keyed = /^(持有|精度|槽位)\s*[=＝]\s*(.*)$/.exec(part);
+        if (keyed) {
+          if (keyed[1] === '持有') fact.holder = keyed[2].trim();
+          else if (keyed[1] === '精度') fact.at_precision = keyed[2].trim();
+          else slotText = keyed[2].trim();
+          continue;
+        }
+        if (part && slotText === undefined) slotText = part;
+      }
+
       const slots: Record<string, unknown>[] = [];
       for (const pair of (slotText ?? '').split(/[;；]/).map((item) => item.trim()).filter(Boolean)) {
         const [slot, value] = pair.split(/[=＝]/).map((item) => item.trim());
