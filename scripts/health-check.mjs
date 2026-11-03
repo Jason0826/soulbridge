@@ -342,6 +342,21 @@ if (!existsSync(agentsPath) || !existsSync(templatePath)) {
   }
 }
 
+// ---------- 4.6.2a 提交钩子是否装在本 clone 上 ----------
+// git hook 是 per-clone 配置：新克隆默认没有。它保护的是"提交时"，所以没装等于没保护。
+// `npm install` 会跑 prepare 自动装；这里再看一眼，避免"以为有、其实没有"。
+if (existsSync(join(ROOT, 'scripts/install-hooks.mjs'))) {
+  const hooks = spawnSync(process.execPath, [join(ROOT, 'scripts/install-hooks.mjs'), '--check'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+  });
+  if (hooks.status !== 0) {
+    add('WARN', '钩子', 'pre-commit 未安装（新克隆默认没有）：跑 node scripts/install-hooks.mjs', (hooks.stderr || '').trim().split('\n')[0]);
+  } else {
+    add('PASS', '钩子', 'pre-commit 已安装（提交时扫替换/编码痕迹）');
+  }
+}
+
 // ---------- 4.6.2b 提示词源与生成物同步 ----------
 // 提示词文本住在 packages/core/prompts/*.md，经 scripts/sync-prompts.mjs 生成普通字符串常量。
 // 这是为了消灭"反引号截断模板字符串"那一类错误（发生过三次）：在 markdown 里反引号只是字符。

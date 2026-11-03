@@ -51,7 +51,8 @@
     "demo": "node packages/cli/src/cli.ts demo",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build && npm test",
-    "sync:prompts": "node scripts/sync-prompts.mjs"
+    "sync:prompts": "node scripts/sync-prompts.mjs",
+    "prepare": "node scripts/install-hooks.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

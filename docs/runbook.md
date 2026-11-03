@@ -217,3 +217,14 @@ profile 位置：`D:\DSH\home\profiles\desktop\node_modules\`（`~/.dsh/profiles
 overlay 装过之后，任何 `npm install` 都要重新走一遍第 3 步。
 
 **回滚**：把 `node_modules.bak-<时间戳>` 里的两个目录拷回去，再重启。
+
+
+## 克隆之后（每台机器一次）
+
+```
+npm install        # 会跑 prepare：安装 pre-commit 钩子
+node scripts/install-hooks.mjs --check   # 确认钩子在了
+```
+
+为什么还需要这一步：`core.hooksPath` 是 **git 的 per-clone 配置**，不随仓库走。
+钩子保护的是"提交时"，没装就等于没保护——所以 `health-check` 会检查它，没装会报 WARN。
