@@ -5,7 +5,7 @@ import { parseLineDraft, validateDraft } from '../src/extract.ts';
 test('lines: a filled template becomes a draft', () => {
   const raw = [
     '实体: 小林 | person | 同事',
-    '事实: 小林在 2026-10-24 那周被裁员 | 裁员 | 2026-10-24 | 上周 | told | 0.8 | 被裁员者=小林;人数=300',
+    '事实: 小林在 2026-10-24 那周被裁员 | 裁员 | 2026-10-24 | 上周 | told | 0.8 | 被裁员者=@小林;人数=300',
     '缺口: 小林后来有着落吗 | 0.6 | 小林',
   ].join('\n');
 
@@ -20,6 +20,7 @@ test('lines: a filled template becomes a draft', () => {
   assert.equal(fact?.atText, '上周');
   assert.equal(fact?.source, 'told');
   assert.equal(fact?.slots.length, 2);
+  assert.deepEqual(fact?.slots[0].value, { kind: 'entity', entityName: '小林', entityType: 'person' }, '@ 才是实体引用');
   assert.deepEqual(fact?.slots[1].value, { kind: 'number', value: 300 });
   assert.equal(draft?.gaps[0].topic, '小林后来有着落吗');
 });

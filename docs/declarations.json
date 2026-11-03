@@ -2,6 +2,60 @@
   "note": "唯一声明登记：变量、常量、名词、枚举、格式、默认值都只能有一处声明，其他地方只引用或渲染。这份文件登记'声明在哪里'，health-check 第 8 节找出还在重复写同一批字面量的文件。copies 非空 = 债：要么改成引用那一处声明，要么把这一处登记为第二个声明点并在 design 里说明为什么（通常说明不了）。",
   "entries": [
     {
+      "id": "entity-types",
+      "what": "实体类型 person / thing / place / self",
+      "literal": "'person'",
+      "declaredIn": "packages/core/src/config/domains.ts",
+      "allowed": [],
+      "mode": "warn",
+      "why": "ENTITY_TYPES 是唯一声明，types.ts 由它派生 EntityType；代码里再出现完整类型列表就是第二个声明点。"
+    },
+    {
+      "id": "holder-domain",
+      "what": "holder 的两种关键字 world / self，其余值必须是实体 id",
+      "literal": "'world'",
+      "declaredIn": "packages/core/src/config/domains.ts",
+      "allowed": [],
+      "mode": "warn",
+      "why": "写入时只允许 world、self，或已存在的实体；不允许用 holder 字符串新造实体。"
+    },
+    {
+      "id": "slot-entity-marker",
+      "what": "槽位值的实体引用标记 @",
+      "literal": "'@'",
+      "declaredIn": "packages/core/src/config/domains.ts",
+      "allowed": [],
+      "mode": "warn",
+      "why": "语法不推语义：没有 @ 的值一律文本，解析器不再用「不是数字」推实体。"
+    },
+    {
+      "id": "fact-status",
+      "what": "事实生命周期 none / open / kept / broken / superseded",
+      "literal": "'superseded'",
+      "declaredIn": "packages/core/src/config/status.ts",
+      "allowed": [],
+      "mode": "warn",
+      "why": "FACT_STATUS 是唯一声明，SQL 与过滤条件只引用。"
+    },
+    {
+      "id": "fact-source",
+      "what": "事实来源 experienced / told / inferred",
+      "literal": "'inferred'",
+      "declaredIn": "packages/core/src/config/status.ts",
+      "allowed": [],
+      "mode": "warn",
+      "why": "来源不对称（ADR 0035）依赖这三个值；散写会让「我侧事实」失去标签。"
+    },
+    {
+      "id": "at-precision",
+      "what": "时间精度 day / range / relative / unknown",
+      "literal": "'unknown'",
+      "declaredIn": "packages/core/src/config/status.ts",
+      "allowed": [],
+      "mode": "warn",
+      "why": "AT_PRECISION 是唯一声明；unknown 是诚实答案，不是失败。"
+    },
+    {
       "id": "profile-dimensions",
       "what": "画像维度名（价值观/工作方式/…）",
       "literal": "价值观",

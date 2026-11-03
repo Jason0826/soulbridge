@@ -197,7 +197,7 @@ export interface TurnFindResult {
  * how replies and causes stay connected without a new table.
  * ------------------------------------------------------------------ */
 
-export type EntityType = 'person' | 'thing' | 'place' | 'self';
+export type EntityType = (typeof ENTITY_TYPES)[number];
 
 export interface Entity {
   id: string;
@@ -350,9 +350,11 @@ export interface FactSlot {
 }
 
 // Vocabulary is declared in config/ and only referenced here: one declaration point,
-// so a status rename cannot leave an old copy behind in another filter.
+// so a status rename cannot leave an old copy behind in another filter. Entity types and
+// the holder vocabulary live in config/domains.ts for the same reason.
 export type { FactStatus, FactSource, AtPrecision } from './config/status.ts';
 import type { FactStatus, FactSource, AtPrecision } from './config/status.ts';
+import { ENTITY_TYPES } from './config/domains.ts';
 
 export interface Fact {
   id: string;

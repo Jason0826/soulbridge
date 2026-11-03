@@ -560,6 +560,86 @@ if (!existsSync(CONFIG_DIR)) {
   }
 }
 
+// ---------- 9.5 边界：谁做语义判断（ADR 0027） ----------
+// 能被机器查的不是"这个判断是不是语义的"，而是它留下的痕迹：
+//   1. 值域只在一处声明（domains.ts / status.ts / dimensions.ts）
+//   2. 语义字段不得有默认值——默认值就是一个决定，决定属于模型或调用方
+//   3. 库里的值必须落在值域内（历史脏数据只报警，不判死）
+const DOMAINS_DECLARED = {
+  'entity-types': 'packages/core/src/config/domains.ts',
+  'holder-domain': 'packages/core/src/config/domains.ts',
+  'slot-entity-marker': 'packages/core/src/config/domains.ts',
+  'fact-status': 'packages/core/src/config/status.ts',
+  'fact-source': 'packages/core/src/config/status.ts',
+  'at-precision': 'packages/core/src/config/status.ts',
+};
+const declarationsPath = join(ROOT, 'docs/declarations.json');
+let declaredIds = new Set();
+if (existsSync(declarationsPath)) {
+  try {
+    const parsed = JSON.parse(readFileSync(declarationsPath, 'utf8'));
+    declaredIds = new Set((parsed.entries ?? []).map((entry) => entry.id));
+  } catch {
+    /* reported elsewhere */
+  }
+}
+const missingDomains = Object.entries(DOMAINS_DECLARED)
+  .filter(([id, file]) => !declaredIds.has(id) || !existsSync(join(ROOT, file)))
+  .map(([id]) => id);
+if (missingDomains.length > 0) {
+  add('WARN', '边界', `值域未登记或声明文件缺失：${missingDomains.join(', ')}`);
+} else {
+  add('PASS', '边界', `${Object.keys(DOMAINS_DECLARED).length} 个值域各有一处声明`);
+}
+
+// 语义默认值：函数参数里给 entity/holder/source/precision 兜默认值，等于代码替模型决定。
+const semanticDefaults = [];
+for (const file of walk(join(ROOT, 'packages/core/src'), '.ts')) {
+  const rel = relative(ROOT, file);
+  if (rel.startsWith('packages/core/src/config/')) continue;
+  const text = readFileSync(file, 'utf8').split('\n');
+  text.forEach((line, index) => {
+    // A default parameter, not a comparison: `=== 'self'` must not be flagged.
+    if (/(?<![=!<>])=\s*'(person|thing|place|self|world|told|experienced|inferred)'\s*[,)]/.test(line)) {
+      semanticDefaults.push(`${rel}:${index + 1}`);
+    }
+  });
+}
+if (semanticDefaults.length > 0) {
+  add('WARN', '边界', `${semanticDefaults.length} 处语义字段带默认值（默认值是一个决定）`, semanticDefaults.slice(0, 4).join(', '));
+} else {
+  add('PASS', '边界', '语义字段没有默认值');
+}
+
+// 库内值域（历史脏数据）：没有库时跳过，CI 不依赖它。
+const liveDb = process.env.SOULBRIDGE_HOME
+  ? join(process.env.SOULBRIDGE_HOME, 'soul.db')
+  : join(process.env.USERPROFILE ?? '', '.soulbridge', 'soul.db');
+if (existsSync(liveDb)) {
+  try {
+    const sqlite = createRequire(import.meta.url)('node:sqlite');
+    const db = new sqlite.DatabaseSync(liveDb, { readOnly: true });
+    const holders = db.prepare('SELECT DISTINCT holder FROM facts').all().map((row) => String(row.holder));
+    const entityIds = new Set(db.prepare('SELECT id FROM entities').all().map((row) => String(row.id)));
+    const badHolders = holders.filter((holder) => !['world', 'self'].includes(holder) && !entityIds.has(holder));
+    const encoded = db
+      .prepare('SELECT name, id FROM entities')
+      .all()
+      .filter((row) => String(row.id).includes(encodeURIComponent(String(row.name))));
+    const notes = [];
+    if (badHolders.length > 0) notes.push(`holder 域外值 ${badHolders.length} 种`);
+    if (encoded.length > 0) notes.push(`实体 id 里编码了名字 ${encoded.length} 个`);
+    if (notes.length > 0) add('WARN', '边界', `库内值域：${notes.join('，')}（历史数据，不是代码错误）`);
+    else add('PASS', '边界', '库内值均落在值域内');
+    db.close();
+  } catch (error) {
+    add('WARN', '边界', `库内值域未检查：${error instanceof Error ? error.message : String(error)}`);
+  }
+} else {
+  add('INFO', '边界', '没有本地库，跳过库内值域检查');
+}
+
+
 // ---------- 10. 代码质量（docs/code-quality.md 里能机械查的部分） ----------
 // 只查"判定明确"的规则。品味、设计、耦合这些留给人审清单——假装机器能全查，
 // 只会让人相信一个假的绿灯。

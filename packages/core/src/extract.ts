@@ -18,6 +18,7 @@
 import type {
   ThreadAttribution, EntityDraft, ExtractDraft, FactDraft, FactOperation, GapDraft, SlotValue } from './types.ts';
 import { renderExtractionPrompt } from './prompts.ts';
+import { SLOT_ENTITY_MARKER } from './config/domains.ts';
 
 /**
  * What a fact's confidence is when the model did not give one.
@@ -599,8 +600,17 @@ export function parseLineDraft(raw: string): Record<string, unknown> | null {
       for (const pair of (slotText ?? '').split(/[;；]/).map((item) => item.trim()).filter(Boolean)) {
         const [slot, value] = pair.split(/[=＝]/).map((item) => item.trim());
         if (!slot || !value) continue;
-        // Numbers stay numbers; everything else is a name the gate resolves.
-        slots.push(/^-?\d+(\.\d+)?$/.test(value) ? { slot, number: Number(value) } : { slot, entity: value });
+        // Syntax does not imply semantics (ADR 0027, health-check §12). A slot value is
+        // text unless the model marks it as a reference with SLOT_ENTITY_MARKER; the old
+        // rule "anything that is not a number is a name" turned descriptions into
+        // entity claims and made the gate clean up after the parser.
+        if (/^-?\d+(\.\d+)?$/.test(value)) {
+          slots.push({ slot, number: Number(value) });
+        } else if (value.startsWith(SLOT_ENTITY_MARKER) && value.slice(SLOT_ENTITY_MARKER.length).trim()) {
+          slots.push({ slot, entity: value.slice(SLOT_ENTITY_MARKER.length).trim() });
+        } else {
+          slots.push({ slot, text: value });
+        }
       }
       if (slots.length > 0) fact.slots = slots;
       // Precision must agree with what survived: a model that wrote 精度=day for a date

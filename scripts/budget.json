@@ -96,28 +96,34 @@
       "date": "2026-11-03",
       "delta": 33,
       "reason": "ADR 0035 第 1 步：抽取输入含双方、来源按说话人、inferred 事实自动带依据槽、handoff 写双方（core +33，插件 +10）。结构修复允许涨。"
+    },
+    {
+      "date": "2026-11-03",
+      "delta": 56,
+      "reason": "边界可检查：domains.ts 值域单一声明、@ 槽位标记、去掉语义默认值、health-check 9.5 节、4 条 boundary 测试（+56）。"
     }
   ],
-  "coreLines": 7926,
+  "coreLines": 7982,
   "pluginLines": 2373,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 1461,
+    "index.ts": 1475,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 194,
     "seed-lexicon.ts": 145,
     "dimensions.ts": 38,
+    "domains.ts": 29,
     "labels.ts": 26,
     "status.ts": 59,
     "consolidate.ts": 369,
     "context.ts": 147,
     "dimension-text.ts": 31,
-    "extract.ts": 637,
+    "extract.ts": 647,
     "inject-text.ts": 27,
     "profile-prompt.ts": 119,
-    "prompts.ts": 530,
+    "prompts.ts": 531,
     "reflect.ts": 417,
     "retrieval.ts": 116,
     "scoring.ts": 170,
@@ -128,6 +134,6 @@
     "transcript.ts": 96,
     "store.ts": 160,
     "measure.ts": 45,
-    "types.ts": 725
+    "types.ts": 727
   }
 }

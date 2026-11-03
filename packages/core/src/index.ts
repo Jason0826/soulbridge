@@ -106,6 +106,7 @@ import type {
 } from './types.ts';
 import type { SoulStore } from './store.ts';
 import { FACT_STATUS, MEMORY_STATUS } from './config/status.ts';
+import { HOLDER_WORDS } from './config/domains.ts';
 import type { AffectAnalyzer } from './affect/port.ts';
 import { parseTrigger } from './rules.ts';
 import type { Rule } from './rules.ts';
@@ -594,7 +595,10 @@ export class Soul {
 
     const declared = new Set(draft.entities.map((entity) => entity.name));
 
-    const ensureEntity = (name: string, type: EntityDraft['type'] = 'person'): Entity => {
+    // No default type: choosing person/thing is a meaning decision, and a default here
+    // would let the code make it silently (ADR 0027, health-check §12). Every caller
+    // passes the type the model declared.
+    const ensureEntity = (name: string, type: EntityDraft['type']): Entity => {
       const existing = byName.get(name);
       if (existing) return existing;
       const key = `${type}:${name}`;
@@ -642,23 +646,31 @@ export class Soul {
           continue;
         }
         const name = slot.value.entityName.trim();
-        if (declared.has(name) || byName.has(name)) {
-          const entity = ensureEntity(name, slot.value.entityType ?? 'person');
+        // Only a declared or already-known name is a reference; the declaration carries
+        // the type, so the code never has to guess one.
+        const known = byName.get(name);
+        const fromDraft = declared.has(name) ? draft.entities.find((entity) => entity.name === name) : undefined;
+        const type = known?.type ?? fromDraft?.type;
+        if (fromDraft || known) {
+          const entity = known ?? ensureEntity(name, type as EntityDraft['type']);
           slots.push({ slot: slot.slot, value: { kind: 'entity', entityId: entity.id } });
           continue;
         }
         slots.push({ slot: slot.slot, value: { kind: 'text', value: name } });
         droppedSlots.push({ fact: statement, slot: slot.slot, value: name });
       }
-      // Where the fact holds (ADR 0032): `world`, or a named mind. An unknown holder
-      // means the layer is unknown, which is not a reason to lose the sentence.
-      const holderName = factDraft.holder?.trim() || 'world';
-      let holder = 'world';
-      if (holderName !== 'world') {
-        if (declared.has(holderName) || byName.has(holderName)) {
-          holder = ensureEntity(holderName).id;
+      // Where the fact holds (ADR 0032): `world`, `self`, or a named mind. The holder is
+      // a reference to an entity that already exists (declared entities are created
+      // above), never a new entity created from a holder string.
+      const holderName = factDraft.holder?.trim() || HOLDER_WORDS[0];
+      let holder: string = HOLDER_WORDS[0];
+      if (holderName !== HOLDER_WORDS[0]) {
+        if (holderName === HOLDER_WORDS[1]) {
+          holder = HOLDER_WORDS[1];
         } else {
-          holderFallbacks.push({ fact: statement, holder: holderName });
+          const holderEntity = byName.get(holderName);
+          if (holderEntity) holder = holderEntity.id;
+          else holderFallbacks.push({ fact: statement, holder: holderName });
         }
       }
 
@@ -738,9 +750,9 @@ export class Soul {
     }
 
     for (const gapDraft of draft.gaps) {
-      const about = gapDraft.aboutEntityName
-        ? ensureEntity(gapDraft.aboutEntityName)
-        : undefined;
+      // A gap about a known entity only; no type guessing, and no entity minted from a
+      // gap's wording (that is how "仅在电话里说" became a person).
+      const about = gapDraft.aboutEntityName ? byName.get(gapDraft.aboutEntityName) : undefined;
       gaps.push(
         this.store.putGap({
           soulId: this.soulId,
@@ -760,7 +772,9 @@ export class Soul {
   /** Remember a person/thing/place; calling again just refreshes "last mentioned". */
   rememberEntity(
     name: string,
-    type: Entity['type'] = 'person',
+    // No default type: person/thing/place is a meaning decision, and a default would let
+    // every caller silently decide "person" (ADR 0027, health-check §9.5).
+    type: Entity['type'],
     options: { aliases?: string[]; attrs?: Record<string, unknown>; seenAt?: number } = {},
   ): Entity {
     return this.store.putEntity({
