@@ -13,6 +13,7 @@
 > 全系统审计：[audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md)。
 > 代码审查（今晚，含已修复 4 条）：[audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md)。
 
+**19:20 词表对字段（第 3 件）**：新增 [vocabulary-map.v1](spec/vocabulary-map.v1.md)。关键发现：`type_name` 同时承担"是什么"和"到哪一步"，所以要拆成 `role`（模型选，闭合集）+ `status`（代码写，三态）；`依据` 槽 225 条**无人读**，`原则候选` 50 条可删，`来源` 54 条与 `证据` 重复。冻结清单三件已完成。
 **18:45 提示词外置**：5 个模板从 `prompts.ts` 移到 `packages/core/prompts/*.md`，生成 `prompts.generated.ts`（普通字符串常量）；`build` 先跑 `sync-prompts --check`，`health-check` 新增同源检查。**反引号截断模板这一类错误不再可能。** 渲染输出 4416 字符逐字节一致。
 
 **16:55 取代成为机制**：抽取行支持 `操作=取代 <id>`，闸门只认库里真实存在的同作用域事实；编造 id/无 id 退化为新增并记 `unknown-supersede-target`。**「记忆会更新」从纸面能力变成行为。** 修法选择 A（模型显式指定），B（代码自动判同槽位）留待数据。core 279 测试，0 FAIL。
