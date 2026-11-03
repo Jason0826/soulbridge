@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { openSqlite, upgradeToV5 } from '../src/sqlite.ts';
 import { Soul } from '../src/index.ts';
@@ -57,7 +59,7 @@ test('recallTurnPairs: finds a turn by its text step', () => {
 });
 
 test('upgrade to v5: legacy turn_pairs become turns with one text step', () => {
-  const file = `C:/Users/DELL/AppData/Local/Temp/soulbridge-v5-${process.pid}-${Date.now()}.db`;
+  const file = join(tmpdir(), `soulbridge-v5-${process.pid}-${Date.now()}.db`);
   openSqlite(file).close(); // full v5 schema first
 
   const raw = new DatabaseSync(file);
