@@ -161,3 +161,184 @@ v1 → v2：memories.updated_at / memories.deleted_at / emotions.updated_at
 | 列 | 一句话 |
 |---|---|
 | `k` / `v` | schema 版本号（当前 3）|
+
+## 8. 现行 schema 逐列说明（v7，ADR 0032 之后）
+
+§7 记录的是 v3 的旧表；v6/v7 新增了 `turns`、`steps`、`entities`、`facts`、`fact_slots`、`gaps`、`threads`，
+并给旧表补了列（`memories.updated_at`/`deleted_at`、`emotions.updated_at`、`facts.at_precision`/`recall_count`/`last_recalled_at`、`turns.thread_id`）。
+下面是**当前代码里真实存在**的每一列，`health-check` 逐列核对这一节。
+
+`schema_meta`
+
+| 列 | 一句话 |
+|---|---|
+| `k` | 元信息键（当前只有 `schema_version`） |
+| `v` | 值，文本存整数 |
+
+`souls`
+
+| 列 | 一句话 |
+|---|---|
+| `soul_id` | 灵魂标识，一个用户一个 |
+| `name` | 注入时使用的自称 |
+| `creator` | 创建者，目前无写入 |
+| `created_at` | 相识时间，用于"相处了 N 天" |
+
+`emotions`
+
+| 列 | 一句话 |
+|---|---|
+| `soul_id` / `user_id` | 归属；一个用户一条 |
+| `passion` / `bond` / `tension` / `self_regard` / `curiosity` / `contentment` | 六维关系状态，0–1 |
+| `updated_at` | 上次更新时间（迁移补列） |
+
+`memories`（旧表示，待退场）
+
+| 列 | 一句话 |
+|---|---|
+| `id` | 记忆唯一标识 |
+| `soul_id` / `user_id` | 归属 |
+| `type` | 旧分型（strategy/trait/fact/cognition） |
+| `content` | 记忆正文 |
+| `importance` / `vividness` | 旧排序因子；`vividness` 无更新路径 |
+| `recall_count` / `last_recalled_at` | 召回累计与最近时间 |
+| `status` | active / superseded / archived |
+| `visibility` | 恒为 private（遗留） |
+| `keywords` | 中文 bigram，可从 content 重建 |
+| `created_at` | 写入时间 |
+| `valid_from` / `valid_until` | 旧的有效区间 |
+| `superseded_by` | 被哪条取代 |
+| `updated_at` / `deleted_at` | 迁移补列；`deleted_at` 软删除标记 |
+
+`affect_samples`
+
+| 列 | 一句话 |
+|---|---|
+| `soul_id` / `user_id` / `at` | 归属与采样时间 |
+| `analyzer` | 分析器名（lexicon / llm） |
+| `dominant` | 主导情绪族 |
+| `intensity` / `valence` / `arousal` | 强度、极性、唤醒 |
+| `confidence` | 判定置信度 |
+| `payload` | 完整信号 JSON，不含原文 |
+| `device_id` | 采样设备 |
+
+`corrections`
+
+| 列 | 一句话 |
+|---|---|
+| `id` | 纠正证据标识 |
+| `soul_id` / `user_id` / `at` | 归属与识别时间 |
+| `user_text` / `assistant_text` | 原话与那一轮回答，不改写 |
+| `rule` | 命中原因 |
+| `device_id` | 写入设备 |
+
+`turn_pairs`（旧表示，只读）
+
+| 列 | 一句话 |
+|---|---|
+| `id` | 旧交流单元标识 |
+| `soul_id` / `user_id` / `session_id` / `turn` / `at` | 归属、位置与时间 |
+| `user_text` / `assistant_text` | 双方原文 |
+| `metadata_json` | 未定字段 |
+| `created_at` | 写入时间 |
+
+`turns`（一轮 = 一次完整往返）
+
+| 列 | 一句话 |
+|---|---|
+| `id` | 轮次标识，也是事实的 `source_turn_id` |
+| `soul_id` / `user_id` | 归属 |
+| `session_id` | 宿主会话 |
+| `turn_no` | 宿主轮次号，同会话内唯一 |
+| `started_at` / `ended_at` | 开始与结束时间 |
+| `user_text` / `assistant_text` | 双方原文，不截断 |
+| `outcome` | 结束方式（正常/中断） |
+| `status` | 记录状态 |
+| `thread_id` | 所属线索；未归属为空（ADR 0034 后默认继续） |
+| `created_at` | 写入时间 |
+
+`steps`（一轮里的每一步）
+
+| 列 | 一句话 |
+|---|---|
+| `id` | 自增主键 |
+| `turn_id` | 所属轮次 |
+| `idx` | 轮内序号 |
+| `kind` | 步骤类型（reasoning / text / tool） |
+| `text` | 该步正文；reasoning 存原文，**只存不注入** |
+| `tool_name` / `tool_args_chars` / `tool_result_chars` | 工具调用与体积（不存工具参数原文） |
+| `ok` | 工具是否成功 |
+| `at` | 发生时间 |
+
+`entities`
+
+| 列 | 一句话 |
+|---|---|
+| `id` | 实体标识（`en_<type>_<随机>`；旧数据编码了名字） |
+| `soul_id` / `user_id` | 归属 |
+| `type` | person / thing / place / self（`config/domains.ts` 唯一声明） |
+| `name` | 名字，身份的可读部分 |
+| `aliases` | 别名 JSON 数组，指向同一实体 |
+| `attrs` | 附加属性 JSON（如关系） |
+| `first_seen_at` / `last_mentioned_at` | 首次与最近提及 |
+| `created_at` | 写入时间 |
+
+`facts`（一句话事实）
+
+| 列 | 一句话 |
+|---|---|
+| `id` | 事实标识 |
+| `soul_id` / `user_id` | 归属 |
+| `statement` | 陈述，15–80 字，原文语义不截断 |
+| `type_name` | 自由文本类型名（偏好/裁员/结论…），不设枚举 |
+| `holder` | 成立位置：`world` / `self` / 实体 id（ADR 0032） |
+| `at` / `at_text` / `at_end` | 时间、原话、区间结束 |
+| `at_precision` | day / range / relative / unknown |
+| `place_id` | 地点实体引用，可空 |
+| `status` | none / open / kept / broken / superseded（`config/status.ts`） |
+| `confidence` | 0–1；空字段不落 0 |
+| `source` | experienced / told / inferred（ADR 0035 的来源不对称） |
+| `source_turn_id` | 来自哪一轮，证据链 |
+| `superseded_by` | 被哪条取代 |
+| `created_at` | 写入时间 |
+| `recall_count` / `last_recalled_at` | 被注入的累计与最近时间 |
+
+`fact_slots`
+
+| 列 | 一句话 |
+|---|---|
+| `id` | 自增主键 |
+| `fact_id` | 所属事实 |
+| `slot` | 槽位名（主体/工具/证据…），自由文本 |
+| `value_type` | entity / number / text / fact（值的种类，结构字段） |
+| `entity_id` | 实体引用的值 |
+| `value_num` | 数值的值 |
+| `value_text` | 文本的值 |
+| `ref_fact_id` | 指向另一条事实（证据、原则候选） |
+
+`gaps`（提过但没答案的事）
+
+| 列 | 一句话 |
+|---|---|
+| `id` | 缺口标识 |
+| `soul_id` / `user_id` | 归属 |
+| `about_entity_id` / `about_fact_id` | 关于谁 / 关于哪条事实 |
+| `topic` | 缺什么，一句话 |
+| `tension` | 张力 0–1，决定提醒优先级 |
+| `status` | open / closed / dropped |
+| `opened_at` / `closed_at` | 开合时间 |
+| `closed_by_fact_id` | 被哪条事实关闭 |
+
+`threads`（线索 = 可跨中断的话题章节）
+
+| 列 | 一句话 |
+|---|---|
+| `id` | 线索标识 |
+| `soul_id` / `user_id` | 归属 |
+| `session_id` | 开始时的会话 |
+| `topic` | 一句话主题，随线索演进（ADR 0034） |
+| `status` | open / closed |
+| `opened_at` / `closed_at` | 开合时间 |
+| `last_turn_no` | 最近一轮，用于"几轮前"与空闲闭合 |
+| `summary_fact_id` | 闭合时归纳出的结论 |
+
