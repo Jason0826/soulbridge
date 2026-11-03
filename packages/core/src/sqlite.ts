@@ -10,6 +10,7 @@ import { copyFileSync, existsSync, renameSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { DEFAULT_EMOTION } from './types.ts';
 import { FACT_STATUS, MEMORY_STATUS } from './config/status.ts';
+import { LEGACY_ROLE_BY_TYPE } from './config/domains.ts';
 import type {
   AffectSignal,
   Correction,
@@ -199,6 +200,7 @@ CREATE TABLE IF NOT EXISTS facts (
   user_id        TEXT NOT NULL,
   statement      TEXT NOT NULL,
   type_name      TEXT,
+  role           TEXT NOT NULL DEFAULT 'observation',
   holder         TEXT NOT NULL DEFAULT 'world',
   at             INTEGER,
   at_text        TEXT,
@@ -340,6 +342,9 @@ export function upgradeToV9(db: DatabaseSync): void {
   // Time became locatability (ADR 0032): a fact may be known to exist without a
   // date, and that is a value — unknown — not a reason to discard it.
   ensureColumn(db, 'facts', 'at_precision', "TEXT NOT NULL DEFAULT 'unknown'");
+  // What a fact is *for* (config/domains.ts FACT_ROLES). Backfill from the old type label so
+  // rows written before this column still reach the right consumer.
+  ensureColumn(db, 'facts', 'role', "TEXT NOT NULL DEFAULT 'observation'");
 }
 
 export function upgradeToV8(db: DatabaseSync): void {
@@ -961,13 +966,18 @@ export function openSqlite(file: string): SoulStore {
     putFact(spec: FactSpec): Fact {
       const id = spec.id ?? `fc_${Date.now().toString(36)}_${(factSeq += 1).toString(36)}`;
       const createdAt = Date.now();
+      // The writer assigns the role: callers may set one explicitly, otherwise the old type
+      // label decides. Without this every new row would default to observation and quietly
+      // disappear from rules()/profile()/conclusions().
+      const role =
+        spec.role ?? (LEGACY_ROLE_BY_TYPE as Record<string, string>)[spec.typeName ?? ''] ?? 'observation';
       withRetry(() => {
         const inserted = db
           .prepare(
             `INSERT OR IGNORE INTO facts
-               (id, soul_id, user_id, statement, type_name, holder, at, at_text, at_end, at_precision,
+               (id, soul_id, user_id, statement, type_name, role, holder, at, at_text, at_end, at_precision,
                 place_id, status, confidence, source, source_turn_id, superseded_by, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
             id,
@@ -975,13 +985,14 @@ export function openSqlite(file: string): SoulStore {
             spec.userId,
             spec.statement,
             spec.typeName ?? null,
+            role,
             spec.holder ?? 'world',
             spec.at ?? null,
             spec.atText ?? null,
             spec.atEnd ?? null,
             spec.atPrecision ?? 'unknown',
             spec.placeId ?? null,
-            spec.status ?? 'none',
+            spec.status ?? 'active',
             spec.confidence ?? 1,
             spec.source ?? 'experienced',
             spec.sourceTurnId ?? null,
@@ -1334,8 +1345,11 @@ export function openSqlite(file: string): SoulStore {
 
     /** Retag a fact, e.g. a lesson that turned out to be a rule (ADR 0033). */
     setFactTypeName(factId: string, typeName: string): void {
+      // Role follows the label: markRule/markProfile change what the row is for, and a stale
+      // role would send it to the wrong consumer (the exact split this refactor removes).
+      const role = (LEGACY_ROLE_BY_TYPE as Record<string, string>)[typeName] ?? 'observation';
       withRetry(() =>
-        db.prepare('UPDATE facts SET type_name = ? WHERE id = ?').run(typeName, factId),
+        db.prepare('UPDATE facts SET type_name = ?, role = ? WHERE id = ?').run(typeName, role, factId),
       );
     },
 
@@ -1623,6 +1637,7 @@ function rowToFact(row: Row, slots: Map<string, FactSlot[]>): Fact {
     userId: String(row.user_id),
     statement: String(row.statement),
     typeName: row.type_name === null ? undefined : String(row.type_name),
+    role: row.role === null || row.role === undefined ? undefined : (String(row.role) as Fact['role']),
     holder: String(row.holder),
     at: row.at === null ? undefined : Number(row.at),
     atText: row.at_text === null ? undefined : String(row.at_text),

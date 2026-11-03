@@ -402,6 +402,8 @@ export interface FactSpec {
   userId: string;
   statement: string;
   typeName?: string;
+  /** Structural role (config/domains.ts FACT_ROLES); the writer derives it if omitted. */
+  role?: FactRole;
   holder?: string;
   at?: number;
   atText?: string;

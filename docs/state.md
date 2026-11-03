@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-03 18:45**（core 0.0.96 / plugin 0.0.101）
+最后核对：**2026-11-03 20:05**（core 0.0.98 / plugin 0.0.101）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -12,6 +12,8 @@
 > 名词/变量声明：[declarations.json](declarations.json)，定义文件在 `packages/core/src/config/`（`health-check` 第 8、9 节）。
 > 全系统审计：[audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md)。
 > 代码审查（今晚，含已修复 4 条）：[audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md)。
+
+**20:05 角色/状态迁移（A+B）**：A 步上线（代码同时认新旧两套值，`roles.ts` 单一裁决）；B 步已跑：备份 `soul.db.bak-roles-*`，role 分布 observation 296 / judgment 79 / rule 65 / profile 60 / lesson 13 / promise 8，status 只剩 active 470 / retracted 51。**发现并补了一个洞：新写入的事实不会带 role**，已在 `putFact`/`setFactTypeName` 里按旧类型名派生，否则新规则/画像会变成 observation。C 步（删回落）待办。
 
 **19:20 词表对字段（第 3 件）**：新增 [vocabulary-map.v1](spec/vocabulary-map.v1.md)。关键发现：`type_name` 同时承担"是什么"和"到哪一步"，所以要拆成 `role`（模型选，闭合集）+ `status`（代码写，三态）；`依据` 槽 225 条**无人读**，`原则候选` 50 条可删，`来源` 54 条与 `证据` 重复。冻结清单三件已完成。
 **18:45 提示词外置**：5 个模板从 `prompts.ts` 移到 `packages/core/prompts/*.md`，生成 `prompts.generated.ts`（普通字符串常量）；`build` 先跑 `sync-prompts --check`，`health-check` 新增同源检查。**反引号截断模板这一类错误不再可能。** 渲染输出 4416 字符逐字节一致。

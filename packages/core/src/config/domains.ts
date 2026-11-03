@@ -58,3 +58,20 @@ export const FACT_STATE_MIGRATION = {
   broken: 'retracted',
   superseded: 'retracted',
 } as const;
+
+/**
+ * The old Chinese type labels mapped to structural roles.
+ *
+ * `type_name` used to be the only place that said what a fact was, and rows written before the
+ * role column still carry it. One table, used by the writer (new rows get a role), by the reader
+ * fallback, and by the migration script — so the three cannot disagree.
+ */
+export const LEGACY_ROLE_BY_TYPE = {
+  规则: 'rule',
+  画像: 'profile',
+  结论: 'judgment',
+  判断: 'judgment',
+  决定: 'judgment',
+  承诺: 'promise',
+  教训: 'lesson',
+} as const;

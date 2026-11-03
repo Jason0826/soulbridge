@@ -291,6 +291,7 @@ v1 → v2：memories.updated_at / memories.deleted_at / emotions.updated_at
 | `soul_id` / `user_id` | 归属 |
 | `statement` | 陈述，15–80 字，原文语义不截断 |
 | `type_name` | 自由文本类型名（偏好/裁员/结论…），不设枚举 |
+| `role` | 结构角色：observation / judgment / rule / profile / promise / lesson（`config/domains.ts` 唯一声明）；写入时由类型名派生 |
 | `holder` | 成立位置：`world` / `self` / 实体 id（ADR 0032） |
 | `at` / `at_text` / `at_end` | 时间、原话、区间结束 |
 | `at_precision` | day / range / relative / unknown |
