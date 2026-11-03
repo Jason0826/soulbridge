@@ -50,9 +50,17 @@ const query = (sql, ...args) => db.prepare(sql).all(...args);
 const one = (sql, ...args) => db.prepare(sql).get(...args);
 
 // ---- 1. 归属（来自日志：只有新逻辑才会写 join=） ----
+// Backfilled turns are excluded: they are re-extractions of history that never saw the
+// new default-continue rule, so counting them would answer "is the new rule working" with
+// evidence from before it existed. They are counted separately instead of hidden.
 const reasons = new Map();
+let backfilled = 0;
 for (const line of joinLines) {
   if (Date.parse(line.slice(0, 24)) < windowStartMs) continue;
+  if (/origin=backfill/.test(line)) {
+    backfilled += 1;
+    continue;
+  }
   const reason = /join=([a-z-]+)/.exec(line)?.[1] ?? 'unknown';
   reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
 }
@@ -124,6 +132,7 @@ for (const [reason, count] of [...reasons.entries()].sort((a, b) => b[1] - a[1])
   console.log(`  ${reason.padEnd(18)} ${String(count).padStart(4)}  ${pct(count, total)}`);
 }
 console.log(`  继续:新建 = ${joined}:${created}`);
+if (backfilled > 0) console.log(`  回填批次（已排除）: ${backfilled} 次（origin=backfill）`);
 
 console.log(`\n线索（窗口内 ${threadIds.length} 条）`);
 const turnHist = new Map();
