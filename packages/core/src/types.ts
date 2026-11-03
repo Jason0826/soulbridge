@@ -75,6 +75,35 @@ export interface TurnPair {
   createdAt: number;
 }
 
+/** One step of a turn, flattened for the archive. */
+export interface PortableStep extends TurnStep {
+  turnId: string;
+}
+
+/** Everything the portable bundle needs, scoped to one soul/user. */
+export interface PortableDump {
+  entities: Entity[];
+  facts: Fact[];
+  threads: TurnThread[];
+  gaps: Gap[];
+  turns: TurnPair[];
+  steps: PortableStep[];
+  corrections: Correction[];
+}
+
+/** The three layers of the portability contract (spec/vocabulary.v1 §7). */
+export interface PortableBundle {
+  schemaVersion: number;
+  exportedAt: number;
+  soulId: string;
+  userId: string;
+  /** Human-readable: rules, profile, conclusions, promises, entities, open gaps. */
+  summary: string;
+  /** What the model would see right now. */
+  injection: string;
+  /** One JSON object per line, including raw turns — the source of truth. */
+  archive: string[];
+}
 /** What a recall call may narrow by. Everything is optional. */
 export interface TurnPairSpec {
   soulId: string;

@@ -18,6 +18,7 @@ import type {
   Emotion,
   Identity,
   Memory,
+  PortableDump,
   QuerySpec,
   SessionSummary,
   TurnPair,
@@ -796,6 +797,49 @@ export function openSqlite(file: string): SoulStore {
         rule: row.rule == null ? undefined : String(row.rule),
         deviceId: row.device_id == null ? undefined : String(row.device_id),
       }));
+    },
+
+    corrections(soulId: string, userId: string, limit = 100_000): Correction[] {
+      return this.recentCorrections(soulId, userId, limit);
+    },
+
+    dump(soulId: string, userId: string): PortableDump {
+      const facts = this.facts({ soulId, userId, limit: 100_000 });
+      const entities = this.findEntities({ soulId, userId, limit: 100_000 });
+      const threads = (db
+        .prepare('SELECT * FROM threads WHERE soul_id = ? AND user_id = ? ORDER BY opened_at ASC')
+        .all(soulId, userId) as Row[]).map(rowToThread);
+      const gaps = (db
+        .prepare('SELECT * FROM gaps WHERE soul_id = ? AND user_id = ? ORDER BY opened_at ASC')
+        .all(soulId, userId) as Row[]).map(rowToGap);
+      const turns = (db
+        .prepare('SELECT * FROM turns WHERE soul_id = ? AND user_id = ? ORDER BY created_at ASC')
+        .all(soulId, userId) as Row[]).map(rowToTurnPair);
+      const steps = db
+        .prepare(
+          `SELECT s.* FROM steps s JOIN turns t ON t.id = s.turn_id
+            WHERE t.soul_id = ? AND t.user_id = ? ORDER BY s.turn_id, s.idx`,
+        )
+        .all(soulId, userId) as Row[];
+      return {
+        entities,
+        facts,
+        threads,
+        gaps,
+        turns,
+        steps: steps.map((row) => ({
+          turnId: String(row.turn_id),
+          idx: Number(row.idx),
+          kind: row.kind as 'reasoning' | 'text' | 'tool',
+          text: row.text == null ? undefined : String(row.text),
+          toolName: row.tool_name == null ? undefined : String(row.tool_name),
+          toolArgsChars: row.tool_args_chars == null ? undefined : Number(row.tool_args_chars),
+          toolResultChars: row.tool_result_chars == null ? undefined : Number(row.tool_result_chars),
+          ok: row.ok == null ? undefined : Boolean(row.ok),
+          at: Number(row.at),
+        })),
+        corrections: this.recentCorrections(soulId, userId, 100_000),
+      };
     },
 
     countCorrections(soulId: string, userId: string): number {

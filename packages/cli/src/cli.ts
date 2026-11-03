@@ -14,7 +14,7 @@
  *   soulbridge demo
  */
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import type {
   AffectAnalyzer,
   AffectSignal,
@@ -273,8 +273,26 @@ async function main(): Promise<void> {
     }
 
     case 'export': {
+      // Two shapes: a legacy JSONL of memories (--out), and the portable bundle (--dir)
+      // that carries the whole record, a readable summary and the current injection.
+      if (flags.dir) {
+        const { soul } = open(flags);
+        const dir = resolve(String(flags.dir));
+        mkdirSync(dir, { recursive: true });
+        const bundle = soul.portableBundle();
+        writeFileSync(join(dir, 'archive.jsonl'), `${bundle.archive.join('\n')}\n`, 'utf8');
+        writeFileSync(join(dir, 'summary.md'), bundle.summary, 'utf8');
+        writeFileSync(join(dir, 'injection.txt'), bundle.injection, 'utf8');
+        out({
+          ok: true,
+          dir,
+          records: bundle.archive.length,
+          files: ['archive.jsonl', 'summary.md', 'injection.txt'],
+        });
+        return;
+      }
       const file = flags.out;
-      if (!file) throw new Error('usage: soulbridge export --out soulbridge.jsonl');
+      if (!file) throw new Error('usage: soulbridge export --out <file> | --dir <directory>');
       const { soul, deviceId } = open(flags);
       const body = exportJsonl(soul, deviceId);
       const target = resolve(file);
@@ -492,6 +510,7 @@ async function main(): Promise<void> {
           '  recall <q> [--limit N]          召回',
           '  reflect --text|--file           会话反思',
           '  export --out <file>             导出 JSONL',
+          '  export --dir <directory>        导出可携带档案（archive/summary/injection）',
           '  import --in <file>              导入 JSONL',
           '  import --from <steering.md>     导入 AGENTS.md / CLAUDE.md',
           '  ingest --file <transcript.jsonl> 会话转写 → 记忆与情绪采样',

@@ -18,6 +18,7 @@ import type {
   GapSpec,
   Identity,
   Memory,
+  PortableDump,
   QuerySpec,
   SessionSummary,
   SlotValue,
@@ -121,6 +122,10 @@ export interface SoulStore {
   putGap(spec: GapSpec): Gap;
   openGaps(soulId: string, userId: string, limit?: number): Gap[];
   closeGap(id: string, closedByFactId?: string, at?: number): void;
+  /** Corrections the user made, newest first — the objective signal for behaviour changes. */
+  corrections(soulId: string, userId: string, limit?: number): Correction[];
+  /** Everything a portable bundle needs, scoped to one soul/user. */
+  dump(soulId: string, userId: string): PortableDump;
   /** Exchanges visible to `userId`; scored against `spec.query` when given. */
   recallTurnPairs(spec: TurnPairSpec): TurnPair[];
   countTurnPairs(soulId: string, userId: string, sessionId?: string): number;

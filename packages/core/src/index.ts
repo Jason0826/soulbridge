@@ -102,8 +102,10 @@ import type {
   SessionSummary,
   TurnPair,
   TurnStep,
+  PortableBundle,
   Visibility,
 } from './types.ts';
+import { buildPortableBundle } from './portable.ts';
 import type { SoulStore } from './store.ts';
 import { FACT_STATUS, MEMORY_STATUS } from './config/status.ts';
 import { HOLDER_WORDS } from './config/domains.ts';
@@ -225,6 +227,16 @@ export class Soul {
         createdAt: options.createdAt ?? Date.now(),
       });
     }
+  }
+
+  /**
+   * Everything a host needs to carry this soul to another machine or tool:
+   * the full archive, a readable summary, and the injection the model would see.
+   */
+  portableBundle(now = Date.now()): PortableBundle {
+    const dump = this.store.dump(this.soulId, this.userId);
+    const injection = this.context({}).text;
+    return buildPortableBundle(dump, this.soulId, this.userId, injection, now);
   }
 
   /** Verb 1: session start. */
