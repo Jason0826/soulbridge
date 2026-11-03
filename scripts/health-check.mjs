@@ -311,6 +311,37 @@ if (docArtifacts.length > 0) {
   add('PASS', '文档', `没有替换事故痕迹（${docFiles2.length} 份文档：无字面 \u0060n、无非法 UTF-8、无行首残片）`);
 }
 
+// ---------- 4.6.2 steering file 与模板同源 ----------
+// AGENTS.md 是给 agent 读的副本，docs/steering-project-principles.md 是跨项目模板。
+// 两份文件规则编号必须一致：副本少一条，agent 就少一条约束；模板改了副本没改，两处就分叉。
+const agentsPath = join(ROOT, 'AGENTS.md');
+const templatePath = join(ROOT, 'docs/steering-project-principles.md');
+if (!existsSync(agentsPath) || !existsSync(templatePath)) {
+  add('WARN', 'steering', '缺少 AGENTS.md 或 steering 模板，跳过同源检查');
+} else {
+  const readNumbers = (file) =>
+    new Set(
+      readFileSync(file, 'utf8')
+        .split('\n')
+        .map((line) => /^(\d+)\.\s/.exec(line))
+        .filter(Boolean)
+        .map((match) => Number(match[1])),
+    );
+  const agents = readNumbers(agentsPath);
+  const template = readNumbers(templatePath);
+  const onlyAgent = [...agents].filter((n) => !template.has(n));
+  const onlyTemplate = [...template].filter((n) => !agents.has(n));
+  if (onlyAgent.length > 0 || onlyTemplate.length > 0) {
+    add(
+      'FAIL',
+      'steering',
+      `AGENTS.md 与模板规则编号不一致（AGENTS 独有 ${onlyAgent.join(',') || '无'}；模板独有 ${onlyTemplate.join(',') || '无'}）`,
+    );
+  } else {
+    add('PASS', 'steering', `AGENTS.md 与模板同源（${agents.size} 条）`);
+  }
+}
+
 // ---------- 4.7 文档是否落后于代码 ----------
 // "改动必须同步更新文档"以前只是口头约定。判据：state.md 自带「最后核对」时间戳，
 // 代码自带最后提交时间；代码更新则文档落后。
