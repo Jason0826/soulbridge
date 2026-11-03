@@ -33,6 +33,7 @@
 | **代码规范（可判定）** | [code-quality.md](code-quality.md) |
 | **每次改动的清单** | [checklist.md](checklist.md) |
 | **我们积累的通用规则（一页索引）** | [rules.md](rules.md) |
+| **可放进 steering file 的通用原则（可直接粘贴）** | [steering-project-principles.md](steering-project-principles.md) |
 | 整体 review（2026-11-03） | [audit/2026-11-03-review.md](audit/2026-11-03-review.md) |
 
 ## 两个"锚"的分工
