@@ -108,8 +108,11 @@ export interface SoulStore {
   lastClosedThread(soulId: string, userId: string): TurnThread | null;
   /** Every turn of a thread, in order — the chapter, not one page. */
   threadTurns(threadId: string): TurnPair[];
-  /** Facts whose source turn belongs to the given turns. */
-  factsByTurns(turnIds: string[]): Fact[];
+  /**
+   * Facts whose source turn belongs to the given turns. Live facts only; candidates are
+   * included when asked, because promotion needs to see lessons not yet classified.
+   */
+  factsByTurns(turnIds: string[], options?: { includeCandidates?: boolean }): Fact[];
   /** One turn by id, for expanding a fact back into its conversation. */
   turn(id: string): TurnPair | null;
   /** Retire a fact: the new one replaces it, the old row stays for the record. */

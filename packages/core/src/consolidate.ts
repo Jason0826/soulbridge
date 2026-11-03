@@ -291,8 +291,10 @@ export function parseProfileMerge(raw: string, allowed: Set<string>, expected?: 
     // The batch is one dimension by construction; a line that leaves it means the
     // model mixed two lenses back together, which is the welding the split prevents.
     if (expected && dimension !== expected) continue;
-    const sourceField = fields.find((field) => field.startsWith('来源'));
-    const sources = (sourceField?.replace(/^来源\s*[=＝]\s*/, '') ?? '')
+    // One name for the field now; 来源 is accepted only so an older prompt in flight
+    // still parses.
+    const sourceField = fields.find((field) => /^(证据|来源)\s*[=＝]/.test(field));
+    const sources = (sourceField?.replace(/^(证据|来源)\s*[=＝]\s*/, '') ?? '')
       .split(/[,，、;；\s]+/)
       .map((id) => id.trim())
       .filter((id) => allowed.has(id));
@@ -321,7 +323,9 @@ export function parseProfileMerge(raw: string, allowed: Set<string>, expected?: 
  * so both are read — a line that names its sources can never be merge input.
  */
 export function isDerivedProfileLine(fact: { slots?: { slot: string }[] }): boolean {
-  return (fact.slots ?? []).some((slot) => slot.slot === '来源' || slot.slot === '合并');
+  // 证据 is the one name for "this line cites its sources"; 来源 was the old spelling and 合并
+  // marks a merged line that has no sources of its own.
+  return (fact.slots ?? []).some((slot) => slot.slot === '证据' || slot.slot === '合并');
 }
 
 export interface ProfileCandidate {

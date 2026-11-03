@@ -43,7 +43,7 @@ import type {
 import type { SoulStore } from './store.ts';
 import { bm25, buildCorpusStats, tokenize } from './scoring.ts';
 
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 /** How many recent pairs are considered before scoring. Bounded so recall stays O(candidates). */
 const RECALL_CANDIDATES = 500;
 export const AFFECT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -340,6 +340,22 @@ function upgradeToV3(db: DatabaseSync): void {
  */
 
 /** v6 → v7: turn threads (a topic's turns need not be adjacent) plus turns.thread_id. */
+export function upgradeToV11(db: DatabaseSync): void {
+  // 原则候选 stored a decision as a slot; it is role+status now. The row becomes a lesson
+  // candidate — held and shown to the classifier, injected nowhere until it is placed.
+  db.exec(`UPDATE facts SET role = 'lesson', status = 'candidate'
+            WHERE id IN (SELECT fact_id FROM fact_slots WHERE slot = '原则候选' AND value_text = '是')`);
+  db.exec("DELETE FROM fact_slots WHERE slot = '原则候选'");
+  // One name for "this cites its sources": 来源 → 证据. Skip where the fact already cites
+  // the same row under the new name, then drop what is left of the old spelling.
+  db.exec(`UPDATE fact_slots SET slot = '证据'
+            WHERE slot = '来源'
+              AND NOT EXISTS (SELECT 1 FROM fact_slots x
+                               WHERE x.fact_id = fact_slots.fact_id AND x.slot = '证据'
+                                 AND x.ref_fact_id = fact_slots.ref_fact_id)`);
+  db.exec("DELETE FROM fact_slots WHERE slot = '来源'");
+}
+
 export function upgradeToV10(db: DatabaseSync): void {
   // The four-state vocabulary (config/status.ts). Everything written under the old names
   // becomes one of the two states the code now reads; after this the fallbacks are gone.
@@ -499,7 +515,7 @@ export function openSqlite(file: string): SoulStore {
       if (version < 5) upgradeToV5(db);
       if (version < 7) upgradeToV7(db);
       if (version < 8) upgradeToV8(db);
-      if (version < 10) upgradeToV10(db);
+      if (version < 11) upgradeToV11(db);
       // v6 adds tables only; SCHEMA creates them on every open, nothing to copy.
       setVersion(db, SCHEMA_VERSION);
       db.exec('COMMIT');
@@ -1307,11 +1323,20 @@ export function openSqlite(file: string): SoulStore {
       const text = row ? String(row.user_text ?? '').trim() : '';
       return text === '' ? null : text;
     },
-    factsByTurns(turnIds: string[]): Fact[] {
+    factsByTurns(turnIds: string[], options: { includeCandidates?: boolean } = {}): Fact[] {
       if (turnIds.length === 0) return [];
       const placeholders = turnIds.map(() => '?').join(',');
+      // Only live facts. A retracted statement must not become evidence for the next
+      // consolidation; a candidate is held but unconfirmed, so it is evidence for nothing
+      // except the promotion step that decides its role.
+      const live = options.includeCandidates
+        ? `f.status IN ('${FACT_STATUS.active}','${FACT_STATUS.candidate}')`
+        : `f.status = '${FACT_STATUS.active}'`;
       const rows = db
-        .prepare(`SELECT f.* FROM facts f WHERE f.source_turn_id IN (${placeholders}) ORDER BY f.created_at ASC`)
+        .prepare(
+          `SELECT f.* FROM facts f WHERE f.source_turn_id IN (${placeholders})
+             AND ${live} ORDER BY f.created_at ASC`,
+        )
         .all(...turnIds) as Row[];
       const slots = slotsOfRows(db, rows.map((row) => String(row.id)));
       return rows.map((row) => rowToFact(row, slots));

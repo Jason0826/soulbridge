@@ -420,8 +420,8 @@ test('profile: a batch declared as one dimension rejects a line from another', (
   assert.deepEqual(lines.map((line) => line.statement), ['先验证再动手']);
 });
 
-test('profile: a line that cites a source is derived, marker or not', () => {
-  assert.equal(isDerivedProfileLine({ slots: [{ slot: '来源' }] }), true);
+test('profile: a line that cites evidence is derived, marker or not', () => {
+  assert.equal(isDerivedProfileLine({ slots: [{ slot: '证据' }] }), true);
   assert.equal(isDerivedProfileLine({ slots: [{ slot: '合并' }] }), true);
   assert.equal(isDerivedProfileLine({ slots: [{ slot: '维度' }] }), false);
   assert.equal(isDerivedProfileLine({}), false);
@@ -499,7 +499,7 @@ test('profile: derived lines are not offered back as merge input', () => {
     role: 'profile', typeName: '画像',
     holder: 'self',
     slots: [
-      { slot: '来源', value: { kind: 'fact', factId: 'f1' } },
+      { slot: '证据', value: { kind: 'fact', factId: 'f1' } },
       { slot: '合并', value: { kind: 'text', value: '1' } },
     ],
   });

@@ -46,7 +46,7 @@ const PROFILE_RULES = `<rules>
 - 不许出现"一切/所有/总是/从不"，除非来源原文里就有。
 - 每行给一个维度：${dimensionChoices()}
 - 一行只讲一个维度。不同维度必须分行——跨维度拼成一句就是没拆。
-- 每条必须给来源：来源=fc_xxx,fc_yyy，只能引用 <input> 里出现过的 id；没有来源的整行不要。
+- 每条必须给证据：证据=fc_xxx,fc_yyy，只能引用 <input> 里出现过的 id；没有证据的整行不要。
 - 合并后 5–8 条；宁少不凑。
 - 输入里没有的新判断，不许出现。
 </rules>`;
@@ -75,8 +75,8 @@ const PROFILE_EXAMPLE = `<example>
 - fc_c | 用户很讨厌一件事反复讲，换工具又要重新交代
 </input>
 <output>
-画像: 要机制，不要靠 prompt 的自觉 | 维度=${PROFILE_DIMENSIONS[1]} | 来源=fc_a,fc_b
-画像: 讨厌重复交代，工具换了也不该重讲 | 维度=${PROFILE_DIMENSIONS[2]} | 来源=fc_c
+画像: 要机制，不要靠 prompt 的自觉 | 维度=${PROFILE_DIMENSIONS[1]} | 证据=fc_a,fc_b
+画像: 讨厌重复交代，工具换了也不该重讲 | 维度=${PROFILE_DIMENSIONS[2]} | 证据=fc_c
 </output>
 </example>`;
 

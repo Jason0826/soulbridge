@@ -92,10 +92,10 @@ test('promotion: only flagged lessons of a corrected turn are candidates', () =>
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
   const at = Date.parse('2026-11-02T10:00:00Z');
   store.putTurn({ ...base, id: 't1', sessionId: 'sess', turnNo: 1, startedAt: at, userText: '不对，应该先说影响再动手', steps: [] });
-  store.putFact({ ...base, id: 'f_lesson', statement: '改动前先说明影响', sourceTurnId: 't1', at, typeName: '要求', holder: 'world', slots: [{ slot: '原则候选', value: { kind: 'text', value: '是' } }] });
+  store.putFact({ ...base, id: 'f_lesson', statement: '改动前先说明影响', sourceTurnId: 't1', at, typeName: '要求', holder: 'world', role: 'lesson', status: 'candidate' });
   store.putFact({ ...base, id: 'f_plain', statement: '用户今天改了 A 文件', sourceTurnId: 't1', at, typeName: '修改', holder: 'world' });
   store.putTurn({ ...base, id: 't2', sessionId: 'sess', turnNo: 2, startedAt: at + 1000, userText: '继续', steps: [] });
-  store.putFact({ ...base, id: 'f_other', statement: '另一轮的判断', sourceTurnId: 't2', at, typeName: '要求', holder: 'world', slots: [{ slot: '原则候选', value: { kind: 'text', value: '是' } }] });
+  store.putFact({ ...base, id: 'f_other', statement: '另一轮的判断', sourceTurnId: 't2', at, typeName: '要求', holder: 'world', role: 'lesson', status: 'candidate' });
 
   // No correction yet: the turn is ordinary, so nothing is promoted.
   assert.equal(soul.wasCorrectedTurn('t1'), false);

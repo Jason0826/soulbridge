@@ -314,11 +314,9 @@ export class Soul {
    * code would be the guess ADR 0027 forbids.
    */
   promotionCandidates(turnId: string): Fact[] {
-    return this.store.factsByTurns([turnId]).filter((fact) =>
-      fact.slots.some(
-        (slot) => slot.slot === '原则候选' && slot.value.kind === 'text' && slot.value.value === '是',
-      ),
-    );
+    return this.store
+      .factsByTurns([turnId], { includeCandidates: true })
+      .filter((fact) => fact.role === 'lesson' && fact.status === 'candidate');
   }
 
   /**
@@ -686,10 +684,11 @@ export class Soul {
         return null;
       }
 
-      // The promotion rules read this slot; they must not re-read the statement to
-      // guess whether it was a lesson, because that is the semantic call the model
-      // already made.
-      if (factDraft.principle) slots.push({ slot: '原则候选', value: { kind: 'text', value: '是' } });
+      // An unclassified lesson is a candidate: a lesson the model flagged but did not
+      // place in a role. It is held and shown to the classifier, injected nowhere.
+      // This replaced the old `原则候选` slot, which was the same decision stored as text.
+      const role = factDraft.principle && !factDraft.role ? 'lesson' : factDraft.role;
+      const status = factDraft.principle && !factDraft.role ? 'candidate' : undefined;
       // ADR 0035: a fact from my side of the exchange is `inferred`, and inferred
       // claims must carry their evidence. The turn id is the evidence available here —
       // claims that need a tool or test result are kept out by the prompt instead.
@@ -702,7 +701,8 @@ export class Soul {
         userId: this.userId,
         statement,
         holder,
-        role: factDraft.role,
+        role,
+        status,
         typeName: factDraft.typeName,
         at: factDraft.at,
         atText: factDraft.atText,
@@ -960,7 +960,7 @@ export class Soul {
         // More sources means more observations behind the line, so it ranks first.
         confidence: Math.min(0.95, 0.6 + 0.05 * line.sources.length),
         slots: [
-          ...line.sources.map((id) => ({ slot: '来源', value: { kind: 'fact' as const, factId: id } })),
+          ...line.sources.map((id) => ({ slot: '证据', value: { kind: 'fact' as const, factId: id } })),
           // A merged line is not an original: re-merging merged lines loses detail.
           { slot: '合并', value: { kind: 'text' as const, value: '1' } },
           { slot: '维度', value: { kind: 'text' as const, value: line.dimension } },
