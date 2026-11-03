@@ -270,10 +270,12 @@ export async function extractWithModel(
   llm: (prompt: string) => Promise<string> | string,
   at = Date.now(),
   context?: ExtractionContext,
+  assistantText?: string,
 ): Promise<ModelParseResult> {
   const prompt = renderExtractionPrompt({
     text,
     now: at,
+    assistantText,
     entities: context?.entities,
     facts: context?.facts,
     previousUserText: context?.previousUserText,

@@ -87,10 +87,31 @@ test('extraction prompt: evidence goes in whole, never a prefix', () => {
   assert.match(prompt, /一个完整主题标题不该在中间被切开/);
 });
 
+test('extraction prompt: the exchange goes in whole, both sides labelled', () => {
+  const prompt = renderExtractionPrompt({
+    text: '把版本号改一下',
+    now: NOW,
+    assistantText: '改好了，用的是 edit 工具',
+  });
+  // ADR 0035: without the reply half, the prompt's "my promises" category is dead.
+  assert.match(prompt, /<source>\n用户：把版本号改一下\n我：改好了，用的是 edit 工具\n<\/source>/);
+
+  const oneSided = renderExtractionPrompt({ text: '只说了这一句', now: NOW });
+  assert.match(oneSided, /<source>\n用户：只说了这一句\n<\/source>/);
+  assert.equal(oneSided.includes('我：'), false, '没有回复时不编一个');
+});
+
+test('extraction prompt: provenance rules name both sides', () => {
+  const prompt = renderExtractionPrompt({ text: 'x', now: NOW });
+  assert.match(prompt, /用户那一侧写 told 或 experienced/);
+  assert.match(prompt, /我那一侧写 inferred/);
+  assert.match(prompt, /完成声明/);
+});
+
 test('extraction prompt: stays within a sane size', () => {
   const prompt = renderExtractionPrompt({ text: 'x'.repeat(200), now: NOW });
   // A guard against runaway growth, not a target: the base prompt is ~3916 chars with
   // a 200-char source (the terms block is the bulk), and candidate text is added at
   // runtime on top. Raise deliberately when the prompt gains a required section.
-  assert.ok(prompt.length < 4400, `prompt grew to ${prompt.length} chars`);
+  assert.ok(prompt.length < 4600, `prompt grew to ${prompt.length} chars`);
 });

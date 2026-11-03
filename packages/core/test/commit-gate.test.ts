@@ -172,3 +172,28 @@ test('gate: the three counters add up to what the model wrote', () => {
   assert.equal(result.skipped.length, 0);
   store.close();
 });
+
+test('gate: a fact from my side carries its evidence (ADR 0035)', () => {
+  const { s, store } = soul();
+  const result = s.commitDrafts(
+    {
+      entities: [],
+      facts: [
+        { statement: '承诺：明天把表补上', source: 'inferred', confidence: 0.7, slots: [] },
+        { statement: '用户讨厌重复', source: 'told', confidence: 0.8, slots: [] },
+      ],
+      gaps: [],
+      by: 'llm',
+    },
+    { turnId: 'tn_123' },
+  );
+  const inferred = result.facts.find((fact) => fact.source === 'inferred');
+  const userSaid = result.facts.find((fact) => fact.source === 'told');
+  const slotOf = (id: string, name: string) => store.fact(id)?.slots.find((slot) => slot.slot === name);
+
+  const evidence = slotOf(inferred?.id ?? '', '依据');
+  assert.equal(evidence?.value.kind, 'text');
+  assert.equal(evidence?.value.kind === 'text' ? evidence.value.value : '', 'tn_123', '依据就是这一轮');
+  assert.equal(slotOf(userSaid?.id ?? '', '依据'), undefined, '用户的话不需要额外依据');
+  store.close();
+});

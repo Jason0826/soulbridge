@@ -52,6 +52,14 @@ export interface ExtractionPromptInput {
   entities?: KnownEntityPrompt[];
   facts?: KnownFactPrompt[];
   previousUserText?: string;
+  /**
+   * My reply in the same turn (ADR 0035).
+   *
+   * The unit of memory is the exchange, not the user's message: without the reply, the
+   * prompt's own fourth category ("my promises") can never fire, and "did this turn
+   * decide anything" is unanswerable.
+   */
+  assistantText?: string;
   /** Open topic threads: the candidate list for attribution. */
   threads?: KnownThreadPrompt[];
   /** Which thread the previous turn belonged to, when known. */
@@ -142,6 +150,10 @@ const EXTRACTION_RULES = `<rules>
 - 槽位只放参与者，不放话题：宁可少写一个槽位，也不要把一句话塞进槽位。
 - 不确定就省略字段，绝不编造数字、日期、关系。
 - 不要重复用户刚落的话（回声不算新事实）。
+- 来源按「谁说的」定（<source> 里标了双方）：用户那一侧写 told 或 experienced；
+  **我那一侧写 inferred**。我的承诺/决定写 类型名=承诺/决定；
+  我的完成声明（"我改好了""已经修了"）如果没有工具或测试结果作为依据，**不要写**。
+  自述（"我是小灵，一个持续的伙伴"）永远不写。
 - 线索：候选见 <open-threads>，每条带它最近几轮的原文。**默认继续**：这一轮在聊候选里的某一条，
   就写「继续 <id>」。只有出现明确转折（"另外 / 换个话题 / 说回 / 不聊这个了"），
   或这一轮与所有候选的主题、实体都不相干时，才写「线索: 新 | 一句话主题」。
@@ -241,6 +253,13 @@ export function renderExtractionPrompt(input: ExtractionPromptInput): string {
     .filter(Boolean)
     .join('\n');
 
+  // The exchange, not the message (ADR 0035). Both sides are labelled, so a fact taken
+  // from my reply is visibly mine — the prompt's fourth category ("my promises") lives
+  // in that half, and the provenance rules depend on knowing which half it came from.
+  const source = input.assistantText
+    ? `<source>\n用户：${input.text}\n我：${input.assistantText}\n</source>`
+    : `<source>\n用户：${input.text}\n</source>`;
+
   return [
     EXTRACTION_ROLE,
     '<task>把 <source> 里的信息变成记忆操作，并说明它属于哪条线索。只依据 <source> 与 <previous-user>；<known-facts> 只用于判断冲突与去重。</task>',
@@ -249,7 +268,7 @@ export function renderExtractionPrompt(input: ExtractionPromptInput): string {
     EXTRACTION_RULES,
     EXTRACTION_EXAMPLES,
     context,
-    `<source>\n${input.text}\n</source>`,
+    source,
     '<output>',
   ].join('\n\n');
 }

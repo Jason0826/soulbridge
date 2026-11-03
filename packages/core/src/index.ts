@@ -411,6 +411,11 @@ export class Soul {
       mode?: 'auto' | 'rules';
       /** What the model may see; defaults to the recent store state. */
       context?: ExtractionContext;
+      /**
+       * My reply in the same turn. The unit of memory is the exchange (ADR 0035):
+       * without this half, "my promises" is a rule the model can never use.
+       */
+      assistantText?: string;
     } = {},
   ): Promise<ExtractDraft> {
     const at = options.at ?? Date.now();
@@ -432,7 +437,7 @@ export class Soul {
           return raw;
         }
       : options.llm;
-    const result = await extractWithModel(text, wrapped, at, context);
+    const result = await extractWithModel(text, wrapped, at, context, options.assistantText);
     return result.draft ?? { ...byRules, reason: `model-${result.error ? 'failed' : 'empty'}` };
   }
 
@@ -672,6 +677,12 @@ export class Soul {
       // guess whether it was a lesson, because that is the semantic call the model
       // already made.
       if (factDraft.principle) slots.push({ slot: '原则候选', value: { kind: 'text', value: '是' } });
+      // ADR 0035: a fact from my side of the exchange is `inferred`, and inferred
+      // claims must carry their evidence. The turn id is the evidence available here —
+      // claims that need a tool or test result are kept out by the prompt instead.
+      if (factDraft.source === 'inferred' && options.turnId && !slots.some((slot) => slot.slot === '依据')) {
+        slots.push({ slot: '依据', value: { kind: 'text', value: options.turnId } });
+      }
 
       const written = this.store.putFact({
         soulId: this.soulId,
@@ -1026,7 +1037,8 @@ export class Soul {
   lastClosedThread(): {
     thread: TurnThread;
     conclusion: Fact | null;
-    turns: Array<{ turnNo: number; userText: string }>;
+    /** Both sides of the last turns (ADR 0035): "where were we" includes what I said. */
+    turns: Array<{ turnNo: number; userText: string; assistantText: string }>;
   } | null {
     const thread = this.store.lastClosedThread(this.soulId, this.userId);
     if (!thread) return null;
@@ -1034,7 +1046,7 @@ export class Soul {
     const turns = this.store
       .threadTurns(thread.id)
       .slice(-2)
-      .map((turn) => ({ turnNo: turn.turn, userText: turn.userText }));
+      .map((turn) => ({ turnNo: turn.turn, userText: turn.userText, assistantText: turn.assistantText }));
     return { thread, conclusion, turns };
   }
   /** The entities a set of facts mentions — the key a conclusion is recalled by. */

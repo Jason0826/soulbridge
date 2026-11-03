@@ -91,14 +91,19 @@
       "date": "2026-11-03",
       "delta": 77,
       "reason": "主题会演进：继续时可带主题=、updateThreadTopic、threadLine 观测（absent/invalid/present）、解析器区分；core +77，插件 +3。"
+    },
+    {
+      "date": "2026-11-03",
+      "delta": 33,
+      "reason": "ADR 0035 第 1 步：抽取输入含双方、来源按说话人、inferred 事实自动带依据槽、handoff 写双方（core +33，插件 +10）。结构修复允许涨。"
     }
   ],
-  "coreLines": 7893,
-  "pluginLines": 2363,
+  "coreLines": 7926,
+  "pluginLines": 2373,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 1449,
+    "index.ts": 1461,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 194,
@@ -109,10 +114,10 @@
     "consolidate.ts": 369,
     "context.ts": 147,
     "dimension-text.ts": 31,
-    "extract.ts": 635,
+    "extract.ts": 637,
     "inject-text.ts": 27,
     "profile-prompt.ts": 119,
-    "prompts.ts": 511,
+    "prompts.ts": 530,
     "reflect.ts": 417,
     "retrieval.ts": 116,
     "scoring.ts": 170,

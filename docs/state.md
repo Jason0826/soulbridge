@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-03 12:35**（core 0.0.92 / plugin 0.0.98）
+最后核对：**2026-11-03 14:30**（core 0.0.93 / plugin 0.0.99）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -13,7 +13,7 @@
 > 全系统审计：[audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md)。
 > 代码审查（今晚，含已修复 4 条）：[audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md)。
 
-**12:35 主题演进**：线索主题不再停在第一轮——`继续` 行可带 `主题=`，模型给了才更新；新增 `threadLine`（present/absent/invalid）与 `topicUpdated` 观测，兜底率不再靠推断。core 268 测试。
+**14:30 整轮输入（ADR 0035 第 1 步）**：抽取输入从"用户的话"改为"整轮（用户 + 我的回复）"；来源按说话人标（用户 told/experienced，我 inferred），inferred 事实自动带 `依据=<本轮 id>`；handoff 写双方；日志新增 `inferred=`。core 271 / 插件 82 测试。`n`n**12:35 主题演进**：线索主题不再停在第一轮——`继续` 行可带 `主题=`，模型给了才更新；新增 `threadLine`（present/absent/invalid）与 `topicUpdated` 观测，兜底率不再靠推断。core 268 测试。
 
 **11:20 观察工具**：
 node scripts/attribution-stats.mjs`（`--all` 看历史）输出归属分布与 ADR 0034 四项通过线；**样本 <20 次归属只观察、不判定**。部署后基线（全历史）：159 条线索，136 条单轮，≥2 轮 7%，≥2 事实 4%。
