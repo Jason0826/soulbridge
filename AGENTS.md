@@ -1,7 +1,7 @@
 # AGENTS.md
 
 > 本文件是本仓库的 steering file：任何 agent 在这个仓库工作时先读它。
-> 内容来自跨项目模板 [docs/steering-project-principles.md](docs/steering-project-principles.md)（同一套 38 条）；
+> 内容来自跨项目模板 [docs/steering-project-principles.md](docs/steering-project-principles.md)（同一套 43 条）；
 > 本仓库特有的规则与检查见 [docs/rules.md](docs/rules.md)。
 > **两份文件必须同时改**——`health-check` 会比对两边的规则编号，缺一条就 FAIL。
 
@@ -69,3 +69,11 @@
 36. 一条规则一个权威：发现重复，删弱的、留链接。
 37. 规则也要被证伪：样本不够写"待验收"，通过线要能算出数。
 38. 新项目不要一次搬全套：先立三条能查的（编码损坏、定义单点、文档落后于代码），再逐条加。
+
+## 写入与数据一致性
+
+39. 一个判断只开一次调用：新增判断先并进已有调用，不新开第二套检测器。
+40. 多语句写入是一个事务：写新行 + 退休旧行要么都成功，要么都不发生；迁移和版本号同一次提交。
+41. 排队的工作只有一个写入器：绕过它会越过上限与日志，数据丢得没有痕迹。
+42. 写入没生效要报：UPDATE / INSERT 影响 0 行不是成功。
+43. id 与名字分离：id 是引用，名字是属性；改名不改身份。
