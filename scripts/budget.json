@@ -86,14 +86,19 @@
       "date": "2026-11-03",
       "delta": 30,
       "reason": "去掉会进模型视野的截断：候选行/上一句/主题/分类输入/交接/归纳整句进；新增 firstSentence 与两条整句断言（+30 行）。"
+    },
+    {
+      "date": "2026-11-03",
+      "delta": 77,
+      "reason": "主题会演进：继续时可带主题=、updateThreadTopic、threadLine 观测（absent/invalid/present）、解析器区分；core +77，插件 +3。"
     }
   ],
-  "coreLines": 7816,
-  "pluginLines": 2360,
+  "coreLines": 7893,
+  "pluginLines": 2363,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 1439,
+    "index.ts": 1449,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 194,
@@ -104,20 +109,20 @@
     "consolidate.ts": 369,
     "context.ts": 147,
     "dimension-text.ts": 31,
-    "extract.ts": 595,
+    "extract.ts": 635,
     "inject-text.ts": 27,
     "profile-prompt.ts": 119,
-    "prompts.ts": 508,
+    "prompts.ts": 511,
     "reflect.ts": 417,
     "retrieval.ts": 116,
     "scoring.ts": 170,
-    "sqlite.ts": 1713,
+    "sqlite.ts": 1717,
     "config.ts": 96,
     "merge.ts": 41,
     "steering.ts": 103,
     "transcript.ts": 96,
-    "store.ts": 152,
+    "store.ts": 160,
     "measure.ts": 45,
-    "types.ts": 713
+    "types.ts": 725
   }
 }

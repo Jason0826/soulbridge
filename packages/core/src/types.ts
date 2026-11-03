@@ -300,14 +300,26 @@ export interface ExtractDraft {
   reason?: string;
   /** Which topic thread this turn belongs to, when the model said. */
   thread?: ThreadAttribution;
+  /**
+   * What the model's thread line was: a usable answer, absent, or present but
+   * unparseable. Without this the fallback rate is inferred from behaviour instead of
+   * measured, and "the model stopped answering" looks identical to "the model chose
+   * to continue".
+   */
+  threadLine?: 'present' | 'absent' | 'invalid';
 }
 
 /**
- * Where a turn belongs. continue must name a thread the model was shown;
- * anything unparseable or unknown degrades to a new thread, because a wrong split
- * leaves fragments while a wrong merge poisons a conclusion.
+ * Where a turn belongs. `continue` must name a thread the model was shown; it may also
+ * carry a new topic when the subject has moved inside the same thread.
+ *
+ * An unparseable or unknown answer is not evidence for a new topic: the caller falls
+ * back to the previous turn's thread (ADR 0034), because a wrong split leaves fragments
+ * that starve consolidation while a wrong merge can be split later.
  */
-export type ThreadAttribution = { kind: 'continue'; id: string } | { kind: 'new'; topic?: string };
+export type ThreadAttribution =
+  | { kind: 'continue'; id: string; topic?: string }
+  | { kind: 'new'; topic?: string };
 
 /** What a commit actually created or merged. */
 export interface CommitResult {

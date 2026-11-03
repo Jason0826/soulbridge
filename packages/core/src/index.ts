@@ -499,16 +499,26 @@ export class Soul {
       /** The thread the previous turn belonged to; the default when unsure. */
       previousThreadId?: string;
     },
-  ): { threadId: string; created: boolean; topic: string; joinReason: string } {
-    const join = (id: string, reason: string) => {
+  ): { threadId: string; created: boolean; topic: string; joinReason: string; topicUpdated: boolean } {
+    const join = (id: string, reason: string, nextTopic?: string) => {
       const thread = this.store.thread(id);
       if (!thread || thread.status !== 'open') return null;
       this.store.attachTurn(spec.turnId, thread.id);
       this.store.touchThread(thread.id, spec.turnNo);
-      return { threadId: thread.id, created: false, topic: thread.topic, joinReason: reason };
+      // A continued thread may have moved on within itself: keep the label honest.
+      const topic = nextTopic?.trim();
+      const updated = Boolean(topic) && topic !== thread.topic;
+      if (updated) this.store.updateThreadTopic(thread.id, topic as string);
+      return {
+        threadId: thread.id,
+        created: false,
+        topic: updated ? (topic as string) : thread.topic,
+        joinReason: reason,
+        topicUpdated: updated,
+      };
     };
     if (attribution?.kind === 'continue') {
-      const existing = join(attribution.id, 'continue');
+      const existing = join(attribution.id, 'continue', attribution.topic);
       if (existing) return existing;
       // A named thread that does not exist (or is closed) is not evidence for a new
       // topic — fall through to the previous thread, then to a new one.
@@ -531,7 +541,7 @@ export class Soul {
     spec: { sessionId: string; turnNo: number; turnId: string; at: number; fallbackTopic?: string },
     joinReason: string,
     topicFromModel?: string,
-  ): { threadId: string; created: boolean; topic: string; joinReason: string } {
+  ): { threadId: string; created: boolean; topic: string; joinReason: string; topicUpdated: boolean } {
     const topic = topicFromModel ?? spec.fallbackTopic ?? '未命名话题';
     const thread = this.store.openThread({
       soulId: this.soulId,
@@ -545,7 +555,7 @@ export class Soul {
       turnNo: spec.turnNo,
     });
     this.store.attachTurn(spec.turnId, thread.id);
-    return { threadId: thread.id, created: true, topic: thread.topic, joinReason };
+    return { threadId: thread.id, created: true, topic: thread.topic, joinReason, topicUpdated: false };
   }
 
   /**

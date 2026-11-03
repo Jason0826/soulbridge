@@ -1145,6 +1145,10 @@ export function openSqlite(file: string): SoulStore {
       withRetry(() => db.prepare('UPDATE threads SET last_turn_no = ? WHERE id = ?').run(turnNo, id));
     },
 
+    updateThreadTopic(id: string, topic: string): void {
+      withRetry(() => db.prepare('UPDATE threads SET topic = ? WHERE id = ?').run(topic, id));
+    },
+
     openThreads(soulId: string, userId: string, limit = 5): TurnThread[] {
       const rows = db
         .prepare(

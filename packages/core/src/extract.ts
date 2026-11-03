@@ -288,17 +288,25 @@ export async function extractWithModel(
   }
   // Lines first: one bad record is one bad record. JSON is the fallback for a
   // model that ignores the template and answers in JSON anyway.
-  const thread = parseThreadLine(raw);
+  const threadRead = readThreadLine(raw);
+  const thread = threadRead.kind === 'continue' || threadRead.kind === 'new' ? threadRead : null;
+  const threadLine = threadRead.kind === 'continue' || threadRead.kind === 'new' ? 'present' : threadRead.kind;
   const fromLines = parseLineDraft(raw);
   if (fromLines) {
     const result = validateDraft(fromLines, at, context);
-    if (result.draft && thread) result.draft.thread = thread;
+    if (result.draft) {
+      if (thread) result.draft.thread = thread;
+      result.draft.threadLine = threadLine;
+    }
     return result;
   }
   const json = extractJson(raw);
   if (!json) return { draft: null, error: `unparseable output: ${String(raw).slice(0, 60)}` };
   const result = validateDraft(json, at, context);
-  if (result.draft && thread) result.draft.thread = thread;
+  if (result.draft) {
+    if (thread) result.draft.thread = thread;
+    result.draft.threadLine = threadLine;
+  }
   return result;
 }
 
@@ -309,17 +317,49 @@ export async function extractWithModel(
  *  线索: 新 | 在聊 cookie 与认证
  */
 export function parseThreadLine(raw: string): ThreadAttribution | null {
+  const read = readThreadLine(raw);
+  // `topic` is omitted rather than set to undefined: callers compare the attribution
+  // object, and an explicit undefined key makes two equivalent answers unequal.
+  if (read.kind === 'continue') return read.topic ? { kind: 'continue', id: read.id, topic: read.topic } : { kind: 'continue', id: read.id };
+  if (read.kind === 'new') return read.topic ? { kind: 'new', topic: read.topic } : { kind: 'new' };
+  return null;
+}
+
+/**
+ * What the model's thread line said, including whether it said anything.
+ *
+ * `parseThreadLine` collapses "no line" and "a line I cannot read" into null, which made
+ * the fallback rate unmeasurable — 75% of attributions arrived as `fallback-previous`
+ * with no way to tell whether the model was silent or unparseable. The kinds are kept
+ * apart here; only `continue` and `new` are usable attributions.
+ */
+export function readThreadLine(
+  raw: string,
+):
+  | { kind: 'continue'; id: string; topic?: string }
+  | { kind: 'new'; topic?: string }
+  | { kind: 'absent' }
+  | { kind: 'invalid'; line: string } {
+  let sawLine = false;
+  let unreadable = '';
   for (const line of String(raw ?? '').split(/\r?\n/)) {
     const match = /^线索\s*[:：]\s*(.+)$/.exec(line.trim());
     if (!match) continue;
+    sawLine = true;
     const body = match[1].trim();
-    if (/^(无|none|nothing)[。.]?$/i.test(body)) return null;
-    const continued = /^继续\s*[:：]?\s*([A-Za-z0-9_-]+)$/.exec(body);
-    if (continued) return { kind: 'continue', id: continued[1] };
+    if (/^(无|none|nothing)[。.]?$/i.test(body)) return { kind: 'absent' };
+    // `继续 <id>` with an optional new topic, for when the subject moved inside the
+    // same thread: the stored topic would otherwise stay at the first turn forever.
+    const continued = /^继续\s*[:：]?\s*([A-Za-z0-9_-]+)\s*(?:[|｜]\s*主题\s*[=:：]\s*(.*))?$/.exec(body);
+    if (continued) {
+      const topic = (continued[2] ?? '').trim();
+      return { kind: 'continue', id: continued[1], topic: topic || undefined };
+    }
     const fresh = /^新\s*(?:[|｜:：]\s*(.*))?$/.exec(body);
     if (fresh) return { kind: 'new', topic: (fresh[1] ?? '').trim() || undefined };
+    unreadable = `线索: ${body}`;
   }
-  return null;
+  return sawLine && unreadable ? { kind: 'invalid', line: unreadable } : { kind: 'absent' };
 }
 
 /** Models wrap JSON in prose or fences; take the outermost object. */

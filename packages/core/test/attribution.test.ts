@@ -8,8 +8,13 @@ const base = { soulId: 's1', userId: 'u1' };
 
 test('attribution: the line parses into continue / new / nothing', () => {
   assert.deepEqual(parseThreadLine('线索: 继续 th_ab12'), { kind: 'continue', id: 'th_ab12' });
+  assert.deepEqual(parseThreadLine('线索: 继续 th_ab12 | 主题=认领方式定下来了'), {
+    kind: 'continue',
+    id: 'th_ab12',
+    topic: '认领方式定下来了',
+  });
   assert.deepEqual(parseThreadLine('线索: 新 | 在聊 cookie 与认证'), { kind: 'new', topic: '在聊 cookie 与认证' });
-  assert.deepEqual(parseThreadLine('线索: 新'), { kind: 'new', topic: undefined });
+  assert.deepEqual(parseThreadLine('线索: 新'), { kind: 'new' });
   assert.equal(parseThreadLine('线索: 无'), null);
   assert.equal(parseThreadLine('事实: 无关的一行'), null);
 });

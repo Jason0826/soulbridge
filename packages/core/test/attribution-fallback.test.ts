@@ -94,6 +94,44 @@ test('attribution: an explicit new topic still opens a thread', () => {
   store.close();
 });
 
+test('attribution: continuing with a new topic rewrites the label', () => {
+  const { store, soul, threadId } = setup();
+  const turnId = record(soul, 2, '换个说法：现在是在定认领方式');
+  const result = soul.applyThread(
+    { kind: 'continue', id: threadId, topic: '认领方式定下来了' },
+    {
+      sessionId: 'sess',
+      turnNo: 2,
+      turnId,
+      at: NOW + 2000,
+      previousThreadId: threadId,
+    },
+  );
+  assert.equal(result.threadId, threadId);
+  assert.equal(result.topicUpdated, true);
+  assert.equal(result.topic, '认领方式定下来了');
+  assert.equal(store.thread(threadId)?.topic, '认领方式定下来了', '库里的主题也更新了');
+  store.close();
+});
+
+test('attribution: continuing without a topic keeps the old label', () => {
+  const { store, soul, threadId } = setup();
+  const turnId = record(soul, 2, '继续');
+  const result = soul.applyThread(
+    { kind: 'continue', id: threadId },
+    {
+      sessionId: 'sess',
+      turnNo: 2,
+      turnId,
+      at: NOW + 2000,
+      previousThreadId: threadId,
+    },
+  );
+  assert.equal(result.topicUpdated, false);
+  assert.equal(store.thread(threadId)?.topic, '记忆分三层');
+  store.close();
+});
+
 test('attribution: no previous thread and no answer falls back to a new thread', () => {
   const { store, soul } = setup();
   const turnId = record(soul, 2, '第一句话');

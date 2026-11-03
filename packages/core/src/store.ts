@@ -65,6 +65,14 @@ export interface SoulStore {
   attachTurn(turnId: string, threadId: string): void;
   /** Remember the newest turn number seen in a thread (used for ordering). */
   touchThread(id: string, turnNo: number): void;
+  /**
+   * Replace a thread's one-line topic.
+   *
+   * The topic is written when the thread opens, so a thread that continues for an hour
+   * would otherwise stay labelled with its first (often two-word) turn — and the label
+   * is what "上次聊到哪" shows.
+   */
+  updateThreadTopic(id: string, topic: string): void;
   /** Open threads, most recently used first — the candidate list for attribution. */
   openThreads(soulId: string, userId: string, limit?: number): TurnThread[];
   /**
