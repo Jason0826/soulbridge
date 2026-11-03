@@ -283,21 +283,32 @@ if (!existsSync(readmePath)) {
 
 // ---------- 4.6.1 替换事故的痕迹 ----------
 // 两次真实事故：把 `` `n `` 当成换行写进了文档（一次让整节挤成一行，一次把 `node` 切成了 ode）。
-// 这类损坏在 diff 里看着像正常修改，读起来才发现句子断了，所以单独扫一遍。
+// 这类损坏在 diff 里看着像正常修改，读起来才发现句子断了，所以扫全部文档，不只扫 diff。
+// 签名：`` `n `` 后面不是字母（否则 `npx`/`node` 这类正常内联代码会误报）。
 const docArtifacts = [];
+const utf8Strict = new TextDecoder('utf-8', { fatal: true });
 for (const file of docFiles2) {
-  const text = readFileSync(file, 'utf8');
-  // The corruption signature is `` `n` `` (a newline written as backtick-n inside code
-  // style), not any "`n" — that also matches legitimate inline code such as `node …`.
-  if (text.includes('\u0060n\u0060')) docArtifacts.push(`${relative(ROOT, file)}: 含 \u0060n\u0060`);
+  const buffer = readFileSync(file);
+  const rel = relative(ROOT, file);
+  try {
+    utf8Strict.decode(buffer);
+  } catch {
+    // Invalid UTF-8 means a tool wrote bytes in the system code page (GBK here); reading
+    // it as text produced mojibake, so report the file instead of trusting its content.
+    docArtifacts.push(`${rel}: 不是合法 UTF-8（GBK 写入）`);
+  }
+  const text = buffer.toString('utf8');
+  const literalN = [...text.matchAll(/\u0060n(?![A-Za-z])/g)].length;
+  if (literalN > 0) docArtifacts.push(`${rel}: ${literalN} 处换行写成了 \u0060n`);
+  if (text.includes('\uFFFD')) docArtifacts.push(`${rel}: 含替换字符 U+FFFD`);
   for (const line of text.split('\n')) {
-    if (/^(ode|pm|px|ot) /.test(line)) docArtifacts.push(`${relative(ROOT, file)}: 行首残片「${line.slice(0, 20)}」`);
+    if (/^(ode|pm|px|ot) /.test(line)) docArtifacts.push(`${rel}: 行首残片「${line.slice(0, 20)}」`);
   }
 }
 if (docArtifacts.length > 0) {
-  add('WARN', '文档', `${docArtifacts.length} 处替换事故痕迹（换行被写成 \u0060n / 行首残片）`, docArtifacts.slice(0, 5).join('; '));
+  add('FAIL', '文档', `${docArtifacts.length} 处替换事故痕迹（换行写成 \u0060n / 非 UTF-8 / 行首残片）`, docArtifacts.slice(0, 5).join('; '));
 } else {
-  add('PASS', '文档', '没有替换事故痕迹（无 `` \u0060n ``、无行首残片）');
+  add('PASS', '文档', `没有替换事故痕迹（${docFiles2.length} 份文档：无字面 \u0060n、无非法 UTF-8、无行首残片）`);
 }
 
 // ---------- 4.7 文档是否落后于代码 ----------

@@ -29,7 +29,11 @@
 | **一次交付要走哪十步** | [process.md](process.md)（规范；每步都有判定方式） |
 | **名词/变量声明在哪** | [declarations.json](declarations.json)（唯一声明登记，`health-check` 第 8 节判定） |
 | **旧表示退场到哪一步** | [retirements.json](retirements.json)（`health-check` 第 7 节判定） |
-| 代码审查发现与已修项 | [audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md) |`n| **代码规范（可判定）** | [code-quality.md](code-quality.md) |`n| **每次改动的清单** | [checklist.md](checklist.md) |`n| 整体 review（2026-11-03） | [audit/2026-11-03-review.md](audit/2026-11-03-review.md) |
+| 代码审查发现与已修项 | [audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md) |
+| **代码规范（可判定）** | [code-quality.md](code-quality.md) |
+| **每次改动的清单** | [checklist.md](checklist.md) |
+| **我们积累的通用规则（一页索引）** | [rules.md](rules.md) |
+| 整体 review（2026-11-03） | [audit/2026-11-03-review.md](audit/2026-11-03-review.md) |
 
 ## 两个"锚"的分工
 
@@ -52,7 +56,8 @@
 |---|---|
 | 现状态、版本、已知的坑 | [state.md](state.md) |
 | 代码与模型的边界 | [adr/0027](adr/0027-code-vs-model-boundary.md) · [adr/0029](adr/0029-extraction-is-the-models-job.md) · [adr/0030](adr/0030-core-adapter-boundary.md) |
-| 模型环节怎么验收 | [adr/0031](adr/0031-model-dependency-acceptance.md) |`n| 线索归属默认策略 | [adr/0034](adr/0034-attribution-defaults-to-continue.md) |
+| 模型环节怎么验收 | [adr/0031](adr/0031-model-dependency-acceptance.md) |
+| 线索归属默认策略 | [adr/0034](adr/0034-attribution-defaults-to-continue.md) |
 | 各阶段读哪几方原文 | [adr/0035](adr/0035-stage-input-contract.md) |
 | **记忆分两层、时间与精度** | [adr/0032](adr/0032-two-layers-of-memory.md) |
 | **规则 / 画像 / 记忆三层，锚点退场** | [adr/0033](adr/0033-rules-profile-memory.md) |

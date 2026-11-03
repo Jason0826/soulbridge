@@ -101,10 +101,15 @@
       "date": "2026-11-03",
       "delta": 56,
       "reason": "边界可检查：domains.ts 值域单一声明、@ 槽位标记、去掉语义默认值、health-check 9.5 节、4 条 boundary 测试（+56）。"
+    },
+    {
+      "date": "2026-11-03",
+      "delta": 4,
+      "reason": "队列项 origin 标记与日志（插件 +4）。"
     }
   ],
   "coreLines": 7982,
-  "pluginLines": 2373,
+  "pluginLines": 2377,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,

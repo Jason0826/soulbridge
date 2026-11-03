@@ -1,0 +1,94 @@
+# 项目通用规则（索引）
+
+> 这份文件**只做索引**：一条规则一行，指向它的权威出处和它的检查手段。
+> 规则本身写在权威文档里；这里再抄一遍就等于制造第二个版本。
+> 权威来源：[process.md](process.md)（十步）、[checklist.md](checklist.md)（每次改动）、[code-quality.md](code-quality.md)、[ADR 0027](adr/0027-code-vs-model-boundary.md)。
+> 想知道"现在做到哪"看 [state.md](state.md)；想知道"下次从哪继续"看 state.md 的「下次从这里继续」。
+
+## 一、工作方式
+
+| # | 规则 | 权威 | 机器检查 |
+|---|---|---|---|
+| W1 | 一次交付走十步：需求 → 理论 → 边界 → 唯一声明 → 测试 → 文档 → 实施 → 验证 → 质量 review → 旧代码清理 | [process.md](process.md) | — |
+| W2 | 改动第一条消息写四段：为什么 / 怎么做 / 影响面 / 怎么验；没有影响面不开工 | [checklist.md](checklist.md) A1 | — |
+| W3 | 修 bug 必须先看见红：去掉修复它要失败（变异检查） | checklist A4 | 变异命令 + 两条结果 |
+| W4 | 结论用数据说；**空样本不是判决**（0/0 显示"无样本"，不判 PASS/FAIL） | `scripts/attribution-stats.mjs` | 统计脚本输出 |
+| W5 | 模型环节要过四关：gate / floor / metric / 可逆 | [ADR 0031](adr/0031-model-dependency-acceptance.md) | — |
+| W6 | 先可观测，再改行为：没有数就先加数 | [state.md](state.md) | trace/日志字段 |
+
+## 二、语义与结构的边界
+
+| # | 规则 | 权威 | 机器检查 |
+|---|---|---|---|
+| B1 | **语义归模型，结构归代码**：代码只做形态校验、给唯一编码、拒绝缺失 | [ADR 0027](adr/0027-code-vs-model-boundary.md) | checklist A8 |
+| B2 | 语义字段的值域**只在一处声明**（`config/`），别处只引用 | [declarations.json](declarations.json) | health-check §9.5 |
+| B3 | 语义字段**不得有默认值**——默认值就是一个决定 | ADR 0027 补充 | health-check §9.5（FAIL） |
+| B4 | **语法不推语义**：槽位值只有带 `@` 才是实体引用 | ADR 0027 补充 | `test/boundary.test.ts` |
+| B5 | 不造词表：判断"是不是实体/人物"由模型给，代码不加拒绝词表 | ADR 0027 | — |
+| B6 | 抽取是模型的活，规则只是地板；模型失败必须可区分于"模型说没有" | [ADR 0029](adr/0029-extraction-is-the-models-job.md) | 日志 `reason=` |
+| B7 | 各阶段输入单位：**整轮、双方**（用户 + 我的回复）；不对称只在来源（told/experienced vs inferred + 证据） | [ADR 0035](adr/0035-stage-input-contract.md) | `inferred=` 日志 |
+| B8 | core 与适配器边界：策略（阈值/成本/重试）归适配器，语义/结构不变式归 core | [ADR 0030](adr/0030-core-adapter-boundary.md) | — |
+
+## 三、唯一表示与唯一声明
+
+| # | 规则 | 权威 | 机器检查 |
+|---|---|---|---|
+| U1 | **一件事只能有一个表示**：引入新表示，旧表示同一改动里退场或登记 `pending` | process §三条贯穿规则① | health-check §7 + [retirements.json](retirements.json) |
+| U2 | 定义放 `config/`，代码只做解码；维度/状态/格式/默认值只有一处声明 | process ② | health-check §8、§9 |
+| U3 | 同一名词只有一个名字；别名也算同一个实体 | process ② | — |
+| U4 | 假设写进类型/断言/测试，不留在脑子里（单写者、输入前置条件、失败会抛） | process ③ | 注释 + 测试 |
+
+## 四、数据原则
+
+| # | 规则 | 权威 | 机器检查 |
+|---|---|---|---|
+| D1 | **原文不可变、不删原始对话**；派生数据可重建 | process / [ADR 0032](adr/0032-two-layers-of-memory.md) | 迁移 + 备份 |
+| D2 | **不截断**：只在整单位上取舍（整句/整行/整轮），宁可丢一个完整单位，不给半句 | ADR 0035 · 用户原则 | 两条"整句进入"测试 |
+| D3 | 记忆的基本单位是交流（用户 + 助手）；理解的基本单位是线索；人的基本单位是长期 | [briefs/0010](briefs/0010-memory-unit.md) · [briefs/0017](briefs/0017-topic-threads.md) | — |
+| D4 | 时间必填或诚实标 unknown；精度四值，`unknown` 是答案不是失败 | ADR 0032 | health-check 数据检查 |
+| D5 | `holder` 只允许 `world` / `self` / 已存在的实体；**不许用 holder 字符串造实体** | ADR 0032 | `test/boundary.test.ts` |
+| D6 | 实体 id 不编码名字（id 是引用，名字是属性） | ADR 0027 | health-check §9.5（WARN，历史数据） |
+| D7 | 线索归属**默认继续**（碎片化比误合并更贵）；交接写双方 | [ADR 0034](adr/0034-attribution-defaults-to-continue.md) | `attribution-stats.mjs` |
+| D8 | 规则/画像/记忆三层分开：规则按触发注入、画像常驻、记忆按需；锚点退场 | [ADR 0033](adr/0033-rules-profile-memory.md) | 注入块检查 |
+
+## 五、失败与兜底
+
+| # | 规则 | 权威 | 机器检查 |
+|---|---|---|---|
+| F1 | 失败要能区分于"没有"；不吞异常；有重试上限和原因 | checklist A5 | 测试 + 日志 |
+| F2 | **兜底会掩盖根因**：每次降级/默认值都要问"它让什么错误不再报警" | 本文件（教训） | 人工 review |
+| F3 | "让它能跑"不等于"让它对"；先能跑后要回头 | 本文件（教训） | — |
+| F4 | 模型失败 → 保留重试，不冒充成功；连续失败带上限丢弃并记原因 | ADR 0029 | 队列日志 |
+
+## 六、工具纪律
+
+| # | 规则 | 权威 | 机器检查 |
+|---|---|---|---|
+| T1 | 改代码只用 `edit`/`write`；PowerShell 只做只读、git、构建、测试 | checklist A7 | health-check §11 |
+| T2 | 改完必须看 diff；替换类操作后逐行核对 | 本文件（教训） | 人工 + §11 |
+| T3 | core 新增文件后，插件仓库要 `pnpm install --force`（快照不会自动同步） | 记忆 · 本文件 | 插件测试能加载 |
+| T4 | 部署后验证的是**装上去的副本**，不是源码 | [runbook.md](runbook.md) | `verify-installed.mjs` |
+
+## 七、文档
+
+| # | 规则 | 权威 | 机器检查 |
+|---|---|---|---|
+| P1 | `state.md` 是唯一现状文档，带「最后核对」时间戳；代码新于它 → 落后 | [state.md](state.md) | health-check §4.7 |
+| P2 | 文档地图（README）只放链接，不重复内容；同一事实只有一处权威 | [README.md](README.md) | 内链 + 索引检查 |
+| P3 | 新增文档必须回答"谁读、什么时候读"；答不上来不加 | README 维护规则 | — |
+| P4 | 事故痕迹（非 UTF-8、换行写成「反引号 + n」、行首残片）全量扫描，不只扫 diff | 本文件（教训） | health-check §4.6.1（FAIL） |
+
+## 八、部署
+
+| # | 规则 | 权威 | 机器检查 |
+|---|---|---|---|
+| R1 | 构建 → `verify-installed` → 覆盖副本 → 重启 → profile manifest 改到对应 tag | runbook / state.md | 三行版本号 |
+| R2 | 出问题要能退：备份路径 + 回退命令写清楚 | checklist C4 | 备份目录 |
+| R3 | 版本号、tag、manifest 三者一致 | checklist C2 | health-check 版本表 |
+
+## 九、元规则（这套规则本身的规则）
+
+1. **规则进记忆不等于会在决策点触发**——能机器查的就机器查（本文件第三列）。
+2. **一条规则只有一个权威**：本文件是索引，发现重复就删掉弱的、留链接。
+3. **规则也要被证伪**：样本不够就写"待验收"，不写"已完成"。
+4. **新增规则要同时给出检查方式**；给不出检查方式的，标"人工 review"，不许假装自动。
