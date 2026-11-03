@@ -41,12 +41,12 @@
       "id": "memories-write",
       "old": "memories 表（旧记忆层）的写入路径",
       "replacedBy": "facts + fact_slots",
-      "status": "pending",
-      "why": "observe() 仍在写；锚点仍读它。退役需要 observe 只做 affect 分析，锚点改读 facts 的高置信判断。",
+      "status": "done",
+      "why": "写入路径已全部迁到 facts：observe 只做 affect；remember/rememberExplicit/reflect 写事实；16 条旧行由 Soul.migrateLegacyMemories() 迁移并标 superseded（保留可审计）。",
       "check": {
-        "kind": "table",
-        "name": "memories",
-        "expect": "no-writer"
+        "kind": "symbol",
+        "path": "packages/core/src/index.ts",
+        "pattern": "this.store.put("
       }
     },
     {

@@ -66,14 +66,19 @@
       "date": "2026-11-03",
       "delta": 38,
       "reason": "日历校验：calendarDate/parseIsoDate 单一入口，文本与规则两条路径共用；不存在的日期不再滚动，精度随之降级；规则抽取补 atPrecision（+38 行，含说明）。"
+    },
+    {
+      "date": "2026-11-03",
+      "delta": 70,
+      "reason": "退役 memories 写入：observe 只做 affect；remember/rememberExplicit/reflect 改写 facts；新增 migrateLegacyMemories + retireMemory；删除 gating.test（旧闸门测试）。净增 70 行（迁移与适配层），旧路径删除抵消了一部分。"
     }
   ],
-  "coreLines": 7639,
+  "coreLines": 7709,
   "pluginLines": 2322,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 1354,
+    "index.ts": 1382,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 194,
@@ -82,21 +87,21 @@
     "labels.ts": 26,
     "status.ts": 59,
     "consolidate.ts": 369,
-    "context.ts": 136,
+    "context.ts": 147,
     "dimension-text.ts": 31,
     "extract.ts": 590,
     "inject-text.ts": 27,
     "profile-prompt.ts": 119,
     "prompts.ts": 481,
-    "reflect.ts": 411,
+    "reflect.ts": 417,
     "retrieval.ts": 116,
     "scoring.ts": 170,
-    "sqlite.ts": 1683,
+    "sqlite.ts": 1702,
     "config.ts": 96,
     "merge.ts": 41,
     "steering.ts": 103,
     "transcript.ts": 96,
-    "store.ts": 139,
+    "store.ts": 145,
     "measure.ts": 45,
     "types.ts": 713
   }

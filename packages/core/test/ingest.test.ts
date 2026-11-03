@@ -62,15 +62,15 @@ test('normalizeForDedupe：忽略空格与标点', () => {
   assert.equal(normalizeForDedupe('提交前 必须跑 make check。'), normalizeForDedupe('提交前必须跑 make check'));
 });
 
-test('import 幂等：第二次导入不写重复记忆', () => {
+test('import 幂等：第二次导入不写重复事实', () => {
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 'xiaoling', userId: 'u1' });
   const drafts = parseSteering(STEERING);
 
   const importOnce = () => {
-    const existing = new Set(
-      store.query({ soulId: 'xiaoling', userId: 'u1', limit: 1000 }).map((m) => normalizeForDedupe(m.content)),
-    );
+    // Dedupe against facts: remember() now writes facts, so a second import has to
+    // find its "already imported" marker there too.
+    const existing = new Set(soul.list(1000).map((m) => normalizeForDedupe(m.content)));
     let written = 0;
     for (const draft of drafts) {
       const key = normalizeForDedupe(draft.text);
@@ -84,7 +84,7 @@ test('import 幂等：第二次导入不写重复记忆', () => {
 
   assert.equal(importOnce(), 5);
   assert.equal(importOnce(), 0);
-  assert.equal(store.count('xiaoling', 'u1'), 5);
+  assert.equal(soul.list(1000).length, 5);
   store.close();
 });
 
@@ -115,7 +115,7 @@ test('transcript 解析：连续重复行被合并', () => {
   assert.equal(parseTranscriptJsonl(text).turns.length, 2);
 });
 
-test('ingest 等价流程：转写 → 反思写入记忆', async () => {
+test('ingest 等价流程：转写 → 反思写入事实', async () => {
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 'xiaoling', userId: 'u1' });
   const { turns } = parseTranscriptJsonl(
@@ -128,7 +128,7 @@ test('ingest 等价流程：转写 → 反思写入记忆', async () => {
 
   const result = await soul.reflect(turns);
   assert.equal(result.memories, 2);
-  assert.equal(store.count('xiaoling', 'u1'), 2);
+  assert.equal(soul.list(100).length, 2, 'reflect 写的是事实，不是旧表');
 
   const again = await soul.reflect(turns);
   assert.equal(again.memories, 0, '重复 ingest 不应重复写');

@@ -1,10 +1,11 @@
 /**
- * Move the legacy `memories` rows into the two-layer facts, then retire the table.
+ * Move the legacy `memories` rows into facts (retirements.json: memories-write).
  *
- * The legacy table is the last piece of the old model: it holds lessons and traits
- * that are real knowledge ("JSON 用 edit 工具改"), but stores them outside the facts
- * layer, so anchors had to read two sources. Migrating them as person-layer facts
- * keeps the knowledge and lets anchors read one place.
+ * This script used to copy rows with its own SQL and then `DELETE FROM memories` —
+ * a second mapping next to the code, and a deletion where the project rule is "keep
+ * the original, retire it". It now calls `Soul.migrateLegacyMemories()`, which is
+ * idempotent, keeps every old row with `superseded_by` pointing at its new fact, and
+ * is the same code the tests cover.
  *
  *   node scripts/migrate-memories.mjs --dry-run
  *   node scripts/migrate-memories.mjs --apply
@@ -13,6 +14,8 @@ import { copyFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
+import { openSqlite } from '../packages/core/src/index.ts';
+import { Soul } from '../packages/core/src/index.ts';
 
 const HOME = process.env.SOULBRIDGE_HOME ?? join(homedir(), '.soulbridge');
 const dbFile = join(HOME, 'soul.db');
@@ -26,21 +29,16 @@ if (!existsSync(dbFile)) {
   process.exit(2);
 }
 
-const LABEL = { strategy: '教训', cognition: '原则', trait: '性格', fact: '事实' };
-const db = new DatabaseSync(dbFile);
-const rows = db.prepare("SELECT * FROM memories WHERE status != 'superseded'").all();
-console.log(`legacy memories: ${rows.length}`);
-
-const byLabel = {};
-for (const row of rows) {
-  const label = LABEL[row.type] ?? '事实';
-  byLabel[label] = (byLabel[label] ?? 0) + 1;
-}
-console.log('mapping:', JSON.stringify(byLabel));
+// Identities come from the data, not from a constant: the store may hold more than
+// one soul/user pair, and a migration that touches only one looks like it worked.
+const probe = new DatabaseSync(dbFile, { readOnly: true });
+const souls = probe.prepare('SELECT DISTINCT soul_id, user_id FROM memories').all();
+const pending = probe.prepare("SELECT COUNT(*) n FROM memories WHERE status = 'active'").get();
+probe.close();
+console.log(`identities: ${souls.length} | active memories: ${pending.n}`);
 
 if (!apply) {
   console.log('dry run — nothing migrated');
-  db.close();
   process.exit(0);
 }
 
@@ -48,35 +46,20 @@ const backup = `${dbFile}.bak-memories-${Date.now()}`;
 copyFileSync(dbFile, backup);
 console.log(`backup: ${backup}`);
 
-const insert = db.prepare(
-  `INSERT OR IGNORE INTO facts
-     (id, soul_id, user_id, statement, type_name, holder, at, at_text, at_end, at_precision,
-      place_id, status, confidence, source, source_turn_id, superseded_by, created_at)
-   VALUES (?, ?, ?, ?, ?, 'self', NULL, NULL, NULL, 'unknown', NULL, 'none', ?, 'told', NULL, NULL, ?)`,
-);
-
-db.exec('BEGIN');
-try {
-  let migrated = 0;
-  for (const row of rows) {
-    const label = LABEL[row.type] ?? '事实';
-    const confidence = Math.min(1, Math.max(0.3, Number(row.importance ?? 7) / 10));
-    const result = insert.run(
-      `fc_lg_${row.id}`,
-      row.soul_id,
-      row.user_id,
-      String(row.content).trim(),
-      label,
-      confidence,
-      Number(row.created_at ?? Date.now()),
-    );
-    migrated += Number(result.changes);
-  }
-  db.exec('DELETE FROM memories');
-  db.exec('COMMIT');
-  console.log(`migrated: ${migrated} facts; memories table cleared`);
-} catch (error) {
-  db.exec('ROLLBACK');
-  throw error;
+const store = openSqlite(dbFile);
+let total = { migrated: 0, linked: 0, skipped: 0 };
+for (const row of souls) {
+  const soul = new Soul({ store, soulId: String(row.soul_id), userId: String(row.user_id) });
+  const result = soul.migrateLegacyMemories();
+  total = {
+    migrated: total.migrated + result.migrated,
+    linked: total.linked + result.linked,
+    skipped: total.skipped + result.skipped,
+  };
+  console.log(`${row.soul_id}/${row.user_id}:`, result);
 }
-db.close();
+store.close();
+console.log('合计:', total);
+if (total.migrated + total.linked === 0) {
+  console.log('没有可迁移的行（已经跑过或表已空）');
+}

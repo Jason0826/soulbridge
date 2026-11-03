@@ -66,18 +66,9 @@ test('distill: 触发词和要求词离得太远则不提炼，也不入库', ()
   assert.equal(distillStrategy(text), null);
   assert.equal(ruleExtract([user(text)]).length, 0);
 });
-test('observe 去重：同一句话重复出现只写一条', async () => {
-  const { Soul } = await import('../src/index.ts');
-  const { openSqlite } = await import('../src/sqlite.ts');
-  const store = openSqlite(':memory:');
-  const soul = new Soul({ store, soulId: 'xiaoling', userId: 'u1' });
-
-  await soul.observe({ role: 'user', content: '我习惯先看日志再动手' });
-  await soul.observe({ role: 'user', content: '我习惯先看日志再动手' });
-
-  assert.equal(store.count('xiaoling', 'u1'), 1);
-  store.close();
-});
+// observe() no longer writes memories, so its old dedupe test is retired with the
+// path. Duplicate handling for the remaining path lives in drafts.test.ts
+// ('commit: 同一时间表达式的重复陈述只写一条').
 test('LLM 端口：解析 JSON 并保留类型', async () => {
   const llm = async () => '{"type":"strategy","text":"改动前先解释方案"}';
   const draft = await llmExtractTurn('随便一句', llm);

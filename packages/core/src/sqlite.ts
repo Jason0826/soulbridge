@@ -663,6 +663,25 @@ export function openSqlite(file: string): SoulStore {
       return Number(result.changes ?? 0) > 0;
     },
 
+    /**
+     * Retire a legacy memory pointing at something outside this table.
+     *
+     * `supersede()` requires the replacement to be a memory, which is right while the
+     * table is live. The migration replaces rows with facts, so it needs the same
+     * bookkeeping without that check — the row stays for audit, the pointer is kept.
+     */
+    retireMemory(oldId: string, replacedBy?: string, now: number = Date.now()): boolean {
+      const result = withRetry(() =>
+        db
+          .prepare(
+            `UPDATE memories SET status = '${MEMORY_STATUS.superseded}', superseded_by = ?, updated_at = ?
+             WHERE id = ? AND status = '${MEMORY_STATUS.active}' AND deleted_at IS NULL`,
+          )
+          .run(replacedBy ?? null, now, oldId),
+      );
+      return Number(result.changes ?? 0) > 0;
+    },
+
     saveAffect(soulId: string, userId: string, signal: AffectSignal, at: number, deviceId?: string): void {
       withRetry(() => {
         db.prepare(

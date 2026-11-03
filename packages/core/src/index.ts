@@ -116,10 +116,49 @@ import { buildContext } from './context.ts';
 import { reflect, ruleExtract, nextEmotion } from './reflect.ts';
 import { rank, tokenize } from './scoring.ts';
 import { analyzeAffect, emptyAffect, lexiconAnalyzer } from './affect/analyze.ts';
-import { gateDrafts, llmExtractTurn } from './reflect.ts';
 import { extractByRules, extractWithModel } from './extract.ts';
 import type { ExtractionContext } from './extract.ts';
 export { gateDrafts } from './reflect.ts';
+
+/** The fact type a legacy MemoryType maps to. One vocabulary at rest: type_name. */
+const MEMORY_TYPE_TO_FACT: Record<MemoryType, string> = {
+  semantic: '事实',
+  episodic: '事件',
+  strategy: '教训',
+  cognition: '原则',
+  relationship: '关系',
+  trait: '性格',
+  fact: '事实',
+};
+
+/** Longest statement accepted from a host; matches the extractor's ceiling. */
+const MAX_FACT_CHARS = 200;
+
+/**
+ * Read a fact as the shape `recall()` has always returned.
+ *
+ * Callers (the adapter's `soul_recall` tool) only read id/type/content/score, but the
+ * type must stay honest: return the fact's own type name rather than inventing a
+ * MemoryType it never had.
+ */
+function factAsMemory(fact: Fact): Memory {
+  return {
+    id: fact.id,
+    soulId: fact.soulId,
+    userId: fact.userId,
+    type: 'fact',
+    content: fact.statement,
+    importance: Math.round(fact.confidence * 10),
+    vividness: 0.8,
+    recallCount: fact.recallCount ?? 0,
+    status: 'active',
+    visibility: 'private',
+    keywords: tokenize(fact.statement),
+    createdAt: fact.createdAt,
+    lastRecalledAt: fact.lastRecalledAt,
+    updatedAt: fact.createdAt,
+  };
+}
 
 export interface SoulOptions {
   store: SoulStore;
@@ -201,14 +240,17 @@ export class Soul {
    * Audit view: every non-deleted row, including superseded and expired ones.
    * Prompt builders use `context`, which filters both out.
    */
+  /**
+   * The recent holdings, as the shape hosts already consume.
+   *
+   * Reads facts: the legacy table is inert after the migration, and a list that kept
+   * reading it would look empty while the system clearly remembers things.
+   */
   list(limit = 50): Memory[] {
-    return this.store.query({
-      soulId: this.soulId,
-      userId: this.userId,
-      status: [MEMORY_STATUS.active, MEMORY_STATUS.superseded],
-      includeExpired: true,
-      limit,
-    });
+    return this.store
+      .facts({ soulId: this.soulId, userId: this.userId, limit })
+      .filter((fact) => fact.status !== FACT_STATUS.superseded)
+      .map(factAsMemory);
   }
 
   /** Tombstone one memory so it never reaches a prompt again. */
@@ -1113,11 +1155,17 @@ export class Soul {
     return { session: previous, first: topic, last };
   }
 
-  /** Verb 3: on demand. */
+  /**
+   * Verb 3: on demand.
+   *
+   * Reads facts, not the legacy `memories` table: after the migration that table is
+   * inert, and a recall that still read it would stay empty forever.
+   */
   recall(query: string, limit = 5): ScoredMemory[] {
-    const memories = this.store.query({ soulId: this.soulId, userId: this.userId });
-    const ranked = rank(memories, query, Date.now()).slice(0, limit);
-    this.store.touch(ranked.map((r) => r.memory.id));
+    const facts = this.store
+      .facts({ soulId: this.soulId, userId: this.userId, limit: 500 })
+      .filter((fact) => fact.status !== FACT_STATUS.superseded);
+    const ranked = rank(facts.map(factAsMemory), query, Date.now()).slice(0, limit);
     return ranked;
   }
 
@@ -1127,75 +1175,16 @@ export class Soul {
   }
 
   /**
-   * Verb 2: after each turn.
+   * Verb 2: after each turn. Affect and emotion only.
    *
-   * The analyzer may be async (a model); any failure degrades to the lexicon
-   * analyzer. Emotion is computed from the turn only — never from affect.
+   * Memory writing moved to `extract()` + `commitDrafts()` (facts), which is the one
+   * representation the rest of the system reads. This method used to run a second
+   * model pass (`llmExtractTurn`) behind a second gate (`gateDrafts`) into the legacy
+   * `memories` table — two prompts, two gates, two model calls for the same message.
    */
   async observe(turn: Turn): Promise<ObserveResult> {
     const now = turn.at ?? Date.now();
     const affect = turn.role === 'user' ? await this.analyzeTurn(turn.content) : emptyAffect();
-
-    // Rules first: they are precise and cheap. Only when they find nothing does
-    // the optional model get a chance, so it can add recall without overriding
-    // a rule that already fired.
-    let drafts = ruleExtract([turn]);
-    let extractedBy: 'rules' | 'llm' | 'none' = drafts.length > 0 ? 'rules' : 'none';
-    // A model that says "nothing to keep" and a model that answers garbage used
-    // to be indistinguishable; keep them apart for measurement.
-    let llmOutcome: 'off' | 'skipped-rules' | 'skipped-long' | 'stored' | 'null' | 'failed' = this.llm
-      ? 'skipped-rules'
-      : 'off';
-    if (drafts.length === 0 && turn.role === 'user' && this.llm) {
-      if (turn.content.length <= this.llmMaxChars) {
-        try {
-          const draft = await llmExtractTurn(turn.content, this.llm, this.onLlmRaw);
-          if (draft) {
-            drafts = [draft];
-            extractedBy = 'llm';
-            llmOutcome = 'stored';
-          } else {
-            llmOutcome = 'null';
-          }
-        } catch {
-          // The model is an enhancement; a transport or parse failure leaves the
-          // rule result (nothing) in place.
-          llmOutcome = 'failed';
-        }
-      } else {
-        llmOutcome = 'skipped-long';
-      }
-    }
-    // Deterministic write gates: shape -> semantics -> per-turn budget. Whatever
-    // they refuse is reported, so written: 0 always has a reason.
-    const gated = gateDrafts(drafts);
-
-    // observe runs every turn; repeating a sentence must not create a second row.
-    const seen = new Set(
-      this.store.query({ soulId: this.soulId, userId: this.userId, limit: 10_000 }).map((m) => m.content.trim()),
-    );
-    let written = 0;
-    for (const draft of gated.accepted) {
-      if (seen.has(draft.content.trim())) continue;
-      seen.add(draft.content.trim());
-      written += 1;
-      this.store.put({
-        id: `mem_${now.toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
-        soulId: this.soulId,
-        userId: this.userId,
-        type: draft.type,
-        content: draft.content,
-        importance: draft.importance,
-        vividness: 0.8,
-        recallCount: 0,
-        status: 'active',
-        visibility: 'private',
-        keywords: tokenize(draft.content),
-        createdAt: now,
-        updatedAt: now,
-        validFrom: now,
-      });
-    }
 
     if (turn.role === 'user') {
       try {
@@ -1208,49 +1197,46 @@ export class Soul {
     const emotion = nextEmotion(this.store.emotion(this.soulId, this.userId), [turn]);
     this.store.saveEmotion(this.soulId, this.userId, emotion, now);
     return {
-      written,
-      committed: written > 0,
-      rejections: gated.rejected,
-      llmOutcome,
+      written: 0,
+      committed: false,
+      rejections: [],
+      llmOutcome: 'off',
       emotion,
       affect,
-      extractedBy: written > 0 ? extractedBy : 'none',
+      extractedBy: 'none',
     };
   }
 
   /**
    * Explicit form of `observe`: the host decided this is worth keeping.
-   * Same write path, no extraction heuristics.
+   *
+   * Writes a fact, like every other write path. This used to be a row in the legacy
+   * `memories` table, which meant "remember this" produced something the rest of the
+   * system (anchors, recall, conclusions) had to be told about separately.
    */
   remember(
     content: string,
     options: { type?: MemoryType; importance?: number; visibility?: Visibility } = {},
   ): string {
-    const now = Date.now();
-    const id = `mem_${now.toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-    this.store.put({
-      id,
-      soulId: this.soulId,
-      userId: this.userId,
-      type: options.type ?? 'fact',
-      content,
-      importance: options.importance ?? 6,
-      vividness: 0.9,
-      recallCount: 0,
-      status: 'active',
-      visibility: options.visibility ?? 'private',
-      keywords: tokenize(content),
-      createdAt: now,
-      updatedAt: now,
-      validFrom: now,
+    const fact = this.recordFact({
+      statement: content,
+      typeName: MEMORY_TYPE_TO_FACT[options.type ?? 'fact'],
+      holder: 'self',
+      source: 'told',
+      confidence: Math.min(1, Math.max(0, (options.importance ?? 6) / 10)),
+      // Explicit writes are anchors by definition: the host asked for this to be kept.
+      slots: [{ slot: '锚点', value: { kind: 'text', value: '是' } }],
     });
-    return id;
+    return fact.id;
   }
 
   /**
-   * Explicit write requested by a host or its model (RFC 0005). Unlike
-   * `remember`, it passes the same gates as `observe` and dedupes by content,
-   * so a tool cannot bypass shape/semantics or flood duplicates.
+   * Explicit write requested by a host or its model (RFC 0005).
+   *
+   * Writes a fact and keeps the old dedupe contract: exact duplicate returns the
+   * existing id, and a paraphrase inside the dedupe window is treated as the same
+   * statement. Shape checks are the statement checks (non-empty, short enough);
+   * the old `gateDrafts` layer existed only to protect the retired table.
    */
   rememberExplicit(input: { content: string; type?: MemoryType; importance?: number }): {
     ok: boolean;
@@ -1260,32 +1246,28 @@ export class Soul {
   } {
     const type = input.type ?? 'fact';
     const importance = Math.min(10, Math.max(1, input.importance ?? 7));
-    const { accepted, rejected } = gateDrafts([{ type, content: input.content, importance }]);
-    if (accepted.length === 0) {
-      return { ok: false, reason: rejected[0]?.reason ?? 'rejected by write gates' };
-    }
-    const content = accepted[0].content;
+    const content = String(input.content ?? '').trim();
+    if (content.length < 2) return { ok: false, reason: `length ${content.length} (2..${MAX_FACT_CHARS})` };
+    if (content.length > MAX_FACT_CHARS) return { ok: false, reason: `length ${content.length} (2..${MAX_FACT_CHARS})` };
+    // Punctuation alone is not a statement; the old shape gate rejected it and that
+    // rule is worth keeping even though its table is gone.
+    if (!/[\p{L}\p{N}]/u.test(content)) return { ok: false, reason: 'no letters or digits' };
     const now = Date.now();
 
-    const candidates = this.store.query({
-      soulId: this.soulId,
-      userId: this.userId,
-      status: ['active'],
-      includeExpired: true,
-      limit: 50,
-    });
+    const candidates = this.store
+      .facts({ soulId: this.soulId, userId: this.userId, limit: 200 })
+      .filter((fact) => fact.status !== FACT_STATUS.superseded);
 
     // Same content anywhere: the exact duplicate.
-    const same = candidates.find((memory) => memory.content.trim() === content);
+    const same = candidates.find((fact) => fact.statement.trim() === content);
     if (same) return { ok: true, id: same.id, duplicate: true };
 
-    // A paraphrase of something just written (usually the automatic observer
-    // moments earlier) must not become a second row: a shared run of characters
-    // inside the dedupe window is treated as the same statement.
+    // A paraphrase of something just written must not become a second row: a shared
+    // run of characters inside the dedupe window is treated as the same statement.
     const window = this.dedupeWindowMs;
     if (window > 0) {
-      const recent = candidates.filter((memory) => now - memory.createdAt <= window);
-      const overlapping = recent.find((memory) => sharesRun(memory.content, content, MIN_SHARED_RUN));
+      const recent = candidates.filter((fact) => now - fact.createdAt <= window);
+      const overlapping = recent.find((fact) => sharesRun(fact.statement, content, MIN_SHARED_RUN));
       if (overlapping) {
         return { ok: true, id: overlapping.id, duplicate: true, reason: 'already recorded this turn' };
       }
@@ -1293,6 +1275,52 @@ export class Soul {
 
     const id = this.remember(content, { type, importance });
     return { ok: true, id };
+  }
+
+  /**
+   * One-off: move the legacy `memories` rows into facts (ADR 0032), then retire them.
+   *
+   * The old rows are the only description of the soul's own lessons that exists, so
+   * they are copied — never rewritten — and marked superseded pointing at the new
+   * fact. Re-running is safe: a statement that already has a fact is linked, not
+   * copied again.
+   */
+  migrateLegacyMemories(): { migrated: number; linked: number; skipped: number } {
+    const memories = this.store.query({ soulId: this.soulId, userId: this.userId, limit: 10_000 });
+    const existing = new Map(
+      this.store
+        .facts({ soulId: this.soulId, userId: this.userId, limit: 10_000 })
+        .map((fact) => [fact.statement.trim(), fact] as const),
+    );
+    let migrated = 0;
+    let linked = 0;
+    let skipped = 0;
+    for (const memory of memories) {
+      if (memory.status !== 'active') {
+        skipped += 1;
+        continue;
+      }
+      const statement = memory.content.trim();
+      const known = existing.get(statement);
+      const fact =
+        known ??
+        this.recordFact({
+          statement,
+          typeName: MEMORY_TYPE_TO_FACT[memory.type] ?? '事实',
+          holder: 'self',
+          source: 'told',
+          confidence: Math.min(1, Math.max(0, memory.importance / 10)),
+          // Migrated rows were explicit memories; keep them as anchors.
+          slots: [{ slot: '锚点', value: { kind: 'text', value: '是' } }],
+        });
+      if (known) linked += 1;
+      else {
+        existing.set(statement, fact);
+        migrated += 1;
+      }
+      this.store.retireMemory(memory.id, fact.id);
+    }
+    return { migrated, linked, skipped };
   }
 
   /** Verb 4: session end. */

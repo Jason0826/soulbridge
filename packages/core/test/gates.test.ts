@@ -36,18 +36,18 @@ test('闸门 shape：不可抽取的类型被拒', () => {
   assert.equal(rejected[0].gate, 'shape');
 });
 
-test('observe 返回 committed：写成功为 true，全部被拒为 false', async () => {
+test('observe 不再写记忆：写入路径已迁到 extract/commitDrafts', async () => {
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 'xiaoling', userId: 'u1' });
 
   const hit = await soul.observe({ role: 'user', content: '以后提交前先跑测试' });
-  assert.equal(hit.committed, true);
-  assert.equal(hit.written, 1);
+  // The verb kept its name and its affect side, but memory writing moved: one
+  // representation (facts) and one prompt, not two pipelines.
+  assert.equal(hit.committed, false);
+  assert.equal(hit.written, 0);
   assert.deepEqual(hit.rejections, []);
-
-  const miss = await soul.observe({ role: 'user', content: '这个文件里存的是 schema 版本号' });
-  assert.equal(miss.committed, false);
-  assert.equal(miss.written, 0);
+  assert.equal(store.count('xiaoling', 'u1'), 0);
+  assert.equal(soul.list(100).length, 0, '也不应该悄悄写进 facts');
   store.close();
 });
 

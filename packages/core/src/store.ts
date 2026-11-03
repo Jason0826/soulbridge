@@ -121,6 +121,12 @@ export interface SoulStore {
    */
   supersede(oldId: string, newId: string, now?: number): boolean;
 
+  /**
+   * Retire a legacy memory whose replacement is not a memory (the migration replaces
+   * rows with facts). Same bookkeeping, no cross-table existence check.
+   */
+  retireMemory(oldId: string, replacedBy?: string, now?: number): boolean;
+
   /** Persist one affect sample (payload only; no raw text). */
   saveAffect(soulId: string, userId: string, signal: AffectSignal, at: number, deviceId?: string): void;
   /** Samples newer than `sinceMs`, newest first. */

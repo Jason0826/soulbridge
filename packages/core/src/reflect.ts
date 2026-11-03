@@ -5,10 +5,19 @@
  * extraction is possible later; today the rule path is the default, which keeps
  * the whole loop runnable offline.
  */
-import { randomUUID } from 'node:crypto';
-import type { DraftRejection, Emotion, LlmFn, Memory, MemoryType, ReflectResult, Turn } from './types.ts';
+import type { DraftRejection, Emotion, LlmFn, MemoryType, ReflectResult, Turn } from './types.ts';
 import type { SoulStore } from './store.ts';
-import { tokenize } from './scoring.ts';
+
+/** The fact type a legacy MemoryType maps to; one vocabulary at rest (type_name). */
+const MEMORY_TYPE_TO_FACT: Record<MemoryType, string> = {
+  semantic: '事实',
+  episodic: '事件',
+  strategy: '教训',
+  cognition: '原则',
+  relationship: '关系',
+  trait: '性格',
+  fact: '事实',
+};
 
 interface Draft {
   type: MemoryType;
@@ -306,30 +315,27 @@ export async function reflect(store: SoulStore, options: ReflectOptions): Promis
   } else {
     drafts.push(...ruleExtract(options.turns));
   }
-  const existing = store.query({ soulId: options.soulId, userId: options.userId });
-  const seen = new Set(existing.map((m) => m.content));
+  // One representation: a reflected draft becomes a fact, not a row in the retired
+  // `memories` table. Dedupe is by statement against the facts already held, because
+  // the same sentence can arrive through extraction, a tool, or this verb.
+  const existing = store.facts({ soulId: options.soulId, userId: options.userId, limit: 1000 });
+  const seen = new Set(existing.map((fact) => fact.statement.trim()));
 
   const { accepted, rejected } = gateDrafts(drafts);
   let written = 0;
   for (const draft of accepted) {
-    if (seen.has(draft.content)) continue;
-    seen.add(draft.content);
-    const memory: Memory = {
-      id: `mem_${randomUUID().slice(0, 8)}`,
+    const statement = draft.content.trim();
+    if (seen.has(statement)) continue;
+    seen.add(statement);
+    store.putFact({
       soulId: options.soulId,
       userId: options.userId,
-      type: draft.type,
-      content: draft.content,
-      importance: draft.importance,
-      vividness: 0.8,
-      recallCount: 0,
-      status: 'active',
-      visibility: draft.type === 'relationship' ? 'private' : 'private',
-      keywords: tokenize(draft.content),
-      createdAt: now,
-      validFrom: now,
-    };
-    store.put(memory);
+      statement,
+      typeName: MEMORY_TYPE_TO_FACT[draft.type] ?? '事实',
+      holder: 'self',
+      source: 'told',
+      confidence: Math.min(1, Math.max(0, draft.importance / 10)),
+    });
     written += 1;
   }
 

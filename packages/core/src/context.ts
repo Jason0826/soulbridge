@@ -86,11 +86,22 @@ export function buildContext(
   // read until its rows have been migrated and deleted. The union keeps the
   // injection stable across that switch instead of dropping every lesson at once.
   // The anchor vocabulary is declared in config/labels.ts; this file only filters.
+  // A fact carrying the 锚点 slot is explicit ("the user asked me to remember this"),
+  // so it is injected whatever its type name — otherwise an explicit note typed as
+  // 事实 would be stored and never surface.
   const anchorTypes = new Set(ANCHOR_TYPES);
+  const explicitAnchor = (fact: { slots?: Array<{ slot: string; value: { kind: string; value?: unknown } }> }) =>
+    (fact.slots ?? []).some(
+      (slot) => slot.slot === '锚点' && slot.value.kind === 'text' && slot.value.value === '是',
+    );
   type Anchor = { id: string; label: string; text: string; score: number };
   const anchors: Anchor[] = store
     .facts({ soulId: request.soulId, userId: request.userId, limit: 300 })
-    .filter((fact) => fact.status !== FACT_STATUS.superseded && anchorTypes.has(fact.typeName ?? ''))
+    .filter(
+      (fact) =>
+        fact.status !== FACT_STATUS.superseded &&
+        (anchorTypes.has(fact.typeName ?? '') || explicitAnchor(fact)),
+    )
     .map((fact) => ({ id: fact.id, label: fact.typeName ?? '事实', text: fact.statement, score: fact.confidence }));
   for (const memory of store.query({ soulId: request.soulId, userId: request.userId })) {
     if (request.types !== undefined && !request.types.includes(memory.type)) continue;
