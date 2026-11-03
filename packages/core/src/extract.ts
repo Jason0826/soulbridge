@@ -71,6 +71,29 @@ function splitSentences(text: string): string[] {
     .filter((s) => s.length >= 2);
 }
 
+/**
+ * A calendar date, or nothing.
+ *
+ * `Date.parse('2026-02-31T00:00:00Z')` does not fail: it rolls to 2026-03-03. A rolled
+ * date is worse than a missing one — it is confidently wrong and joins time retrieval
+ * as if it were exact. Round-tripping through Date is the only reliable check.
+ */
+export function calendarDate(year: number, month: number, day: number): number | undefined {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return undefined;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return undefined;
+  const ms = Date.UTC(year, month - 1, day);
+  const check = new Date(ms);
+  const same = check.getUTCFullYear() === year && check.getUTCMonth() === month - 1 && check.getUTCDate() === day;
+  return same ? ms : undefined;
+}
+
+/** Parse `YYYY-MM-DD`; anything that is not a real day on the calendar returns undefined. */
+export function parseIsoDate(text: string): number | undefined {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(text ?? '').trim());
+  if (!match) return undefined;
+  return calendarDate(Number(match[1]), Number(match[2]), Number(match[3]));
+}
+
 /** First time expression in the sentence, with a rough timestamp. */
 function findTime(sentence: string, now: number): { at?: number; atText?: string } {
   for (const word of TIME_WORDS) {
@@ -83,15 +106,15 @@ function findTime(sentence: string, now: number): { at?: number; atText?: string
   if (explicit) {
     const month = Number(explicit[1]);
     const day = Number(explicit[2]);
-    const year = new Date(now).getFullYear();
-    return { atText: explicit[0], at: new Date(year, month - 1, day).getTime() };
+    const year = new Date(now).getUTCFullYear();
+    // "2月31日" is not a date; keep the words and let the precision stay unknown.
+    const at = calendarDate(year, month, day);
+    return at === undefined ? { atText: explicit[0] } : { atText: explicit[0], at };
   }
   const yearMonth = sentence.match(/(\d{4})年(\d{1,2})月/);
   if (yearMonth) {
-    return {
-      atText: yearMonth[0],
-      at: new Date(Number(yearMonth[1]), Number(yearMonth[2]) - 1, 1).getTime(),
-    };
+    const at = calendarDate(Number(yearMonth[1]), Number(yearMonth[2]), 1);
+    return at === undefined ? { atText: yearMonth[0] } : { atText: yearMonth[0], at };
   }
   return {};
 }
@@ -187,6 +210,10 @@ export function extractByRules(text: string, at = Date.now()): ExtractDraft {
       typeName: verb?.word,
       at: time.at,
       atText: time.atText,
+      // Precision follows what the rules actually resolved: a parsed date is `day`, a
+      // bare expression ("上次") is `relative`. Without this every rules fact claimed
+      // unknown and could not join time retrieval even when it had a date.
+      atPrecision: time.at !== undefined ? 'day' : time.atText !== undefined ? 'relative' : 'unknown',
       source: boundByPronoun ? 'inferred' : 'told',
       confidence: people.length > 0 ? (boundByPronoun ? 0.5 : 0.7) : 0.5,
       slots,
@@ -490,7 +517,10 @@ export function parseLineDraft(raw: string): Record<string, unknown> | null {
       if (!statement) continue;
       const fact: Record<string, unknown> = { statement };
       if (typeName) fact.type_name = typeName;
-      if (at && /^\d{4}-\d{2}-\d{2}$/.test(at)) fact.at = Date.parse(`${at}T00:00:00Z`);
+      // A date that is not a real day on the calendar is dropped, not rolled:
+      // '2026-02-31' used to become 03-03 and still claim precision=day.
+      const parsedAt = at ? parseIsoDate(at) : undefined;
+      if (parsedAt !== undefined) fact.at = parsedAt;
       if (atText) fact.at_text = atText;
       if (source) fact.source = source;
       // An empty field is "the model did not say", not "the model said zero".
@@ -526,6 +556,14 @@ export function parseLineDraft(raw: string): Record<string, unknown> | null {
         slots.push(/^-?\d+(\.\d+)?$/.test(value) ? { slot, number: Number(value) } : { slot, entity: value });
       }
       if (slots.length > 0) fact.slots = slots;
+      // Precision must agree with what survived: a model that wrote 精度=day for a date
+      // we rejected would otherwise claim exactness it does not have.
+      const precision = typeof fact.at_precision === 'string' ? fact.at_precision : '';
+      if (fact.at === undefined && precision === 'day') {
+        fact.at_precision = fact.at_text ? 'relative' : 'unknown';
+      } else if (fact.at !== undefined && !precision) {
+        fact.at_precision = 'day';
+      }
       operations.push({ op: 'add', fact });
       sawRecord = true;
       continue;

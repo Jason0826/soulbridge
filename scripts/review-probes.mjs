@@ -106,7 +106,13 @@ console.log('--- 空置信字段应回落默认值而不是 0 ---');
 console.log('--- 不存在的日期应被拒，而不是滚动 ---');
 {
   const parsed = parseLineDraft(
-    '事实: 用户在二月底做了某件事 | 事件 | 2026-02-31 | | told | 0.8 | 持有=world | 精度=day',
+    '事实: 用户在二月底做了某件事 | 事件 | 2026-02-31 | 二月底 | told | 0.8 | 持有=world | 精度=day',
   );
-  console.log(`  2026-02-31 → ${new Date(parsed.operations[0].fact.at).toISOString().slice(0, 10)}（期望被拒）`);
+  const fact = parsed.operations[0].fact;
+  const stored = fact.at === undefined ? '未采纳（at 为空）' : new Date(fact.at).toISOString().slice(0, 10);
+  console.log(`  2026-02-31 → ${stored}，精度=${fact.atPrecision ?? fact.at_precision}（期望未采纳 + relative）`);
+  if (fact.at !== undefined) {
+    console.log('  ✗ 不存在的日期被接受了');
+    process.exitCode = 1;
+  }
 }

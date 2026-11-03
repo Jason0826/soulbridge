@@ -61,9 +61,14 @@
       "date": "2026-11-03",
       "delta": 36,
       "reason": "抽取提示词重写为术语块（每个术语一处定义 + 算/不算边界），格式说明与规则不再复述；别名加入实体索引（+36 行，术语是内容不是冗余）。"
+    },
+    {
+      "date": "2026-11-03",
+      "delta": 38,
+      "reason": "日历校验：calendarDate/parseIsoDate 单一入口，文本与规则两条路径共用；不存在的日期不再滚动，精度随之降级；规则抽取补 atPrecision（+38 行，含说明）。"
     }
   ],
-  "coreLines": 7601,
+  "coreLines": 7639,
   "pluginLines": 2322,
   "files": {
     "analyze.ts": 255,
@@ -79,7 +84,7 @@
     "consolidate.ts": 369,
     "context.ts": 136,
     "dimension-text.ts": 31,
-    "extract.ts": 552,
+    "extract.ts": 590,
     "inject-text.ts": 27,
     "profile-prompt.ts": 119,
     "prompts.ts": 481,
