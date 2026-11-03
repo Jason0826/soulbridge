@@ -8,11 +8,47 @@
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
-> 旧表示退场登记：[retirements.json](retirements.json)（`health-check` 第 7 节判定）。`n> 名词/变量声明：[declarations.json](declarations.json)，定义文件在 `packages/core/src/config/`（`health-check` 第 8、9 节）。
+> 旧表示退场登记：[retirements.json](retirements.json)（`health-check` 第 7 节判定）。
+> 名词/变量声明：[declarations.json](declarations.json)，定义文件在 `packages/core/src/config/`（`health-check` 第 8、9 节）。
 > 全系统审计：[audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md)。
 > 代码审查（今晚，含已修复 4 条）：[audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md)。
 
-**12:35 主题演进**：线索主题不再停在第一轮——`继续` 行可带 `主题=`，模型给了才更新；新增 `threadLine`（present/absent/invalid）与 `topicUpdated` 观测，兜底率不再靠推断。core 268 测试。`n`n**11:20 观察工具**：`node scripts/attribution-stats.mjs`（`--all` 看历史）输出归属分布与 ADR 0034 四项通过线；**样本 <20 次归属只观察、不判定**。部署后基线（全历史）：159 条线索，136 条单轮，≥2 轮 7%，≥2 事实 4%。`n`n**11:10 修复摘要**：去掉会进模型视野的截断——候选行、上一句、主题、分类输入、交接块、归纳轮次全部整句进入；凭空造主题改用「第一整句」。core 266 / 插件 81 测试。`n`n**10:35 修复摘要**：ADR 0034 第 1 步——候选线索带近轮原文、`previousUserText` 接线、归属失败默认接上一轮（`joinReason` 可审计）。core 265 测试。`n`n**09:30 修复摘要**：抽取队列可观察——单一导出写入器、backlog 与 cap 丢弃日志、`requeue-history.mjs` 重排脚本；实测 20 条入队后逐条 drain（20→11，每条产出 1 事实）。插件 79 测试。`n`n**09:10 修复摘要**：`memories` 写入退役——`observe` 只做 affect，`remember`/`rememberExplicit`/`reflect` 写 facts，`recall`/`list` 读 facts；16 条旧行迁移并标 superseded（保留可审计）。双 prompt、双闸门、双模型调用消失。core 260 测试。`n`n**08:45 修复摘要**：日历校验——不存在的日期不再滚动（`2026-02-31` 被拒而不是变成 `03-03`），精度随之降级；`review-probes` 8 段全绿。core 267 测试。`n`n**08:20 修复摘要**：抽取提示词重写——每个术语一处定义 + 算/不算边界（`<terms>` 1302 字），格式说明与规则不再复述；别名加入实体索引（「阿林」不再被降级为文本）。core 263 测试。`n`n**07:40 修复摘要**：提交闸门从"过滤器"改成"标注器"——未声明槽位降级为文本、未知持有人回落世界层，只有读不懂与完全重复才拒；新增 `droppedSlots`/`holderFallbacks` 计数。core 261 / 插件 77 测试。`n`n**01:25 修复摘要**：空置信字段不再落成 0（`UNKNOWN_CONFIDENCE` 单一常量，文本/JSON 共用）。core 255 测试。`n`n**01:10 修复摘要**：注入块统一转义（core `inject-text.ts` + 插件六个块），内容不能再伪造标签或提前闭合块。core 251 / 插件 77 测试。`n`n**00:50 修复摘要**：数据库迁移与版本号同一个事务，失败回滚；v5 重跑不再重复插 step。core 248 测试。`n`n**00:35 修复摘要**：WAL 备份改为 `VACUUM INTO` + 完整性校验，坏备份挪走并拒绝升级（备份从"有"变成"有效"）。core 247 测试。`n`n**00:20 修复摘要**：实体刷新不再清空别名与属性（别名累积、属性合并），`latestAbout` 刷新后仍能按别名命中。core 246 测试全过。`n`n**00:05 修复摘要**：`distill` 开关退役，`extract` 成为唯一模型开关；无模型时分类/归纳不再入队（避免 cap 丢新项）。distill 退场项翻成 done。`n`n**23:40 修复摘要**：`section` 不再带 `<affect>`（每轮变的值会让 DSH 每轮追加一个 prompt 版本）；core 新增 `includeAffect` 开关，affect 仍走每轮消息通道（core 242 测试 / 插件 70 测试）。`n`n**23:15 修复摘要**：插件侧模型失败不再被当成"模型说没有"——失败即抛错、归纳草稿读不出来退队重试、验证阶段 3 次上限（插件 68 测试全过）。`n`n**22:50 修复摘要**（详见代码审查第六节）：检索路由的三处误判、合并 prompt 示例与闸门不一致、
+**12:35 主题演进**：线索主题不再停在第一轮——`继续` 行可带 `主题=`，模型给了才更新；新增 `threadLine`（present/absent/invalid）与 `topicUpdated` 观测，兜底率不再靠推断。core 268 测试。
+
+**11:20 观察工具**：
+node scripts/attribution-stats.mjs`（`--all` 看历史）输出归属分布与 ADR 0034 四项通过线；**样本 <20 次归属只观察、不判定**。部署后基线（全历史）：159 条线索，136 条单轮，≥2 轮 7%，≥2 事实 4%。
+
+**11:10 修复摘要**：去掉会进模型视野的截断——候选行、上一句、主题、分类输入、交接块、归纳轮次全部整句进入；凭空造主题改用「第一整句」。core 266 / 插件 81 测试。
+
+**10:35 修复摘要**：ADR 0034 第 1 步——候选线索带近轮原文、`previousUserText` 接线、归属失败默认接上一轮（`joinReason` 可审计）。core 265 测试。
+
+**09:30 修复摘要**：抽取队列可观察——单一导出写入器、backlog 与 cap 丢弃日志、`requeue-history.mjs` 重排脚本；实测 20 条入队后逐条 drain（20→11，每条产出 1 事实）。插件 79 测试。
+
+**09:10 修复摘要**：`memories` 写入退役——`observe` 只做 affect，`remember`/`rememberExplicit`/`reflect` 写 facts，`recall`/`list` 读 facts；16 条旧行迁移并标 superseded（保留可审计）。双 prompt、双闸门、双模型调用消失。core 260 测试。
+
+**08:45 修复摘要**：日历校验——不存在的日期不再滚动（`2026-02-31` 被拒而不是变成 `03-03`），精度随之降级；`review-probes` 8 段全绿。core 267 测试。
+
+**08:20 修复摘要**：抽取提示词重写——每个术语一处定义 + 算/不算边界（`<terms>` 1302 字），格式说明与规则不再复述；别名加入实体索引（「阿林」不再被降级为文本）。core 263 测试。
+
+**07:40 修复摘要**：提交闸门从"过滤器"改成"标注器"——未声明槽位降级为文本、未知持有人回落世界层，只有读不懂与完全重复才拒；新增 `droppedSlots`/`holderFallbacks` 计数。core 261 / 插件 77 测试。
+
+**01:25 修复摘要**：空置信字段不再落成 0（`UNKNOWN_CONFIDENCE` 单一常量，文本/JSON 共用）。core 255 测试。
+
+**01:10 修复摘要**：注入块统一转义（core `inject-text.ts` + 插件六个块），内容不能再伪造标签或提前闭合块。core 251 / 插件 77 测试。
+
+**00:50 修复摘要**：数据库迁移与版本号同一个事务，失败回滚；v5 重跑不再重复插 step。core 248 测试。
+
+**00:35 修复摘要**：WAL 备份改为 `VACUUM INTO` + 完整性校验，坏备份挪走并拒绝升级（备份从"有"变成"有效"）。core 247 测试。
+
+**00:20 修复摘要**：实体刷新不再清空别名与属性（别名累积、属性合并），`latestAbout` 刷新后仍能按别名命中。core 246 测试全过。
+
+**00:05 修复摘要**：`distill` 开关退役，`extract` 成为唯一模型开关；无模型时分类/归纳不再入队（避免 cap 丢新项）。distill 退场项翻成 done。
+
+**23:40 修复摘要**：`section` 不再带 `<affect>`（每轮变的值会让 DSH 每轮追加一个 prompt 版本）；core 新增 `includeAffect` 开关，affect 仍走每轮消息通道（core 242 测试 / 插件 70 测试）。
+
+**23:15 修复摘要**：插件侧模型失败不再被当成"模型说没有"——失败即抛错、归纳草稿读不出来退队重试、验证阶段 3 次上限（插件 68 测试全过）。
+
+**22:50 修复摘要**（详见代码审查第六节）：检索路由的三处误判、合并 prompt 示例与闸门不一致、
 正反句被折叠、JSON 形状抽取被空 operations 遮蔽。core 241 测试全过；
 `scripts/review-probes.mjs` 前 5 段从红变绿。
 
@@ -67,7 +103,8 @@
 | 19 | 派生 = 引用了来源（今晚） | `isDerivedProfileLine` | 8/9 条派生行不再进合并输入 | ✅ |
 | 20 | 分类是队列的唯一活水（今晚） | `markProfile(dimension)` → `enqueueProfileCandidate` | 队列现为 0 条（无新教训） | ✅ 机制 / ⏳ 数据 |
 | 21 | T1：纠正才升格（今晚） | `wasCorrectedTurn` + `promotionCandidates` | e2e 通；**信号 precision ~1/3** | ⚠️ |
-| 22 | 候选 / 生效 / 撤回 | `facts.status` 只有 `none`/`superseded` | "候选不生效"**无处表达** | ❌ |
+| 22 | 候选 / 生效 / 撤回 | `facts.status` 只有 
+one`/`superseded` | "候选不生效"**无处表达** | ❌ |
 | 23 | 老 `memories` 退场 | **写入路径已删**；16 条迁移成 facts 并标 superseded | active 0 / superseded 16 | ✅ done |
 | 24 | 冻结层清理 | `turn_pairs` **97 行、0 写者** | 无写入、只有迁移在读 | ⚠️ |
 
@@ -85,7 +122,8 @@
 管线（一条）：`turn → 抽取队列 → extract（唯一 prompt）→ commitDrafts（标注器）→ facts → 归纳按线索 → 结论 → 画像按维度合并`
 
 正在验收的实验（ADR 0034）：归属默认继续。部署 0.0.98 之后尚无抽取样本，
-`node scripts/attribution-stats.mjs` 会在归属 ≥20 次时给第一个判决。
+
+node scripts/attribution-stats.mjs` 会在归属 ≥20 次时给第一个判决。
 现象记录：今早那批历史回填让世界层从 1 涨到 11、有日期从 0 涨到 4——事实开始带时间了。
 ## 三·一、下次从这里继续（未完成，别重开）
 
@@ -108,7 +146,8 @@
 部署契约（每次发版照做）：
   build → verify-installed → 覆盖副本 → 重启 → manifest 改到对应 tag
 ```
-## 四、四个比率（`node scripts/quality.mjs --days 7`）
+## 四、四个比率（
+node scripts/quality.mjs --days 7`）
 
 | 指标 | 值 | 通过线 | 判定 |
 |---|---|---|---|
@@ -196,7 +235,8 @@ node scripts/verify-installed.mjs    # 装上去的产物是不是这份代码
 1. 改动前解释：为什么、怎么做、影响
 2. 需求说明 → 文献 → 边界 → 声明 → 验收
 3. 改动前后各跑一次 `health-check.mjs`，输出要贴进交付物
-4. 发版前 `npm test` fail 0，且 `verify-installed.mjs` 通过
+4. 发版前 
+npm test` fail 0，且 `verify-installed.mjs` 通过
 5. 失败排查先保存原始输出，不猜
 6. 报数据，不报感觉
 

@@ -281,6 +281,25 @@ if (!existsSync(readmePath)) {
   else add('PASS', '文档', `顶层文档均已进索引（${topLevelDocs.length} 份）`);
 }
 
+// ---------- 4.6.1 替换事故的痕迹 ----------
+// 两次真实事故：把 `` `n `` 当成换行写进了文档（一次让整节挤成一行，一次把 `node` 切成了 ode）。
+// 这类损坏在 diff 里看着像正常修改，读起来才发现句子断了，所以单独扫一遍。
+const docArtifacts = [];
+for (const file of docFiles2) {
+  const text = readFileSync(file, 'utf8');
+  // The corruption signature is `` `n` `` (a newline written as backtick-n inside code
+  // style), not any "`n" — that also matches legitimate inline code such as `node …`.
+  if (text.includes('\u0060n\u0060')) docArtifacts.push(`${relative(ROOT, file)}: 含 \u0060n\u0060`);
+  for (const line of text.split('\n')) {
+    if (/^(ode|pm|px|ot) /.test(line)) docArtifacts.push(`${relative(ROOT, file)}: 行首残片「${line.slice(0, 20)}」`);
+  }
+}
+if (docArtifacts.length > 0) {
+  add('WARN', '文档', `${docArtifacts.length} 处替换事故痕迹（换行被写成 \u0060n / 行首残片）`, docArtifacts.slice(0, 5).join('; '));
+} else {
+  add('PASS', '文档', '没有替换事故痕迹（无 `` \u0060n ``、无行首残片）');
+}
+
 // ---------- 4.7 文档是否落后于代码 ----------
 // "改动必须同步更新文档"以前只是口头约定。判据：state.md 自带「最后核对」时间戳，
 // 代码自带最后提交时间；代码更新则文档落后。
