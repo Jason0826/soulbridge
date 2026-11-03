@@ -342,6 +342,39 @@ if (!existsSync(agentsPath) || !existsSync(templatePath)) {
   }
 }
 
+// ---------- 4.6.3 一项做完有没有整体 review（checklist A9） ----------
+// A9 以前只是清单里的一句话，被提醒三次仍然没执行——因为它是"记得要做"型规则。
+// 这里把它变成可执行的：自最新一份 audit review 之后，改了多少个业务提交。
+// 阈值不是精确科学，是让"一直加功能不回头看"变成必须解释的事。
+const REVIEW_COMMIT_WARN = 3;
+const REVIEW_COMMIT_FAIL = 6;
+if (existsSync(join(ROOT, 'docs/audit'))) {
+  const audits = readdirSync(join(ROOT, 'docs/audit'))
+    .filter((name) => /review/i.test(name) && name.endsWith('.md'))
+    .map((name) => ({ name, mtime: statSync(join(ROOT, 'docs/audit', name)).mtimeMs }))
+    .sort((a, b) => b.mtime - a.mtime);
+  if (audits.length === 0) {
+    add('WARN', 'review', 'docs/audit 里没有 review 记录：整体 review 从未做过');
+  } else {
+    const sinceIso = new Date(audits[0].mtime).toISOString();
+    const countCommits = (cwd, paths) => {
+      const out = spawnSync('git', ['rev-list', '--count', `--since=${sinceIso}`, 'HEAD', '--', ...paths], {
+        cwd,
+        encoding: 'utf8',
+      });
+      return out.status === 0 ? Number(out.stdout.trim() || 0) : 0;
+    };
+    const coreCommits = countCommits(ROOT, ['packages']);
+    const pluginPath = 'D:/git-workspace/repos/dsh-plugin-soulbridge';
+    const pluginCommits = existsSync(pluginPath) ? countCommits(pluginPath, ['index.js']) : 0;
+    const pending = coreCommits + pluginCommits;
+    const label = `自 ${audits[0].name} 之后有 ${pending} 个业务提交未整体 review`;
+    if (pending >= REVIEW_COMMIT_FAIL) add('FAIL', 'review', label, '先写一份 audit review 再继续加功能');
+    else if (pending >= REVIEW_COMMIT_WARN) add('WARN', 'review', label);
+    else add('PASS', 'review', `整体 review 跟得上（${pending} 个提交待看）`);
+  }
+}
+
 // ---------- 4.7 文档是否落后于代码 ----------
 // "改动必须同步更新文档"以前只是口头约定。判据：state.md 自带「最后核对」时间戳，
 // 代码自带最后提交时间；代码更新则文档落后。
