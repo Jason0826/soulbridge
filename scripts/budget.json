@@ -106,10 +106,15 @@
       "date": "2026-11-03",
       "delta": 4,
       "reason": "队列项 origin 标记与日志（插件 +4）。"
+    },
+    {
+      "date": "2026-11-03",
+      "delta": 26,
+      "reason": "调度公平：live 优先、回填不饿死归纳（插件 +26）。"
     }
   ],
   "coreLines": 7982,
-  "pluginLines": 2377,
+  "pluginLines": 2403,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
