@@ -342,6 +342,22 @@ if (!existsSync(agentsPath) || !existsSync(templatePath)) {
   }
 }
 
+// ---------- 4.6.2b 提示词源与生成物同步 ----------
+// 提示词文本住在 packages/core/prompts/*.md，经 scripts/sync-prompts.mjs 生成普通字符串常量。
+// 这是为了消灭"反引号截断模板字符串"那一类错误（发生过三次）：在 markdown 里反引号只是字符。
+// 生成物提交进仓库，但必须和源一致——不一致时编译进去的还是旧文本，最难查。
+if (existsSync(join(ROOT, 'packages/core/prompts'))) {
+  const sync = spawnSync(process.execPath, [join(ROOT, 'scripts/sync-prompts.mjs'), '--check'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+  });
+  if (sync.status !== 0) {
+    add('FAIL', '提示词', 'prompts.generated.ts 与 packages/core/prompts/*.md 不一致', (sync.stderr || '').trim().split('\n')[0]);
+  } else {
+    add('PASS', '提示词', '提示词源与生成物同步');
+  }
+}
+
 // ---------- 4.6.3 一项做完有没有整体 review（checklist A9） ----------
 // A9 以前只是清单里的一句话，被提醒三次仍然没执行——因为它是"记得要做"型规则。
 // 这里把它变成可执行的：自最新一份 audit review 之后，改了多少个业务提交。

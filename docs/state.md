@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-03 16:55**（core 0.0.95 / plugin 0.0.101）
+最后核对：**2026-11-03 18:45**（core 0.0.96 / plugin 0.0.101）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -12,6 +12,8 @@
 > 名词/变量声明：[declarations.json](declarations.json)，定义文件在 `packages/core/src/config/`（`health-check` 第 8、9 节）。
 > 全系统审计：[audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md)。
 > 代码审查（今晚，含已修复 4 条）：[audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md)。
+
+**18:45 提示词外置**：5 个模板从 `prompts.ts` 移到 `packages/core/prompts/*.md`，生成 `prompts.generated.ts`（普通字符串常量）；`build` 先跑 `sync-prompts --check`，`health-check` 新增同源检查。**反引号截断模板这一类错误不再可能。** 渲染输出 4416 字符逐字节一致。
 
 **16:55 取代成为机制**：抽取行支持 `操作=取代 <id>`，闸门只认库里真实存在的同作用域事实；编造 id/无 id 退化为新增并记 `unknown-supersede-target`。**「记忆会更新」从纸面能力变成行为。** 修法选择 A（模型显式指定），B（代码自动判同槽位）留待数据。core 279 测试，0 FAIL。
 

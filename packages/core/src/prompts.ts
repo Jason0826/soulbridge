@@ -13,6 +13,7 @@
  *   - wrap the data, never inline it next to the instructions
  *   - end with the output anchor
  */
+import { extractionRole, extractionTerms, extractionSchema, extractionRules, extractionExamples } from './prompts.generated.ts';
 import { PROFILE_DIMENSIONS_BLOCK } from './profile-prompt.ts';
 import { dimensionChoices } from './dimension-text.ts';
 
@@ -66,10 +67,6 @@ export interface ExtractionPromptInput {
   previousThreadId?: string;
 }
 
-const EXTRACTION_ROLE = `<role>
-你是记忆抽取器。你只从对话里抽取可验证的事实，不做判断、不给建议、不写总结。
-你的输出由一个确定性的程序消费，它不会读你的解释；格式错一个字段，这条记忆就丢了。
-</role>`;
 
 /**
  * Every term, defined once, with the boundary that decides it.
@@ -80,137 +77,9 @@ const EXTRACTION_ROLE = `<role>
  * One definition per term, each with 算/不算 examples, is the only version a model can
  * apply consistently.
  */
-const EXTRACTION_TERMS = `<terms>
-每个术语的含义和边界。写之前先判断它属于哪个术语——放错位置比漏写更糟。
 
-**实体**：一个具体的人、物、地点或平台。它是"谁/什么"，不是"做了什么"。
-  算：小林、用户、TypeScript、抖音、PowerShell、config 文件夹
-  不算：不删除原始对话、从根上解决、必要、噪声记忆、情绪注入、项目进展
-  边界：能用"这说的是谁"问出来的才算。一句话、一个观点、一个做法都不是实体。
-  判据：超过 12 个字，或含"的/和/与"，或能加上"这件事"的，基本都不是实体。
-  同一个人或物只出现一次；type 只能是 person / thing / place / self。
 
-**事实**：一句自包含的陈述，回答"发生了什么"或"某人是什么样"。
-  算：小林在 2026-10-24 那周被裁员；用户要求改动前先说明影响
-  不算：用户的提问、催促、同意、否定；寒暄；我对自己能力的说明
-  边界：把代词换成名字后仍然成立，且换个人复述不需要加问号。15–80 字，保留数字和专有名词。
 
-**持有**：这条事实在谁的视角里成立。只有两个合法值。
-  world：世界上发生的事，第三个人也能核实（换工作、吃饭、下雨、约定暗号）
-  人名：某人的看法、偏好、要求、担心（"用户认为…"），只有那个人能确认
-  边界：能写成新闻报道的 → world；只能写成"X 认为"的 → 人名。人物层不写日期。
-
-**槽位**：这条事实的参与者与参数，写成 名称=值，多个用 ; 隔开。
-  只放"谁、对谁、在哪里、多少"这类结构位置。
-  算：被裁员者=@小林；人数=300；地点=杭州
-  不算：事项=不删除原始对话；做法=从根上解决；理由=必要
-  边界：值要以实体身份参与时，写成 **@名字**；不写 @ 的一律当文字。
-  @名字 必须在本轮实体行声明（或已在 <known-entities> 里），否则仍按文字保存、不建实体。
-
-**日期与精度**：先按 <observation-date> 把"昨天/上周/上个月"换算成 YYYY-MM-DD 填入日期。
-  精度四值：day 确切日期 / range 只知道一周一月 / relative 只有相对说法（上次、最近、初次见面）/ unknown 不知道。
-  换算不出来就留空日期，把原话写进"时间原文"。**没有时间就写 unknown，绝不编日期。**
-
-**来源**：experienced 你亲历 / told 听别人说 / inferred 你推断。
-**类型名**：一句自由描述（偏好、要求、技术约束、事件）。它不是分类体系，写最贴切的词即可，不用造分类。
-**置信**：0–1。拿不准写低，不要空着——空着会被当成"没把握"。
-
-**原则候选**：这条事实是不是"以后该怎么做事的经验"？判据是会不会影响以后的做法。
-  算：改动前先说明影响；用户讨厌反复交代
-  不算：今天改了 A 文件；小林被裁员
-  拿不准就省略——一条不该升格的经验比漏掉更糟。
-
-**缺口**：提过但没有答案的事（"她后来怎么样了"）。
-**线索**：这段对话在接着聊哪个话题，见 <open-threads>。
-</terms>`;
-
-const EXTRACTION_SCHEMA = `<output-format>
-不要输出 JSON。按下面的表格一行一条填写，字段之间用 | 分隔，没有内容的字段留空。
-可以只写其中几行；什么都记不住就只写：无
-
-实体: 名字 | 类型 | 关系
-事实: 陈述 | 类型名 | 日期(YYYY-MM-DD) | 时间原文 | 来源 | 置信(0-1) | 持有=world或人名 | 精度=day/range/relative/unknown | 原则候选=是 | 槽位 | 操作=取代 <id>
-缺口: 主题 | 张力(0-1) | 相关实体
-线索: 继续 <id>        或        线索: 新 | 一句话主题
-     话题在同一线索内变了，就写：线索: 继续 <id> | 主题=新的一句话主题
-
-每个字段的边界见 <terms>，这里只说格式：日期必须是 YYYY-MM-DD；槽位写成 名称=值，多个用 ; 隔开；
-"持有/精度/原则候选"是键值对，写在事实行的尾部；线索行二选一（继续时可附 主题=）。
-示例：
-实体: 小林 | person | 同事
-事实: 小林在 2026-10-24 那周被裁员 | 裁员 | 2026-10-24 | 上周 | told | 0.8 | 持有=world | 精度=day | 被裁员者=@小林
-事实: 用户要求改动前先说明为什么、怎么做、有什么影响 | 要求 | | | experienced | 0.9 | 持有=用户 | 精度=unknown | 原则候选=是 | 对象=@用户
-缺口: 小林后来有着落吗 | 0.6 | 小林
-线索: 继续 th_ab12
-</output-format>`;
-
-const EXTRACTION_RULES = `<rules>
-术语的含义见 <terms>；这里只说操作和取舍。
-- 合并：与 <known-facts> 语义相同 → noop；互相矛盾 → supersede 并给 target；是补充 → update。
-  相关但独立 → add。不要用 <known-facts> 里没有的新事实去 supersede。
-- 要取代旧事实时，在事实行尾部写「操作=取代 <id>」（id 只能来自 <known-facts>）。
-  不写就是新增。代码会先确认那个 id 真实存在；编造的 id 会退化成新增并记原因。
-- 槽位只放参与者，不放话题：宁可少写一个槽位，也不要把一句话塞进槽位。
-- 不确定就省略字段，绝不编造数字、日期、关系。
-- 不要重复用户刚落的话（回声不算新事实）。
-- 来源按「谁说的」定（<source> 里标了双方）：用户那一侧写 told 或 experienced；
-  **我那一侧写 inferred**。我的承诺/决定写 类型名=承诺/决定；
-  我的完成声明（"我改好了""已经修了"）如果没有工具或测试结果作为依据，**不要写**。
-  自述（"我是小灵，一个持续的伙伴"）永远不写。
-- 线索：候选见 <open-threads>，每条带它最近几轮的原文。**默认继续**：这一轮在聊候选里的某一条，
-  就写「继续 <id>」。只有出现明确转折（"另外 / 换个话题 / 说回 / 不聊这个了"），
-  或这一轮与所有候选的主题、实体都不相干时，才写「线索: 新 | 一句话主题」。
-  拿不准就继续最接近的那一条——线索碎掉会让后面的归纳无法进行，接错可以事后拆开。
-  继续时，如果这一轮已经不是在聊候选原来的主题（话题在同一线索内往前走了），
-  补一句「| 主题=现在聊的是什么」——线索的主题是给后续读的人看的，不更新就会一直停在第一轮的说法。
-  没有任何候选时这一行只可能是"新"。
-</rules>
-
-<when-to-write>
-只在这四种情况下写事实：
-1. 某个人或某件事的状态、经历（“小林换了工作”“那个项目黄了”）
-2. 一个决定，以及做这个决定的理由
-3. 用户表达的偏好、原则或习惯（“我讨厌反复讲同一件事”）
-4. 我给出的承诺（“我明天把表补上”）
-
-**不要写**（这是最常见的噪声）：
-- 用户对我的要求、提问、催促、同意、否定——这些是对话动作，对话原文已经保存，再写一份只会变成噪声
-- 我问用户的澄清问题
-- 寒暄、我的自我介绍、我对能力的说明
-- 用户正在问我的事，不是“关于用户的事实”
-</when-to-write>
-
-<gaps>
-只有两种情况建缺口：
-1. 用户说自己不知道、没消息、想知道某件事（“她后来怎么样了”“不知道还在不在”）
-2. 我说过要做、但状态仍未完成的事
-
-用户只是在问我一个问题时**不要**建缺口——那是他在提问，不是他缺信息。
-</gaps>`;
-
-const EXTRACTION_EXAMPLES = `<examples>
-<example>
-<source>我同事小林上周被裁员了，挺难受的</source>
-<output>实体: 小林 | person | 同事
-事实: 小林在 2026-10-24 那周被裁员 | 裁员 | 2026-10-24 | 上周 | told | 0.8 | 持有=world | 精度=day | 被裁员者=@小林</output>
-</example>
-<example>
-<source>这个 bug 我上周就修好了</source>
-<output>事实: 用户说他在 2026-10-24 那周修好了这个 bug | 修复 | 2026-10-24 | 上周 | experienced | 0.7 | 持有=world | 精度=day | 修复者=用户</output>
-</example>
-<example>
-<source>好的，谢谢</source>
-<output>无</output>
-</example>
-<example>
-<source>你帮我把那个表重新跑一遍</source>
-<output>无</output>
-</example>
-<example>
-<source>我讨厌同一件事反复讲，换个工具又要重新说一遍</source>
-<output>事实: 用户讨厌同一件事反复讲，换工具也不想重复交代 | 偏好 | | | experienced | 0.9 | 持有=用户 | 精度=unknown | 偏好主体=用户</output>
-</example>
-</examples>`;
 
 function isoDate(at: number): string {
   const d = new Date(at);
@@ -264,12 +133,12 @@ export function renderExtractionPrompt(input: ExtractionPromptInput): string {
     : `<source>\n用户：${input.text}\n</source>`;
 
   return [
-    EXTRACTION_ROLE,
+    extractionRole,
     '<task>把 <source> 里的信息变成记忆操作，并说明它属于哪条线索。只依据 <source> 与 <previous-user>；<known-facts> 只用于判断冲突与去重。</task>',
-    EXTRACTION_TERMS,
-    EXTRACTION_SCHEMA,
-    EXTRACTION_RULES,
-    EXTRACTION_EXAMPLES,
+    extractionTerms,
+    extractionSchema,
+    extractionRules,
+    extractionExamples,
     context,
     source,
     '<output>',
