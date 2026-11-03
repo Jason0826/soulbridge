@@ -28,7 +28,7 @@ test('putFact: slots of every kind round-trip', () => {
     typeName: '裁员',
     at: 1000,
     atText: '上周',
-    status: 'none',
+    status: 'active',
     source: 'told',
     slots: [
       { slot: '被裁员者', value: { kind: 'entity', entityId: person.id } },

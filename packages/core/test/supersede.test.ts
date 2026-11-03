@@ -61,7 +61,7 @@ test('supersede: a valid target retires the old fact and links the new one', () 
   const result = s.commitDrafts(draft!, { turnId: 'tp_1' });
 
   const old = store.fact(oldId);
-  assert.equal(old?.status, 'superseded', '旧事实退休');
+  assert.equal(old?.status, 'retracted', '旧事实退休');
   assert.equal(old?.supersededBy, result.facts[0].id);
   store.close();
 });

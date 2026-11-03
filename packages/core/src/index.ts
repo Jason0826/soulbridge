@@ -751,7 +751,7 @@ export class Soul {
         // lost, and "the fact changed" is never claimed without a real predecessor.
         const target = operation.targetId ? this.store.fact(operation.targetId) : null;
         const sameScope = target && target.soulId === this.soulId && target.userId === this.userId;
-        if (target && sameScope && target.status !== 'superseded') {
+        if (target && sameScope && isActive(target)) {
           this.store.supersedeFact(target.id, written.id);
         } else {
           skipped.push({

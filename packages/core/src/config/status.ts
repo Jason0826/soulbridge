@@ -1,24 +1,24 @@
 /**
  * Fact lifecycle vocabulary — declared once, imported everywhere.
  *
- * "superseded" used to be typed out in three files, so renaming it would have left
- * one filter silently admitting retired facts. Config modules hold data only; the
- * decoding (SQL binding, filters, prompts) lives in the code that imports this.
+ * These four replaced none/open/kept/broken/superseded. The older set mixed "what kind of
+ * fact" with "how far it has come", so every reader had to remember which values counted as
+ * live. The four below are the only ones written now: `raw` is the exchange itself,
+ * `candidate` is held but not injected, `active` is in use, `retracted` is kept for the
+ * record and read by nothing.
  *
- * Values match the column defaults in sqlite.ts; changing one is a schema migration,
- * not a rename.
+ * Values match the column defaults in sqlite.ts; changing one is a schema migration, not a
+ * rename.
  */
 export const FACT_STATUS = {
-  /** Written, no lifecycle decision yet. */
-  none: 'none',
-  /** Being worked on (promises, plans). */
-  open: 'open',
-  /** Held. */
-  kept: 'kept',
-  /** Broken (a promise that did not happen). */
-  broken: 'broken',
-  /** Replaced by another fact; kept for the record, never injected. */
-  superseded: 'superseded',
+  /** The exchange itself; not a distilled fact. */
+  raw: 'raw',
+  /** Held, not injected: unverified inference or an unconfirmed rule. */
+  candidate: 'candidate',
+  /** In use: retrieval, rules, profile, evidence. */
+  active: 'active',
+  /** Replaced or withdrawn; kept for the audit trail, injected nowhere. */
+  retracted: 'retracted',
 } as const;
 
 export type FactStatus = (typeof FACT_STATUS)[keyof typeof FACT_STATUS];

@@ -41,7 +41,7 @@ import type {
 import type { SoulStore } from './store.ts';
 import { bm25, buildCorpusStats, tokenize } from './scoring.ts';
 
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 /** How many recent pairs are considered before scoring. Bounded so recall stays O(candidates). */
 const RECALL_CANDIDATES = 500;
 export const AFFECT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -207,7 +207,7 @@ CREATE TABLE IF NOT EXISTS facts (
   at_end         INTEGER,
   at_precision   TEXT NOT NULL DEFAULT 'unknown',
   place_id       TEXT,
-  status         TEXT NOT NULL DEFAULT 'none',
+  status         TEXT NOT NULL DEFAULT 'active',
   confidence     REAL NOT NULL DEFAULT 1,
   source         TEXT NOT NULL DEFAULT 'experienced',
   source_turn_id TEXT,
@@ -338,6 +338,13 @@ function upgradeToV3(db: DatabaseSync): void {
  */
 
 /** v6 → v7: turn threads (a topic's turns need not be adjacent) plus turns.thread_id. */
+export function upgradeToV10(db: DatabaseSync): void {
+  // The four-state vocabulary (config/status.ts). Everything written under the old names
+  // becomes one of the two states the code now reads; after this the fallbacks are gone.
+  db.exec("UPDATE facts SET status = 'active' WHERE status IN ('none','open','kept')");
+  db.exec("UPDATE facts SET status = 'retracted' WHERE status IN ('broken','superseded')");
+}
+
 export function upgradeToV9(db: DatabaseSync): void {
   // Time became locatability (ADR 0032): a fact may be known to exist without a
   // date, and that is a value — unknown — not a reason to discard it.
@@ -490,7 +497,7 @@ export function openSqlite(file: string): SoulStore {
       if (version < 5) upgradeToV5(db);
       if (version < 7) upgradeToV7(db);
       if (version < 8) upgradeToV8(db);
-      if (version < 9) upgradeToV9(db);
+      if (version < 10) upgradeToV10(db);
       // v6 adds tables only; SCHEMA creates them on every open, nothing to copy.
       setVersion(db, SCHEMA_VERSION);
       db.exec('COMMIT');
@@ -1066,7 +1073,7 @@ export function openSqlite(file: string): SoulStore {
     supersedeFact(oldId: string, newId: string): void {
       withRetry(() =>
         db
-          .prepare(`UPDATE facts SET status = '${FACT_STATUS.superseded}', superseded_by = ? WHERE id = ?`)
+          .prepare(`UPDATE facts SET status = '${FACT_STATUS.retracted}', superseded_by = ? WHERE id = ?`)
           .run(newId, oldId),
       );
     },
@@ -1406,7 +1413,7 @@ export function openSqlite(file: string): SoulStore {
           `SELECT DISTINCT f.* FROM facts f
            JOIN fact_slots s ON s.fact_id = f.id AND s.value_type = 'entity'
            JOIN entities e ON e.id = s.entity_id
-           WHERE f.soul_id = ? AND f.user_id = ? AND f.status != '${FACT_STATUS.superseded}'
+           WHERE f.soul_id = ? AND f.user_id = ? AND f.status = '${FACT_STATUS.active}'
              AND (e.name = ? OR e.aliases LIKE ?)
              AND (? IS NULL OR f.statement LIKE ? OR COALESCE(f.type_name, '') LIKE ?)
            ORDER BY COALESCE(f.at, f.created_at) DESC

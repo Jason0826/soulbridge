@@ -133,7 +133,7 @@ test('model: supersede retires the old fact and writes the new one', async () =>
   assert.equal(result.facts.length, 1);
   const all = store.facts({ soulId: 's1', userId: 'u1' });
   const retired = all.find((f) => f.id === oldFact.id);
-  assert.equal(retired?.status, 'superseded');
+  assert.equal(retired?.status, 'retracted');
   assert.equal(retired?.supersededBy, result.facts[0].id, 'old fact points at its replacement');
   store.close();
 });

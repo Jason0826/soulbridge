@@ -126,7 +126,7 @@ test('record: a conflicting conclusion supersedes the old one instead of piling 
   );
   assert.equal(second.ok, true);
   assert.equal(second.superseded, first.fact!.id);
-  assert.equal(store.fact(first.fact!.id)?.status, 'superseded');
+  assert.equal(store.fact(first.fact!.id)?.status, 'retracted');
 
   const current = soul.conclusions();
   assert.equal(current.length, 1);
@@ -312,7 +312,7 @@ test('profile: merging supersedes the sources and keeps the trail', () => {
   ]);
   assert.equal(written.length, 1);
   assert.equal(soul.profile(8).length, 1, 'the merged line is the active profile');
-  assert.equal(store.fact('f1')?.status, 'superseded');
+  assert.equal(store.fact('f1')?.status, 'retracted');
   assert.equal(store.fact('f1')?.supersededBy, written[0].id, 'source points at the merge');
   store.close();
 });
