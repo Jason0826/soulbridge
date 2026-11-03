@@ -129,7 +129,7 @@ const EXTRACTION_SCHEMA = `<output-format>
 可以只写其中几行；什么都记不住就只写：无
 
 实体: 名字 | 类型 | 关系
-事实: 陈述 | 类型名 | 日期(YYYY-MM-DD) | 时间原文 | 来源 | 置信(0-1) | 持有=world或人名 | 精度=day/range/relative/unknown | 原则候选=是 | 槽位
+事实: 陈述 | 类型名 | 日期(YYYY-MM-DD) | 时间原文 | 来源 | 置信(0-1) | 持有=world或人名 | 精度=day/range/relative/unknown | 原则候选=是 | 槽位 | 操作=取代 <id>
 缺口: 主题 | 张力(0-1) | 相关实体
 线索: 继续 <id>        或        线索: 新 | 一句话主题
      话题在同一线索内变了，就写：线索: 继续 <id> | 主题=新的一句话主题
@@ -148,6 +148,8 @@ const EXTRACTION_RULES = `<rules>
 术语的含义见 <terms>；这里只说操作和取舍。
 - 合并：与 <known-facts> 语义相同 → noop；互相矛盾 → supersede 并给 target；是补充 → update。
   相关但独立 → add。不要用 <known-facts> 里没有的新事实去 supersede。
+- 要取代旧事实时，在事实行尾部写「操作=取代 <id>」（id 只能来自 <known-facts>）。
+  不写就是新增。代码会先确认那个 id 真实存在；编造的 id 会退化成新增并记原因。
 - 槽位只放参与者，不放话题：宁可少写一个槽位，也不要把一句话塞进槽位。
 - 不确定就省略字段，绝不编造数字、日期、关系。
 - 不要重复用户刚落的话（回声不算新事实）。

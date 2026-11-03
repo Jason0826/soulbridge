@@ -744,8 +744,20 @@ export class Soul {
       if (operation.op === 'noop') continue;
       const written = writeFact(operation.fact);
       if (!written) continue;
-      if ((operation.op === 'supersede' || operation.op === 'update') && operation.targetId) {
-        this.store.supersedeFact(operation.targetId, written.id);
+      if (operation.op === 'supersede' || operation.op === 'update') {
+        // The model may name any id; only a row we actually hold may be retired. A
+        // missing target degrades to a plain add and is reported — the sentence is never
+        // lost, and "the fact changed" is never claimed without a real predecessor.
+        const target = operation.targetId ? this.store.fact(operation.targetId) : null;
+        const sameScope = target && target.soulId === this.soulId && target.userId === this.userId;
+        if (target && sameScope && target.status !== 'superseded') {
+          this.store.supersedeFact(target.id, written.id);
+        } else {
+          skipped.push({
+            what: written.statement,
+            reason: target ? `supersede-target-${target.status}` : `unknown-supersede-target: ${operation.targetId ?? '(missing)'}`,
+          });
+        }
       }
     }
 

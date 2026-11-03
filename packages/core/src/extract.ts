@@ -480,11 +480,9 @@ export function validateDraft(
       continue;
     }
     if (!parsed) continue;
-    if ((op === 'supersede' || op === 'update') && (!targetId || !knownFactIds.has(targetId))) {
-      // Unknown target: fall back to add rather than silently dropping the news.
-      operations.push({ op: 'add', fact: parsed });
-      continue;
-    }
+    // Target validation belongs to the writer (commitDrafts), which can see every row and
+    // record a reason. Demoting here as well would give two places that decide whether a
+    // supersede is real — and would hide the model's intent from the skip report.
     operations.push({ op: op as FactOperation['op'], targetId, fact: parsed });
     // Keep `facts` as a flat view of the adds: older callers and the commit
     // gate's skip report read it, and operations are the source of truth.
@@ -579,17 +577,27 @@ export function parseLineDraft(raw: string): Record<string, unknown> | null {
         fact.confidence = Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : UNKNOWN_CONFIDENCE;
       }
 
-      // 持有= / 精度= / 原则候选= are keyed so the positional fields stay backward
-      // compatible; anything else in the tail is the slot list.
+      // 持有= / 精度= / 原则候选= / 操作= are keyed so the positional fields stay
+      // backward compatible; anything else in the tail is the slot list.
       let slotText: string | undefined;
+      let supersedes = '';
+      let wantsSupersede = false;
       for (const part of rest) {
-        const keyed = /^(持有|精度|原则候选|槽位)\s*[=＝]\s*(.*)$/.exec(part);
+        const keyed = /^(持有|精度|原则候选|槽位|操作)\s*[=＝]\s*(.*)$/.exec(part);
         if (keyed) {
           if (keyed[1] === '持有') fact.holder = keyed[2].trim();
           else if (keyed[1] === '精度') fact.at_precision = keyed[2].trim();
           else if (keyed[1] === '原则候选') {
             // Only 是 promotes. "否" and anything else is the safe default.
             if (/^(是|yes|true)$/i.test(keyed[2].trim())) fact.principle = true;
+          } else if (keyed[1] === '操作') {
+            // `操作=取代 <id>` replaces an old fact. The id is *not* trusted here: the
+            // gate verifies it exists before anything is retired, so a hallucinated id
+            // degrades to an add instead of silently claiming a revision.
+            if (/^取代/.test(keyed[2].trim())) {
+              wantsSupersede = true;
+              supersedes = /^取代\s*[:：]?\s*([A-Za-z0-9_-]+)?/.exec(keyed[2].trim())?.[1] ?? '';
+            }
           } else slotText = keyed[2].trim();
           continue;
         }
@@ -621,7 +629,12 @@ export function parseLineDraft(raw: string): Record<string, unknown> | null {
       } else if (fact.at !== undefined && !precision) {
         fact.at_precision = 'day';
       }
-      operations.push({ op: 'add', fact });
+      // A supersede without a target is still recorded as an operation: the gate decides
+      // whether the target exists, and a missing one becomes a skipped reason instead of
+      // a silent add (the fact itself is never lost).
+      operations.push(
+        wantsSupersede ? { op: 'supersede', target: supersedes, fact } : { op: 'add', fact },
+      );
       sawRecord = true;
       continue;
     }

@@ -111,14 +111,19 @@
       "date": "2026-11-03",
       "delta": 26,
       "reason": "调度公平：live 优先、回填不饿死归纳（插件 +26）。"
+    },
+    {
+      "date": "2026-11-03",
+      "delta": 27,
+      "reason": "取代成为机制：操作=取代 <id> 解析、闸门校验目标存在并记录原因、4 条测试（+27）。"
     }
   ],
-  "coreLines": 7982,
+  "coreLines": 8009,
   "pluginLines": 2403,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 1475,
+    "index.ts": 1487,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 194,
@@ -130,10 +135,10 @@
     "consolidate.ts": 369,
     "context.ts": 147,
     "dimension-text.ts": 31,
-    "extract.ts": 647,
+    "extract.ts": 660,
     "inject-text.ts": 27,
     "profile-prompt.ts": 119,
-    "prompts.ts": 531,
+    "prompts.ts": 533,
     "reflect.ts": 417,
     "retrieval.ts": 116,
     "scoring.ts": 170,

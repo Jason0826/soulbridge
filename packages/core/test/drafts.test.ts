@@ -138,14 +138,18 @@ test('model: supersede retires the old fact and writes the new one', async () =>
   store.close();
 });
 
-test('model: an unknown supersede target falls back to add instead of losing the news', async () => {
+test('model: an unknown supersede target keeps the news and reports why it did not replace', async () => {
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
   const llm = () => '{"operations":[{"op":"supersede","target":"fc_nope","fact":{"statement":"小林搬走了","at_text":"昨天","slots":[{"slot":"搬家者","entity":"小林"}]}}],"entities":[{"name":"小林","type":"person"}],"gaps":[]}';
   const draft = await soul.extract('小林搬走了', { llm, at: NOW });
-  assert.equal(draft.operations?.[0].op, 'add', 'unknown target degrades to add');
+  // The writer decides whether a predecessor exists (single place for that judgement);
+  // the extractor keeps what the model said so the skip report can explain it.
+  assert.equal(draft.operations?.[0].op, 'supersede');
+  assert.equal(draft.operations?.[0].targetId, 'fc_nope');
   const result = soul.commitDrafts(draft, { at: NOW });
-  assert.equal(result.facts.length, 1);
+  assert.equal(result.facts.length, 1, '句子不丢');
+  assert.match(result.skipped[0]?.reason ?? '', /unknown-supersede-target/);
   store.close();
 });
 
