@@ -76,14 +76,19 @@
       "date": "2026-11-03",
       "delta": 14,
       "reason": "队列可观察：单一导出写入器、backlog/over-cap 日志、重排脚本（+14 行）。"
+    },
+    {
+      "date": "2026-11-03",
+      "delta": 95,
+      "reason": "ADR 0034 第 1 步：候选线索带近轮原文、previousUserText 接线、归属失败默认继续 + joinReason（core +95，插件 +6）。结构改动允许涨。"
     }
   ],
-  "coreLines": 7709,
-  "pluginLines": 2336,
+  "coreLines": 7804,
+  "pluginLines": 2342,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 1382,
+    "index.ts": 1434,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 194,
@@ -94,19 +99,19 @@
     "consolidate.ts": 369,
     "context.ts": 147,
     "dimension-text.ts": 31,
-    "extract.ts": 590,
+    "extract.ts": 595,
     "inject-text.ts": 27,
     "profile-prompt.ts": 119,
-    "prompts.ts": 481,
+    "prompts.ts": 501,
     "reflect.ts": 417,
     "retrieval.ts": 116,
     "scoring.ts": 170,
-    "sqlite.ts": 1702,
+    "sqlite.ts": 1713,
     "config.ts": 96,
     "merge.ts": 41,
     "steering.ts": 103,
     "transcript.ts": 96,
-    "store.ts": 145,
+    "store.ts": 152,
     "measure.ts": 45,
     "types.ts": 713
   }

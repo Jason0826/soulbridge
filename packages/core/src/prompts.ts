@@ -34,6 +34,14 @@ export interface KnownThreadPrompt {
   topic: string;
   /** How many turns ago this thread was last seen. */
   ago?: number;
+  /**
+   * The thread's most recent lines, oldest first.
+   *
+   * A topic label alone cannot answer "does this turn continue that conversation" —
+   * the model would be keyword-matching the label. The words are the evidence, so a
+   * candidate carries its last turns (ADR 0034).
+   */
+  recent?: Array<{ role: 'user' | 'assistant'; text: string }>;
 }
 
 export interface ExtractionPromptInput {
@@ -133,7 +141,10 @@ const EXTRACTION_RULES = `<rules>
 - 槽位只放参与者，不放话题：宁可少写一个槽位，也不要把一句话塞进槽位。
 - 不确定就省略字段，绝不编造数字、日期、关系。
 - 不要重复用户刚落的话（回声不算新事实）。
-- 线索：候选见 <open-threads>。拿不准写"新"——多开一条只是话题碎一点，接错会把两件事混成一条结论。
+- 线索：候选见 <open-threads>，每条带它最近几轮的原文。**默认继续**：这一轮在聊候选里的某一条，
+  就写「继续 <id>」。只有出现明确转折（"另外 / 换个话题 / 说回 / 不聊这个了"），
+  或这一轮与所有候选的主题、实体都不相干时，才写「线索: 新 | 一句话主题」。
+  拿不准就继续最接近的那一条——线索碎掉会让后面的归纳无法进行，接错可以事后拆开。
   没有任何候选时这一行只可能是"新"。
 </rules>
 
@@ -244,12 +255,21 @@ export function renderExtractionPrompt(input: ExtractionPromptInput): string {
  * back and a short topic it can compare against. Too many candidates and the
  * model starts keyword-matching; a wrong merge is worse than starting a new
  * thread, so the list stays short on purpose.
+ *
+ * Each candidate also carries its last lines verbatim: the question "does this turn
+ * continue that conversation" cannot be answered from a label, and ADR 0034 makes
+ * continuing the default, so the evidence has to be there.
  */
 function renderOpenThreads(threads: KnownThreadPrompt[], previousThreadId?: string): string {
   if (threads.length === 0) return '<open-threads>（空）</open-threads>';
   const lines = threads.slice(0, 5).map((thread) => {
     const ago = thread.ago === undefined ? '' : ` | ${thread.ago} 轮前`;
-    return `  ${thread.id} | ${thread.topic.slice(0, 20)}${ago}`;
+    const head = `  ${thread.id} | ${thread.topic.slice(0, 20)}${ago}`;
+    const recent = (thread.recent ?? []).slice(-3).map((line) => {
+      const who = line.role === 'user' ? '用户' : '我';
+      return `    ${who}：${line.text.replace(/\s+/g, ' ').slice(0, 60)}`;
+    });
+    return [head, ...recent].join('\n');
   });
   const previous = previousThreadId ? [`  上一轮所属：${previousThreadId}`] : [];
   return ['<open-threads>', ...lines, ...previous, '</open-threads>'].join('\n');

@@ -437,7 +437,7 @@ export class Soul {
   }
 
   /** The slice of the store the extractor is allowed to know about. */
-  extractionContext(limit = 20, options: { turnNo?: number } = {}): ExtractionContext {
+  extractionContext(limit = 20, options: { turnNo?: number; sessionId?: string } = {}): ExtractionContext {
     const entities = this.store
       .findEntities({ soulId: this.soulId, userId: this.userId, limit })
       .map((e) => ({
@@ -450,37 +450,89 @@ export class Soul {
       .facts({ soulId: this.soulId, userId: this.userId, limit: 12 })
       .map((f) => ({ id: f.id, statement: f.statement, atText: f.atText }));
     // Candidate threads, most recently used first. "How many turns ago" is what
-    // lets the model tell "just now" from "a while back" without counting.
-    const threads = this.store.openThreads(this.soulId, this.userId, 5).map((thread) => ({
-      id: thread.id,
-      topic: thread.topic,
-      ago:
-        options.turnNo !== undefined && thread.lastTurnNo !== undefined
-          ? Math.max(0, options.turnNo - thread.lastTurnNo)
-          : undefined,
-    }));
-    return { entities, facts, threads };
+    // lets the model tell "just now" from "a while back" without counting. Each
+    // candidate also carries its last lines: a label cannot answer "does this turn
+    // continue that conversation", and continuing is now the default (ADR 0034).
+    const threads = this.store.openThreads(this.soulId, this.userId, 5).map((thread) => {
+      const turns = this.store.threadTurns(thread.id).slice(-2);
+      const recent = turns.flatMap((turn) => {
+        const lines: Array<{ role: 'user' | 'assistant'; text: string }> = [];
+        if (turn.userText.trim()) lines.push({ role: 'user', text: turn.userText });
+        if (turn.assistantText.trim()) lines.push({ role: 'assistant', text: turn.assistantText });
+        return lines;
+      });
+      return {
+        id: thread.id,
+        topic: thread.topic,
+        ago:
+          options.turnNo !== undefined && thread.lastTurnNo !== undefined
+            ? Math.max(0, options.turnNo - thread.lastTurnNo)
+            : undefined,
+        recent: recent.slice(-3),
+      };
+    });
+    // The previous user line is what "继续 / 那个 / 她" refers to. Extraction is per
+    // turn; without it the model has nothing to bind to.
+    const previousUserText =
+      options.sessionId !== undefined && options.turnNo !== undefined
+        ? (this.store.previousTurnText(options.sessionId, options.turnNo) ?? undefined)
+        : undefined;
+    return { entities, facts, threads, previousUserText };
   }
 
   /**
-   * Put a turn into the thread the model named, or start a new one.
+   * Put a turn into a thread.
    *
-   * A named thread that does not exist (or is closed) degrades to a new thread:
-   * the model cannot be allowed to attach a turn to something it never saw.
+   * Default is continuity (ADR 0034): a named thread joins when it exists and is open;
+   * an unreadable answer, a hallucinated id, or no answer at all joins the previous
+   * turn's thread instead of opening a new one — fragmentation is what starves
+   * consolidation, and threads can be split later while a lost topic cannot.
    */
   applyThread(
     attribution: ThreadAttribution | undefined,
-    spec: { sessionId: string; turnNo: number; turnId: string; at: number; fallbackTopic?: string },
-  ): { threadId: string; created: boolean; topic: string } {
+    spec: {
+      sessionId: string;
+      turnNo: number;
+      turnId: string;
+      at: number;
+      fallbackTopic?: string;
+      /** The thread the previous turn belonged to; the default when unsure. */
+      previousThreadId?: string;
+    },
+  ): { threadId: string; created: boolean; topic: string; joinReason: string } {
+    const join = (id: string, reason: string) => {
+      const thread = this.store.thread(id);
+      if (!thread || thread.status !== 'open') return null;
+      this.store.attachTurn(spec.turnId, thread.id);
+      this.store.touchThread(thread.id, spec.turnNo);
+      return { threadId: thread.id, created: false, topic: thread.topic, joinReason: reason };
+    };
     if (attribution?.kind === 'continue') {
-      const existing = this.store.thread(attribution.id);
-      if (existing && existing.status === 'open') {
-        this.store.attachTurn(spec.turnId, existing.id);
-        this.store.touchThread(existing.id, spec.turnNo);
-        return { threadId: existing.id, created: false, topic: existing.topic };
-      }
+      const existing = join(attribution.id, 'continue');
+      if (existing) return existing;
+      // A named thread that does not exist (or is closed) is not evidence for a new
+      // topic — fall through to the previous thread, then to a new one.
     }
-    const topic = (attribution?.kind === 'new' ? attribution.topic : undefined) ?? spec.fallbackTopic ?? '未命名话题';
+    if (attribution?.kind === 'new') {
+      return this.openThreadFor(spec, 'explicit-new', attribution.topic);
+    }
+    if (spec.previousThreadId) {
+      const previous = join(spec.previousThreadId, 'fallback-previous');
+      if (previous) return previous;
+    }
+    // `attribution === undefined` covers "无" and unparseable output.
+    return this.openThreadFor(
+      spec,
+      attribution?.kind === 'continue' ? 'fallback-unknown-id' : 'no-context',
+    );
+  }
+
+  private openThreadFor(
+    spec: { sessionId: string; turnNo: number; turnId: string; at: number; fallbackTopic?: string },
+    joinReason: string,
+    topicFromModel?: string,
+  ): { threadId: string; created: boolean; topic: string; joinReason: string } {
+    const topic = topicFromModel ?? spec.fallbackTopic ?? '未命名话题';
     const thread = this.store.openThread({
       soulId: this.soulId,
       userId: this.userId,
@@ -490,7 +542,7 @@ export class Soul {
       turnNo: spec.turnNo,
     });
     this.store.attachTurn(spec.turnId, thread.id);
-    return { threadId: thread.id, created: true, topic: thread.topic };
+    return { threadId: thread.id, created: true, topic: thread.topic, joinReason };
   }
 
   /**

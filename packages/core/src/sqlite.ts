@@ -1270,6 +1270,17 @@ export function openSqlite(file: string): SoulStore {
         .get(sessionId, turnNo) as Row | undefined;
       return row ? String(row.thread_id) : null;
     },
+    previousTurnText(sessionId: string, turnNo: number): string | null {
+      const row = db
+        .prepare(
+          `SELECT user_text FROM turns
+           WHERE session_id = ? AND turn_no < ?
+           ORDER BY turn_no DESC LIMIT 1`,
+        )
+        .get(sessionId, turnNo) as Row | undefined;
+      const text = row ? String(row.user_text ?? '').trim() : '';
+      return text === '' ? null : text;
+    },
     factsByTurns(turnIds: string[]): Fact[] {
       if (turnIds.length === 0) return [];
       const placeholders = turnIds.map(() => '?').join(',');

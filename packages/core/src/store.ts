@@ -67,6 +67,13 @@ export interface SoulStore {
   touchThread(id: string, turnNo: number): void;
   /** Open threads, most recently used first — the candidate list for attribution. */
   openThreads(soulId: string, userId: string, limit?: number): TurnThread[];
+  /**
+   * The user text of the turn before `turnNo` in a session, or null.
+   *
+   * Extraction is per turn; without the previous line it cannot tell "继续" from a
+   * new subject, and pronouns have nothing to bind to (ADR 0034).
+   */
+  previousTurnText(sessionId: string, turnNo: number): string | null;
   thread(id: string): TurnThread | null;
   closeThread(id: string, at: number, summaryFactId?: string): void;
   /** Close threads whose last turn is at least idleTurns behind now; returns the ids. */

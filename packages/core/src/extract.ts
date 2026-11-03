@@ -245,8 +245,13 @@ export interface ExtractionContext {
   entities: Array<{ id: string; name: string; aliases?: string[]; relation?: string }>;
   facts: Array<{ id: string; statement: string; atText?: string }>;
   previousUserText?: string;
-  /** Open threads, for attribution. */
-  threads?: Array<{ id: string; topic: string; ago?: number }>;
+  /** Open threads, for attribution (labels plus their last lines, ADR 0034). */
+  threads?: Array<{
+    id: string;
+    topic: string;
+    ago?: number;
+    recent?: Array<{ role: 'user' | 'assistant'; text: string }>;
+  }>;
   previousThreadId?: string;
 }
 

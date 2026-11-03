@@ -73,5 +73,8 @@ test('extraction prompt: terms come before the format, and rules do not restate 
 
 test('extraction prompt: stays within a sane size', () => {
   const prompt = renderExtractionPrompt({ text: 'x'.repeat(200), now: NOW });
-  assert.ok(prompt.length < 4000, `prompt grew to ${prompt.length} chars`);
+  // A guard against runaway growth, not a target: the base prompt is ~3916 chars with
+  // a 200-char source (the terms block is the bulk), and candidate text is added at
+  // runtime on top. Raise deliberately when the prompt gains a required section.
+  assert.ok(prompt.length < 4400, `prompt grew to ${prompt.length} chars`);
 });
