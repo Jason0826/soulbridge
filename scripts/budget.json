@@ -71,10 +71,15 @@
       "date": "2026-11-03",
       "delta": 70,
       "reason": "退役 memories 写入：observe 只做 affect；remember/rememberExplicit/reflect 改写 facts；新增 migrateLegacyMemories + retireMemory；删除 gating.test（旧闸门测试）。净增 70 行（迁移与适配层），旧路径删除抵消了一部分。"
+    },
+    {
+      "date": "2026-11-03",
+      "delta": 14,
+      "reason": "队列可观察：单一导出写入器、backlog/over-cap 日志、重排脚本（+14 行）。"
     }
   ],
   "coreLines": 7709,
-  "pluginLines": 2322,
+  "pluginLines": 2336,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
