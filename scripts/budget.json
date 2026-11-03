@@ -81,14 +81,19 @@
       "date": "2026-11-03",
       "delta": 95,
       "reason": "ADR 0034 第 1 步：候选线索带近轮原文、previousUserText 接线、归属失败默认继续 + joinReason（core +95，插件 +6）。结构改动允许涨。"
+    },
+    {
+      "date": "2026-11-03",
+      "delta": 30,
+      "reason": "去掉会进模型视野的截断：候选行/上一句/主题/分类输入/交接/归纳整句进；新增 firstSentence 与两条整句断言（+30 行）。"
     }
   ],
-  "coreLines": 7804,
-  "pluginLines": 2342,
+  "coreLines": 7816,
+  "pluginLines": 2360,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 1434,
+    "index.ts": 1439,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 194,
@@ -102,7 +107,7 @@
     "extract.ts": 595,
     "inject-text.ts": 27,
     "profile-prompt.ts": 119,
-    "prompts.ts": 501,
+    "prompts.ts": 508,
     "reflect.ts": 417,
     "retrieval.ts": 116,
     "scoring.ts": 170,

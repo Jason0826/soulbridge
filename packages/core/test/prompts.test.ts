@@ -71,6 +71,22 @@ test('extraction prompt: terms come before the format, and rules do not restate 
   assert.match(rules, /supersede/);
 });
 
+test('extraction prompt: evidence goes in whole, never a prefix', () => {
+  const longLine =
+    '用户要求把注入块里的证据完整保留，因为截断会让后面的判断失去依据，尤其是最后一句往往才是结论，切成半句等于把证据删掉';
+  const prompt = renderExtractionPrompt({
+    text: 'x',
+    now: NOW,
+    previousUserText: longLine,
+    threads: [{ id: 'th_1', topic: '一个完整主题标题不该在中间被切开', recent: [{ role: 'user', text: longLine }] }],
+  });
+  // The whole line is present, including its last characters — the part a character
+  // cut would remove first and the model would need most.
+  assert.ok(prompt.includes(longLine), '整句都在');
+  assert.ok(prompt.includes(longLine.slice(-8)), '结尾没有被切掉');
+  assert.match(prompt, /一个完整主题标题不该在中间被切开/);
+});
+
 test('extraction prompt: stays within a sane size', () => {
   const prompt = renderExtractionPrompt({ text: 'x'.repeat(200), now: NOW });
   // A guard against runaway growth, not a target: the base prompt is ~3916 chars with

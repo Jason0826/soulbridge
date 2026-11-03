@@ -229,7 +229,10 @@ export function renderExtractionPrompt(input: ExtractionPromptInput): string {
     renderKnownEntities(input.entities ?? []),
     renderKnownFacts(input.facts ?? []),
     threads,
-    input.previousUserText ? `<previous-user>${input.previousUserText.slice(0, 200)}</previous-user>` : '',
+    // The previous line is evidence for binding "继续/那个/她". Cutting it at an
+    // arbitrary length can remove the very referent the model needs, so it goes in
+    // whole; its size is bounded by the previous user message, not by us.
+    input.previousUserText ? `<previous-user>${input.previousUserText}</previous-user>` : '',
     '</context>',
   ]
     .filter(Boolean)
@@ -262,12 +265,14 @@ export function renderExtractionPrompt(input: ExtractionPromptInput): string {
  */
 function renderOpenThreads(threads: KnownThreadPrompt[], previousThreadId?: string): string {
   if (threads.length === 0) return '<open-threads>（空）</open-threads>';
-  const lines = threads.slice(0, 5).map((thread) => {
+  const lines = threads.map((thread) => {
     const ago = thread.ago === undefined ? '' : ` | ${thread.ago} 轮前`;
-    const head = `  ${thread.id} | ${thread.topic.slice(0, 20)}${ago}`;
-    const recent = (thread.recent ?? []).slice(-3).map((line) => {
+    // Whole lines, never a mid-sentence prefix (ADR 0034): a cut candidate line is
+    // exactly the case where "继续" and "换个话题" become indistinguishable.
+    const head = `  ${thread.id} | ${thread.topic}${ago}`;
+    const recent = (thread.recent ?? []).map((line) => {
       const who = line.role === 'user' ? '用户' : '我';
-      return `    ${who}：${line.text.replace(/\s+/g, ' ').slice(0, 60)}`;
+      return `    ${who}：${line.text}`;
     });
     return [head, ...recent].join('\n');
   });
@@ -483,7 +488,9 @@ export interface RuleClassifyPromptInput {
 
 /** Classify a batch of lessons into rules (with a trigger) or profile items. */
 export function renderRuleClassifyPrompt(input: RuleClassifyPromptInput): string {
-  const items = input.items.map((item) => `- ${item.id} | ${item.statement.slice(0, 120)}`);
+  // Whole statements: classification reads the judgement itself, and a 120-char
+  // prefix can hide the qualifier that decides rule vs profile.
+  const items = input.items.map((item) => `- ${item.id} | ${item.statement}`);
   return [
     CLASSIFY_ROLE,
     CLASSIFY_RULES,

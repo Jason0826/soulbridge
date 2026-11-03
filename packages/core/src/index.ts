@@ -537,7 +537,10 @@ export class Soul {
       soulId: this.soulId,
       userId: this.userId,
       sessionId: spec.sessionId,
-      topic: topic.slice(0, 20),
+      // Whole topic: a label cut at 20 characters loses the end, which is where the
+      // qualifier usually sits. The prompt asks for one short sentence; storage does
+      // not cut one (ADR 0034 keeps truncation out of evidence).
+      topic,
       openedAt: spec.at,
       turnNo: spec.turnNo,
     });
@@ -685,7 +688,9 @@ export class Soul {
             userId: this.userId,
             aboutEntityId: subject?.value.kind === 'entity' ? subject.value.entityId : undefined,
             aboutFactId: written.id,
-            topic: `日期不明：${statement.slice(0, 20)}`,
+            // Whole statement: the gap asks "when did this happen", so the sentence it
+            // refers to cannot be a prefix of itself.
+            topic: `日期不明：${statement}`,
             tension: 0.3,
             openedAt: at,
           }),
