@@ -12,7 +12,7 @@ test('extraction prompt: every block is present, in order', () => {
     facts: [{ id: 'fc_9', statement: '小林在找工作', atText: '上周' }],
     previousUserText: '她最近有消息吗',
   });
-  for (const block of ['<role>', '<output-format>', '<rules>', '<examples>', '<context>', '<source>', '<output>']) {
+  for (const block of ['<role>', '<terms>', '<output-format>', '<rules>', '<examples>', '<context>', '<source>', '<output>', '<when-to-write>']) {
     assert.ok(prompt.includes(block), `missing ${block}`);
   }
   // Order matters: the data comes after the instructions, the output anchor last.
@@ -42,17 +42,33 @@ test('extraction prompt: empty context says so instead of looking broken', () =>
   assert.match(prompt, /<known-facts>（空）<\/known-facts>/);
 });
 
-test('extraction prompt: the entity rules that the old prompt lacked', () => {
+test('extraction prompt: every term is defined once, with its boundary', () => {
   const prompt = renderExtractionPrompt({ text: 'x', now: NOW });
-  assert.match(prompt, /一个真实的人或物只出现一次/);
-  assert.match(prompt, /以“和\/与\/或”连接的两个词/);
-  assert.match(prompt, /自包含/);
-  assert.match(prompt, /换算成 YYYY-MM-DD/);
-  assert.match(prompt, /不确定就省略字段/);
-  assert.match(prompt, /<when-to-write>/);
-  assert.match(prompt, /不要写/);
-  assert.match(prompt, /用户对我的要求、提问、催促、同意、否定/);
-  assert.match(prompt, /用户只是在问我一个问题时\*\*不要\*\*建缺口/);
+  // Definitions live in one <terms> block; format notes and rules point at it instead
+  // of restating it. Two copies of "what is an entity" is how the model learned to
+  // write topics into slots.
+  assert.match(prompt, /<terms>/);
+  for (const term of ['实体', '事实', '持有', '槽位', '日期与精度', '来源', '类型名', '置信', '原则候选', '缺口', '线索']) {
+    assert.ok(prompt.includes(`**${term}**`), `术语缺少定义：${term}`);
+  }
+  // Each boundary shows what counts and what does not — the pair is what a model can
+  // apply; a definition alone was not enough in practice.
+  for (const marker of ['算：', '不算：', '边界：']) {
+    assert.ok(prompt.includes(marker), `术语块缺少边界标记：${marker}`);
+  }
+  assert.match(prompt, /不删除原始对话/);
+  assert.match(prompt, /能写成新闻报道的/);
+  assert.match(prompt, /能用"这说的是谁"问出来的才算/);
+});
+
+test('extraction prompt: terms come before the format, and rules do not restate them', () => {
+  const prompt = renderExtractionPrompt({ text: 'x', now: NOW });
+  assert.ok(prompt.indexOf('<terms>') < prompt.indexOf('<output-format>'));
+  // The rules block carries operations only; definitions are not repeated there.
+  const rules = prompt.slice(prompt.indexOf('<rules>'), prompt.indexOf('</rules>'));
+  assert.equal(rules.includes('自包含'), false, '格式说明不应该在规则里再写一遍');
+  assert.equal(rules.includes('换算成 YYYY-MM-DD'), false);
+  assert.match(rules, /supersede/);
 });
 
 test('extraction prompt: stays within a sane size', () => {

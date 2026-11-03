@@ -1,5 +1,5 @@
 {
-  "date": "2026-11-02",
+  "date": "2026-11-03",
   "note": "棘轮预算：数字是实测值，只能往下调，不能往上调。要加功能导致超限时，先删掉同等规模的东西，再跑 --update-budget。",
   "history": [
     {
@@ -56,14 +56,19 @@
       "date": "2026-11-03",
       "delta": 20,
       "reason": "闸门从过滤器改成标注器：未声明槽位降级为文本、未知持有人回落到世界层、三个计数器（kept/droppedSlots/rejected），提示词加一行声明约束（+20 行）。结构修复允许涨。"
+    },
+    {
+      "date": "2026-11-03",
+      "delta": 36,
+      "reason": "抽取提示词重写为术语块（每个术语一处定义 + 算/不算边界），格式说明与规则不再复述；别名加入实体索引（+36 行，术语是内容不是冗余）。"
     }
   ],
-  "coreLines": 7565,
+  "coreLines": 7601,
   "pluginLines": 2322,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 1349,
+    "index.ts": 1354,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 194,
@@ -77,7 +82,7 @@
     "extract.ts": 552,
     "inject-text.ts": 27,
     "profile-prompt.ts": 119,
-    "prompts.ts": 450,
+    "prompts.ts": 481,
     "reflect.ts": 411,
     "retrieval.ts": 116,
     "scoring.ts": 170,

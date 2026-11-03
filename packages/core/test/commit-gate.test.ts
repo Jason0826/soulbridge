@@ -130,6 +130,30 @@ test('gate: an unreadable statement and an exact duplicate are still refused', (
   store.close();
 });
 
+test('gate: an alias resolves to the known entity instead of degrading to text', () => {
+  const { s, store } = soul();
+  store.putEntity({ ...base, type: 'person', name: '小林', aliases: ['阿林'] });
+  const result = s.commitDrafts({
+    entities: [],
+    facts: [
+      {
+        statement: '小林今天加班到很晚',
+        source: 'told',
+        confidence: 0.8,
+        slots: [{ slot: '加班者', value: { kind: 'entity', entityName: '阿林' } }],
+      },
+    ],
+    gaps: [],
+    by: 'llm',
+  });
+  assert.equal(result.facts.length, 1);
+  assert.equal(result.droppedSlots.length, 0, '别名也算已知，不该降级');
+  const stored = store.fact(result.facts[0].id);
+  const slot = stored?.slots.find((entry) => entry.slot === '加班者');
+  assert.equal(slot?.value.kind, 'entity');
+  store.close();
+});
+
 test('gate: the three counters add up to what the model wrote', () => {
   const { s, store } = soul();
   const result = s.commitDrafts({

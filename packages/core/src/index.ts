@@ -470,9 +470,14 @@ export class Soul {
     // One entity per name, whatever its declared type: the same 核桃 appearing as
     // both person and thing splits every recall that mentions it. Existing rows
     // win, so a wrongly typed first sighting is reused rather than duplicated.
+    // Aliases are the same entity: without them "阿林" reads as undeclared and the
+    // slot degrades to text even though the person is known.
     const byName = new Map<string, Entity>();
     for (const known of this.store.findEntities({ soulId: this.soulId, userId: this.userId, limit: 500 })) {
       if (!byName.has(known.name)) byName.set(known.name, known);
+      for (const alias of known.aliases ?? []) {
+        if (alias && !byName.has(alias)) byName.set(alias, known);
+      }
     }
 
     const declared = new Set(draft.entities.map((entity) => entity.name));

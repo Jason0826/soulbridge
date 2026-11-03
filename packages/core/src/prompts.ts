@@ -52,8 +52,60 @@ export interface ExtractionPromptInput {
 
 const EXTRACTION_ROLE = `<role>
 你是记忆抽取器。你只从对话里抽取可验证的事实，不做判断、不给建议、不写总结。
-你的输出由一个确定性的程序消费，它不会读你的解释。
+你的输出由一个确定性的程序消费，它不会读你的解释；格式错一个字段，这条记忆就丢了。
 </role>`;
+
+/**
+ * Every term, defined once, with the boundary that decides it.
+ *
+ * Terms used to be explained in three places (format notes, rules, examples) and the
+ * copies disagreed: a slot value was "a name" in one paragraph and "a description" in
+ * another, so the model filled slots with topics and the parser called them entities.
+ * One definition per term, each with 算/不算 examples, is the only version a model can
+ * apply consistently.
+ */
+const EXTRACTION_TERMS = `<terms>
+每个术语的含义和边界。写之前先判断它属于哪个术语——放错位置比漏写更糟。
+
+**实体**：一个具体的人、物、地点或平台。它是"谁/什么"，不是"做了什么"。
+  算：小林、用户、TypeScript、抖音、PowerShell、config 文件夹
+  不算：不删除原始对话、从根上解决、必要、噪声记忆、情绪注入、项目进展
+  边界：能用"这说的是谁"问出来的才算。一句话、一个观点、一个做法都不是实体。
+  判据：超过 12 个字，或含"的/和/与"，或能加上"这件事"的，基本都不是实体。
+  同一个人或物只出现一次；type 只能是 person / thing / place / self。
+
+**事实**：一句自包含的陈述，回答"发生了什么"或"某人是什么样"。
+  算：小林在 2026-10-24 那周被裁员；用户要求改动前先说明影响
+  不算：用户的提问、催促、同意、否定；寒暄；我对自己能力的说明
+  边界：把代词换成名字后仍然成立，且换个人复述不需要加问号。15–80 字，保留数字和专有名词。
+
+**持有**：这条事实在谁的视角里成立。只有两个合法值。
+  world：世界上发生的事，第三个人也能核实（换工作、吃饭、下雨、约定暗号）
+  人名：某人的看法、偏好、要求、担心（"用户认为…"），只有那个人能确认
+  边界：能写成新闻报道的 → world；只能写成"X 认为"的 → 人名。人物层不写日期。
+
+**槽位**：这条事实的参与者与参数，写成 名称=值，多个用 ; 隔开。
+  只放"谁、对谁、在哪里、多少"这类结构位置。
+  算：被裁员者=小林；人数=300；地点=杭州
+  不算：事项=不删除原始对话；做法=从根上解决；理由=必要
+  边界：值是实体名时，那个名字必须在本轮实体行声明；没声明就只当文字，不建实体。
+
+**日期与精度**：先按 <observation-date> 把"昨天/上周/上个月"换算成 YYYY-MM-DD 填入日期。
+  精度四值：day 确切日期 / range 只知道一周一月 / relative 只有相对说法（上次、最近、初次见面）/ unknown 不知道。
+  换算不出来就留空日期，把原话写进"时间原文"。**没有时间就写 unknown，绝不编日期。**
+
+**来源**：experienced 你亲历 / told 听别人说 / inferred 你推断。
+**类型名**：一句自由描述（偏好、要求、技术约束、事件）。它不是分类体系，写最贴切的词即可，不用造分类。
+**置信**：0–1。拿不准写低，不要空着——空着会被当成"没把握"。
+
+**原则候选**：这条事实是不是"以后该怎么做事的经验"？判据是会不会影响以后的做法。
+  算：改动前先说明影响；用户讨厌反复交代
+  不算：今天改了 A 文件；小林被裁员
+  拿不准就省略——一条不该升格的经验比漏掉更糟。
+
+**缺口**：提过但没有答案的事（"她后来怎么样了"）。
+**线索**：这段对话在接着聊哪个话题，见 <open-threads>。
+</terms>`;
 
 const EXTRACTION_SCHEMA = `<output-format>
 不要输出 JSON。按下面的表格一行一条填写，字段之间用 | 分隔，没有内容的字段留空。
@@ -64,27 +116,9 @@ const EXTRACTION_SCHEMA = `<output-format>
 缺口: 主题 | 张力(0-1) | 相关实体
 线索: 继续 <id>        或        线索: 新 | 一句话主题
 
-填写说明：
-- 类型只能是 person / thing / place / self；关系可空。
-- 陈述要自包含（15–80 字），把代词换成名字，保留数字和专有名词。
-- **持有**：世界上发生的事（换了工作、吃了饭、约定了暗号）写「持有=world」；
-  某人的看法、偏好、要求、担心（"用户认为…"）写那个人的名字，且这个人必须在本轮声明的实体里。
-  人物层的事实不写日期。
-- **精度**：日期换算出来写 day；只知道周/月写 range；只有相对说法（"初次见面""上次"）写 relative；
-  完全不知道写 unknown。**没有时间就写 unknown，绝不要编日期。**
-- **原则候选**：这条事实是不是"以后该怎么做事的经验"？是就写 原则候选=是，不是就省略这个字段。
-  判据是**会不会影响以后的做法**："改动前要先说明为什么"是；"今天改了 A 文件"不是；
-  "用户讨厌重复交代"是（关于人，也影响做法）。拿不准就省略——一条不该升格的经验比漏掉更糟。
-- 日期换算不出来就留空，把原话写进"时间原文"。
-- 来源：experienced（亲历）/ told（听说的）/ inferred（推断的）。
-- 槽位写成 名称=值，多个用 ; 隔开；值是数字就写数字，是实体就写实体名。
-  **槽位里出现的实体名必须在实体行声明**；没声明就只能写文字（那只是描述，不是实体）。
-  例：被替换方=edit 工具 指的是工具，应在实体行声明；被替换方=PowerShell 改代码 是描述，直接写文字。
-- 线索：这句话在接着聊 <open-threads> 里的哪一条，就写 继续 <id>；
-  开始一个新话题就写 新 | 一句话主题（不超过 20 字）。
-  拿不准时写"新"——多开一条只是话题碎一点，接错会把两件事混成一条结论。
-  没有任何候选线索时，这一行只可能是"新"。
-- 示例：
+每个字段的边界见 <terms>，这里只说格式：日期必须是 YYYY-MM-DD；槽位写成 名称=值，多个用 ; 隔开；
+"持有/精度/原则候选"是键值对，写在事实行的尾部；线索行二选一。
+示例：
 实体: 小林 | person | 同事
 事实: 小林在 2026-10-24 那周被裁员 | 裁员 | 2026-10-24 | 上周 | told | 0.8 | 持有=world | 精度=day | 被裁员者=小林
 事实: 用户要求改动前先说明为什么、怎么做、有什么影响 | 要求 | | | experienced | 0.9 | 持有=用户 | 精度=unknown | 原则候选=是 | 对象=用户
@@ -93,18 +127,14 @@ const EXTRACTION_SCHEMA = `<output-format>
 </output-format>`;
 
 const EXTRACTION_RULES = `<rules>
-- op 只有三种值：add / supersede / update / noop。supersede 与 update 必须给 target（<known-facts> 里的 id）。
-- 实体：一个真实的人或物只出现一次；同一个名字只给一个 type。type 只能是 person / thing / place / self。
-  技术名词、以“和/与/或”连接的两个词、代词（她/他/这个/那个）都不是人名。
-- type 判定：会说话、有意图的 → person；机构、物件、产品、技术概念 → thing；地理位置 → place；助手自己 → self。
-- 陈述（statement）：自包含，15–80 字；把代词换成名字；保留专有名词、职位、数字、具体属性等细节，不要泛化。
-- 时间：先按 <observation-date> 把“昨天/上周/上个月”换算成 YYYY-MM-DD 填入 at，同时把原文写进 at_text。
-  换算不了（如“以前”“最近”）就只填 at_text，不要猜。
-- 来源：用户亲历 experienced；听别人说的 told；你推断的 inferred。
+术语的含义见 <terms>；这里只说操作和取舍。
 - 合并：与 <known-facts> 语义相同 → noop；互相矛盾 → supersede 并给 target；是补充 → update。
   相关但独立 → add。不要用 <known-facts> 里没有的新事实去 supersede。
+- 槽位只放参与者，不放话题：宁可少写一个槽位，也不要把一句话塞进槽位。
 - 不确定就省略字段，绝不编造数字、日期、关系。
-- 不要抽助手对自己的描述，也不要重复用户刚落的话（回声不算新事实）。
+- 不要重复用户刚落的话（回声不算新事实）。
+- 线索：候选见 <open-threads>。拿不准写"新"——多开一条只是话题碎一点，接错会把两件事混成一条结论。
+  没有任何候选时这一行只可能是"新"。
 </rules>
 
 <when-to-write>
@@ -197,6 +227,7 @@ export function renderExtractionPrompt(input: ExtractionPromptInput): string {
   return [
     EXTRACTION_ROLE,
     '<task>把 <source> 里的信息变成记忆操作，并说明它属于哪条线索。只依据 <source> 与 <previous-user>；<known-facts> 只用于判断冲突与去重。</task>',
+    EXTRACTION_TERMS,
     EXTRACTION_SCHEMA,
     EXTRACTION_RULES,
     EXTRACTION_EXAMPLES,
