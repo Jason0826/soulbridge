@@ -222,9 +222,38 @@ overlay 装过之后，任何 `npm install` 都要重新走一遍第 3 步。
 ## 克隆之后（每台机器一次）
 
 ```
-npm install        # 会跑 prepare：安装 pre-commit 钩子
+npm install        # 装依赖
+npm run setup      # 安装 pre-commit 钩子（prepare 已移除，见下）
 node scripts/install-hooks.mjs --check   # 确认钩子在了
 ```
 
-为什么还需要这一步：`core.hooksPath` 是 **git 的 per-clone 配置**，不随仓库走。
-钩子保护的是"提交时"，没装就等于没保护——所以 `health-check` 会检查它，没装会报 WARN。
+为什么 `prepare` 不再做这件事：`prepare` 是**包的生命周期脚本**，从 GitHub/npm 安装时也会跑。
+实测 `npm install github:Jason0826/dsh-plugin-soulbridge#v0.0.102` 失败在 `git dep preparation failed`
+——因为没有 `.git`，`git config core.hooksPath` 跑不了。仓库便利动作不能放在包里。
+钩子仍然不靠记性：`health-check` 会检查它，没装报 WARN。
+
+## 在 profile 里装新版本（pnpm 的三个坑）
+
+2026-11-03 晚踩过，记下来，别重走：
+
+```
+① minimumReleaseAge：pnpm 拒绝太新的版本，报 ERR_PNPM_NO_MATCHING_VERSION
+   → 在 profile 的 pnpm-workspace.yaml 里加：
+     minimumReleaseAgeExclude:
+       - soulbridge@0.0.104
+       - dsh-plugin-soulbridge@0.0.107
+② registry 元数据缓存：pnpm 还说 “latest is 0.0.103”，哪怕 npm 已经有 0.0.104
+   → 等一分钟重试；仍不行就用 tarball URL：
+     pnpm add https://registry.npmjs.org/soulbridge/-/soulbridge-0.0.104.tgz
+   → 装完把 package.json 里的依赖改回 "0.0.104"，再 pnpm install
+③ dsh plugin add 是非交互的：需要确认的提示不会出现，直接失败
+   → 先改 workspace 配置（①），再重跑
+```
+
+装完必须核对**三层**（版本号会骗人）：
+
+```
+npm          npm view soulbridge version
+profile      node_modules/soulbridge/package.json
+运行         plugin.log 里 apply() called (v…) 的时间戳在重启之后
+```
