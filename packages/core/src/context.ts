@@ -13,6 +13,7 @@ import type { ContextRequest, ContextResult, Emotion } from './types.ts';
 import type { SoulStore } from './store.ts';
 import { FACT_STATUS } from './config/status.ts';
 import { ANCHOR_TYPES } from './config/labels.ts';
+import { isActive, roleOf } from './roles.ts';
 import { escapeAttr, escapeBlockText } from './inject-text.ts';
 import { selectDirectives } from './affect/directives.ts';
 
@@ -95,12 +96,15 @@ export function buildContext(
       (slot) => slot.slot === '锚点' && slot.value.kind === 'text' && slot.value.value === '是',
     );
   type Anchor = { id: string; label: string; text: string; score: number };
+  // Roles replace the old type-name check; roleOf() falls back to typeName for rows written
+  // before the migration, so anchors stay stable across the switch.
+  const ANCHOR_ROLES = new Set(['judgment', 'lesson']);
   const anchors: Anchor[] = store
     .facts({ soulId: request.soulId, userId: request.userId, limit: 300 })
     .filter(
       (fact) =>
-        fact.status !== FACT_STATUS.superseded &&
-        (anchorTypes.has(fact.typeName ?? '') || explicitAnchor(fact)),
+        isActive(fact) &&
+        (ANCHOR_ROLES.has(roleOf(fact)) || anchorTypes.has(fact.typeName ?? '') || explicitAnchor(fact)),
     )
     .map((fact) => ({ id: fact.id, label: fact.typeName ?? '事实', text: fact.statement, score: fact.confidence }));
   for (const memory of store.query({ soulId: request.soulId, userId: request.userId })) {

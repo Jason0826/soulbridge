@@ -356,6 +356,9 @@ export type { FactStatus, FactSource, AtPrecision } from './config/status.ts';
 import type { FactStatus, FactSource, AtPrecision } from './config/status.ts';
 import { ENTITY_TYPES } from './config/domains.ts';
 
+/** One of FACT_ROLES; declared with the values so the two cannot drift. */
+export type FactRole = (typeof import('./config/domains.ts').FACT_ROLES)[number];
+
 export interface Fact {
   id: string;
   soulId: string;
@@ -363,6 +366,11 @@ export interface Fact {
   statement: string;
   /** Free text ("裁员" / "道歉" / "请求"); code never branches on it. */
   typeName?: string;
+  /**
+   * What the fact is *for* (closed set in config/domains.ts). Optional during the transition:
+   * older rows have no role, and readers fall back to typeName through `roleOf()`.
+   */
+  role?: FactRole;
   /** Where it holds: `world`, `self`, or an entity id (in someone's mind). */
   holder: string;
   /** Event time. Optional: a preference is a standing fact without one. */

@@ -107,6 +107,7 @@ import type {
 import type { SoulStore } from './store.ts';
 import { FACT_STATUS, MEMORY_STATUS } from './config/status.ts';
 import { HOLDER_WORDS } from './config/domains.ts';
+import { isActive, isRetracted, roleOf } from './roles.ts';
 import type { AffectAnalyzer } from './affect/port.ts';
 import { parseTrigger } from './rules.ts';
 import type { Rule } from './rules.ts';
@@ -250,7 +251,7 @@ export class Soul {
   list(limit = 50): Memory[] {
     return this.store
       .facts({ soulId: this.soulId, userId: this.userId, limit })
-      .filter((fact) => fact.status !== FACT_STATUS.superseded)
+      .filter((fact) => isActive(fact))
       .map(factAsMemory);
   }
 
@@ -868,7 +869,7 @@ export class Soul {
   rules(): Rule[] {
     const out: Rule[] = [];
     for (const fact of this.store.facts({ soulId: this.soulId, userId: this.userId, limit: 500 })) {
-      if (fact.typeName !== '规则' || fact.status === FACT_STATUS.superseded) continue;
+      if (roleOf(fact) !== 'rule' || !isActive(fact)) continue;
       const triggerSlot = fact.slots.find((slot) => slot.slot === '触发' && slot.value.kind === 'text');
       const trigger = parseTrigger(triggerSlot?.value.kind === 'text' ? triggerSlot.value.value : '');
       if (!trigger) continue;
@@ -927,8 +928,8 @@ export class Soul {
       .facts({ soulId: this.soulId, userId: this.userId, limit: 500 })
       .filter(
         (fact) =>
-          fact.typeName === '画像' &&
-          fact.status !== FACT_STATUS.superseded &&
+          roleOf(fact) === 'profile' &&
+          isActive(fact) &&
           // A line that cites sources is derived: merging it again compresses a
           // compression, and the second round is thinner than the first.
           !isDerivedProfileLine(fact),
@@ -963,7 +964,7 @@ export class Soul {
       written.push(fact);
       for (const sourceId of line.sources) {
         const source = this.store.fact(sourceId);
-        if (source && source.status !== FACT_STATUS.superseded) this.store.supersedeFact(sourceId, fact.id);
+        if (source && isActive(source)) this.store.supersedeFact(sourceId, fact.id);
       }
     }
     return written;
@@ -973,7 +974,7 @@ export class Soul {
   profile(limit = 8): Fact[] {
     return this.store
       .facts({ soulId: this.soulId, userId: this.userId, limit: 500 })
-      .filter((fact) => fact.typeName === '画像' && fact.status !== FACT_STATUS.superseded)
+      .filter((fact) => roleOf(fact) === 'profile' && isActive(fact))
       .sort((a, b) => b.confidence - a.confidence || b.createdAt - a.createdAt)
       .slice(0, limit);
   }
@@ -1125,7 +1126,7 @@ export class Soul {
     const target = this.store.fact(into);
     if (!target) return { ok: false, reason: 'target-missing' };
     if (target.typeName !== '结论') return { ok: false, reason: 'target-not-conclusion' };
-    if (target.status === FACT_STATUS.superseded) return { ok: false, reason: 'target-superseded' };
+    if (!isActive(target)) return { ok: false, reason: 'target-superseded' };
 
     const held = evidenceOf(target);
     const heldSet = new Set(held);
@@ -1147,7 +1148,7 @@ export class Soul {
   conclusions(limit = 20): Fact[] {
     return this.store
       .facts({ soulId: this.soulId, userId: this.userId, holder: 'self', limit: 200 })
-      .filter((fact) => fact.typeName === '结论' && fact.status !== FACT_STATUS.superseded)
+      .filter((fact) => roleOf(fact) === 'judgment' && isActive(fact))
       .slice(0, limit);
   }
 
@@ -1269,7 +1270,7 @@ export class Soul {
   recall(query: string, limit = 5): ScoredMemory[] {
     const facts = this.store
       .facts({ soulId: this.soulId, userId: this.userId, limit: 500 })
-      .filter((fact) => fact.status !== FACT_STATUS.superseded);
+      .filter((fact) => isActive(fact));
     const ranked = rank(facts.map(factAsMemory), query, Date.now()).slice(0, limit);
     return ranked;
   }
@@ -1361,7 +1362,7 @@ export class Soul {
 
     const candidates = this.store
       .facts({ soulId: this.soulId, userId: this.userId, limit: 200 })
-      .filter((fact) => fact.status !== FACT_STATUS.superseded);
+      .filter((fact) => isActive(fact));
 
     // Same content anywhere: the exact duplicate.
     const same = candidates.find((fact) => fact.statement.trim() === content);
