@@ -1,6 +1,6 @@
 {
   "name": "soulbridge",
-  "version": "0.0.97",
+  "version": "0.0.99",
   "description": "A personality layer for any agent: continuity, forgetting, and growth across tools.",
   "license": "Apache-2.0",
   "type": "module",
@@ -52,7 +52,7 @@
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build && npm test",
     "sync:prompts": "node scripts/sync-prompts.mjs",
-    "prepare": "node scripts/install-hooks.mjs"
+    "setup": "node scripts/install-hooks.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
