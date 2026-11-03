@@ -110,8 +110,8 @@ test('extraction prompt: provenance rules name both sides', () => {
 
 test('extraction prompt: stays within a sane size', () => {
   const prompt = renderExtractionPrompt({ text: 'x'.repeat(200), now: NOW });
-  // A guard against runaway growth, not a target: the base prompt is ~3916 chars with
-  // a 200-char source (the terms block is the bulk), and candidate text is added at
-  // runtime on top. Raise deliberately when the prompt gains a required section.
-  assert.ok(prompt.length < 4700, `prompt grew to ${prompt.length} chars`);
+  // A guard against runaway growth, not a target. Raised from 4700 to 5000 when the role
+  // field became part of the required line template (~4787 chars with a 200-char source);
+  // the terms block is still the bulk, and candidate text is added on top at runtime.
+  assert.ok(prompt.length < 5000, `prompt grew to ${prompt.length} chars`);
 });

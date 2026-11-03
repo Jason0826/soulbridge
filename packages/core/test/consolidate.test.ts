@@ -304,8 +304,8 @@ test('profile: merged lines keep only sources that were offered', () => {
 test('profile: merging supersedes the sources and keeps the trail', () => {
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
-  store.putFact({ soulId: 's1', userId: 'u1', id: 'f1', statement: '用户要机制不要 prompt', typeName: '画像', holder: 'self' });
-  store.putFact({ soulId: 's1', userId: 'u1', id: 'f2', statement: '结构化输出优先工具解析', typeName: '画像', holder: 'self' });
+  store.putFact({ soulId: 's1', userId: 'u1', id: 'f1', statement: '用户要机制不要 prompt', role: 'profile', typeName: '画像', holder: 'self' });
+  store.putFact({ soulId: 's1', userId: 'u1', id: 'f2', statement: '结构化输出优先工具解析', role: 'profile', typeName: '画像', holder: 'self' });
 
   const written = soul.applyProfileMerge([
     { statement: '要机制，不靠 prompt 自觉', sources: ['f1', 'f2'], dimension: '工作方式' },
@@ -490,13 +490,13 @@ test('profile: derived lines are not offered back as merge input', () => {
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
   // An original judgment.
-  store.putFact({ ...base, id: 'f1', statement: '先验证再动手', typeName: '画像', holder: 'self' });
+  store.putFact({ ...base, id: 'f1', statement: '先验证再动手', role: 'profile', typeName: '画像', holder: 'self' });
   // A merged line: it cites the original, so re-merging it would compress a compression.
   store.putFact({
     ...base,
     id: 'f2',
     statement: '动手前先验证，不靠推测',
-    typeName: '画像',
+    role: 'profile', typeName: '画像',
     holder: 'self',
     slots: [
       { slot: '来源', value: { kind: 'fact', factId: 'f1' } },

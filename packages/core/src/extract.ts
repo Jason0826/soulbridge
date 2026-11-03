@@ -18,7 +18,7 @@
 import type {
   ThreadAttribution, EntityDraft, ExtractDraft, FactDraft, FactOperation, GapDraft, SlotValue } from './types.ts';
 import { renderExtractionPrompt } from './prompts.ts';
-import { SLOT_ENTITY_MARKER } from './config/domains.ts';
+import { SLOT_ENTITY_MARKER, FACT_ROLES } from './config/domains.ts';
 
 /**
  * What a fact's confidence is when the model did not give one.
@@ -208,6 +208,9 @@ export function extractByRules(text: string, at = Date.now()): ExtractDraft {
 
     facts.push({
       statement: toStatement(sentence),
+      // The floor's own decision: a rule can recognise a sentence but cannot judge what it
+      // is for, so it stores the minimal claim. The model path may say otherwise.
+      role: 'observation',
       typeName: verb?.word,
       at: time.at,
       atText: time.atText,
@@ -379,6 +382,7 @@ function extractJson(raw: string): unknown {
 
 const ENTITY_TYPES = new Set(['person', 'thing', 'place', 'self']);
 const PRECISIONS = new Set(['day', 'range', 'relative', 'unknown']);
+const ROLES = new Set<string>(FACT_ROLES);
 
 const SOURCES = new Set(['experienced', 'told', 'inferred']);
 const OPS = new Set(['add', 'supersede', 'update', 'noop']);
@@ -413,8 +417,12 @@ function parseFactDraft(obj: Record<string, unknown>): FactDraft | null {
         : atText
           ? 'relative'
           : 'unknown';
+  const roleRaw = typeof obj.role === 'string' ? obj.role.trim() : '';
   return {
     statement,
+    // The model's structural answer. An unrecognised value is dropped rather than guessed:
+    // the writer's neutral default is observation, never a guess from the type label.
+    ...(roleRaw && ROLES.has(roleRaw) ? { role: roleRaw as FactDraft['role'] } : {}),
     // `world` unless the model named a mind; the commit gate resolves the name.
     holder: holderRaw || 'world',
     typeName: typeof obj.type_name === 'string' ? obj.type_name : undefined,
@@ -583,11 +591,14 @@ export function parseLineDraft(raw: string): Record<string, unknown> | null {
       let supersedes = '';
       let wantsSupersede = false;
       for (const part of rest) {
-        const keyed = /^(持有|精度|原则候选|槽位|操作)\s*[=＝]\s*(.*)$/.exec(part);
+        const keyed = /^(持有|精度|原则候选|槽位|操作|角色)\s*[=＝]\s*(.*)$/.exec(part);
         if (keyed) {
           if (keyed[1] === '持有') fact.holder = keyed[2].trim();
           else if (keyed[1] === '精度') fact.at_precision = keyed[2].trim();
-          else if (keyed[1] === '原则候选') {
+          else if (keyed[1] === '角色') {
+            const role = keyed[2].trim();
+            if (ROLES.has(role)) fact.role = role;
+          } else if (keyed[1] === '原则候选') {
             // Only 是 promotes. "否" and anything else is the safe default.
             if (/^(是|yes|true)$/i.test(keyed[2].trim())) fact.principle = true;
           } else if (keyed[1] === '操作') {

@@ -10,7 +10,8 @@ import { copyFileSync, existsSync, renameSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { DEFAULT_EMOTION } from './types.ts';
 import { FACT_STATUS, MEMORY_STATUS } from './config/status.ts';
-import { LEGACY_ROLE_BY_TYPE } from './config/domains.ts';
+import type { FactStatus } from './config/status.ts';
+import { FACT_ROLES } from './config/domains.ts';
 import type {
   AffectSignal,
   Correction,
@@ -27,6 +28,7 @@ import type {
   Fact,
   FactQuery,
   FactSlot,
+  FactRole,
   FactSpec,
   Gap,
   GapSpec,
@@ -973,11 +975,13 @@ export function openSqlite(file: string): SoulStore {
     putFact(spec: FactSpec): Fact {
       const id = spec.id ?? `fc_${Date.now().toString(36)}_${(factSeq += 1).toString(36)}`;
       const createdAt = Date.now();
-      // The writer assigns the role: callers may set one explicitly, otherwise the old type
-      // label decides. Without this every new row would default to observation and quietly
-      // disappear from rules()/profile()/conclusions().
-      const role =
-        spec.role ?? (LEGACY_ROLE_BY_TYPE as Record<string, string>)[spec.typeName ?? ''] ?? 'observation';
+      // Only the caller decides the role. The writer's neutral default is observation — it
+      // is the minimal claim — and it never guesses from `type_name`: that guess was the debt
+      // the vocabulary rebuild removed. An unknown value is a caller bug, not a guess.
+      if (spec.role !== undefined && !(FACT_ROLES as readonly string[]).includes(spec.role)) {
+        throw new Error(`invalid fact role: ${spec.role}`);
+      }
+      const role = spec.role ?? 'observation';
       withRetry(() => {
         const inserted = db
           .prepare(
@@ -1352,12 +1356,17 @@ export function openSqlite(file: string): SoulStore {
 
     /** Retag a fact, e.g. a lesson that turned out to be a rule (ADR 0033). */
     setFactTypeName(factId: string, typeName: string): void {
-      // Role follows the label: markRule/markProfile change what the row is for, and a stale
-      // role would send it to the wrong consumer (the exact split this refactor removes).
-      const role = (LEGACY_ROLE_BY_TYPE as Record<string, string>)[typeName] ?? 'observation';
-      withRetry(() =>
-        db.prepare('UPDATE facts SET type_name = ?, role = ? WHERE id = ?').run(typeName, role, factId),
-      );
+      withRetry(() => db.prepare('UPDATE facts SET type_name = ? WHERE id = ?').run(typeName, factId));
+    },
+
+    /** What the fact is for; the caller decides (config/domains.ts FACT_ROLES). */
+    setFactRole(factId: string, role: FactRole): void {
+      withRetry(() => db.prepare('UPDATE facts SET role = ? WHERE id = ?').run(role, factId));
+    },
+
+    /** Lifecycle state; code writes it, never the model (config/status.ts). */
+    setFactStatus(factId: string, status: FactStatus): void {
+      withRetry(() => db.prepare('UPDATE facts SET status = ? WHERE id = ?').run(status, factId));
     },
 
     setFactConfidence(factId: string, confidence: number): void {

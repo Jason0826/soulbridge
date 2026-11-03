@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-03 22:40**（core 0.0.101 / plugin 0.0.107）
+最后核对：**2026-11-03 23:10**（core 0.0.102 / plugin 0.0.107）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -12,6 +12,8 @@
 > 名词/变量声明：[declarations.json](declarations.json)，定义文件在 `packages/core/src/config/`（`health-check` 第 8、9 节）。
 > 全系统审计：[audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md)。
 > 代码审查（今晚，含已修复 4 条）：[audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md)。
+
+**23:10 角色由模型选（D 步）**：抽取模板增加 `角色=` 键值（observation/judgment/rule/profile/promise/lesson），`parseFactDraft` 与行解析都读它，未知值忽略；写方不再从中文类型名猜角色（`putFact` 只认传入值，默认 observation，未知值抛错）；`markRule`/`markProfile` 显式写 role，`markUnclassified` 改为 status=candidate；`recordConclusion`/`applyProfileMerge` 显式写 judgment/profile。测试 285 全过。
 
 **22:40 状态词表收口（C 步）**：`config/status.ts` 只剩 `raw/candidate/active/retracted`；读方不再接受旧五值（`isActive` 只认 active，`isRetracted` 只认 retracted）。schema v10 在打开库时把存量转过去（none/open/kept → active，broken/superseded → retracted），`supersedeFact` 写 retracted，facts 列默认值改 active，`factsByTurns` 只取 active。线上实测：schema_version 10，status 只剩 **active 573 / retracted 56**（此前残留的 none 40 / superseded 4 已归零），读路径 judgment=81 / rule=65 / profile=12 正常。core 0.0.101、插件 0.0.107 均由 CI 按 tag 自动发布。
 

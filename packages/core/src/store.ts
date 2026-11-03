@@ -11,7 +11,9 @@ import type {
   EntitySpec,
   Fact,
   FactQuery,
+  FactRole,
   FactSpec,
+  FactStatus,
   Gap,
   GapSpec,
   Identity,
@@ -89,6 +91,10 @@ export interface SoulStore {
   /** Append slots to an existing fact, skipping ones it has. Returns how many were added. */
   addSlots(factId: string, slots: { slot: string; value: SlotValue }[]): number;
   setFactTypeName(factId: string, typeName: string): void;
+  /** What the fact is for (config/domains.ts FACT_ROLES); the caller decides. */
+  setFactRole(factId: string, role: FactRole): void;
+  /** Lifecycle state (config/status.ts); code writes it, never the model. */
+  setFactStatus(factId: string, status: FactStatus): void;
   setFactConfidence(factId: string, confidence: number): void;
   /** Count that retrieval surfaced these facts (0019: use slows decay). */
   recordRecalls(factIds: string[], at: number): void;

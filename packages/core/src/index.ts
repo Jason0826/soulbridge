@@ -702,6 +702,7 @@ export class Soul {
         userId: this.userId,
         statement,
         holder,
+        role: factDraft.role,
         typeName: factDraft.typeName,
         at: factDraft.at,
         atText: factDraft.atText,
@@ -845,6 +846,7 @@ export class Soul {
       soulId: this.soulId,
       userId: this.userId,
       statement: gate.statement,
+      role: 'judgment',
       typeName: '结论',
       holder: 'self',
       confidence: gate.confidence,
@@ -890,6 +892,7 @@ export class Soul {
    * have to be always-on, which is exactly what this split exists to avoid.
    */
   markRule(factId: string, classification: { trigger: string; action?: string }): void {
+    this.store.setFactRole(factId, 'rule');
     this.store.setFactTypeName(factId, '规则');
     const slots: { slot: string; value: { kind: 'text'; value: string } }[] = [
       { slot: '触发', value: { kind: 'text', value: classification.trigger } },
@@ -900,6 +903,7 @@ export class Soul {
 
   /** Apply a profile classification: it is about the person, not a triggered rule. */
   markProfile(factId: string, options: { dimension?: string } = {}): void {
+    this.store.setFactRole(factId, 'profile');
     this.store.setFactTypeName(factId, '画像');
     // The dimension is written here because this is the moment the model decided
     // which lens the judgment belongs to. The merge step cuts its batches along
@@ -916,10 +920,10 @@ export class Soul {
    *
    * Neither bucket is safe for it: as a rule it would fire every turn, and as a
    * profile line it would put an imperative into the description of a person. It
-   * goes to 待修, which nothing injects, and shows up in a review count.
+   * becomes a candidate — held in the store, injected nowhere — and shows up in a review count.
    */
   markUnclassified(factId: string): void {
-    this.store.setFactTypeName(factId, '待修');
+    this.store.setFactStatus(factId, 'candidate');
   }
 
   /** The judgments about the person that are waiting to be merged. */
@@ -950,6 +954,7 @@ export class Soul {
         soulId: this.soulId,
         userId: this.userId,
         statement: line.statement,
+        role: 'profile',
         typeName: '画像',
         holder: 'self',
         // More sources means more observations behind the line, so it ranks first.

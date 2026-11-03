@@ -254,6 +254,8 @@ export type DraftSlotValue =
 
 export interface FactDraft {
   statement: string;
+  /** Structured role, chosen by the model (config/domains.ts FACT_ROLES). */
+  role?: FactRole;
   /** world or a person's name — where the fact holds (ADR 0032). */
   holder?: string;
   typeName?: string;
