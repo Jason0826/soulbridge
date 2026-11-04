@@ -44,7 +44,7 @@ import type {
 import type { SoulStore } from './store.ts';
 import { bm25, buildCorpusStats, tokenize } from './scoring.ts';
 
-export const SCHEMA_VERSION = 13;
+export const SCHEMA_VERSION = 14;
 /** How many recent pairs are considered before scoring. Bounded so recall stays O(candidates). */
 const RECALL_CANDIDATES = 500;
 export const AFFECT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -344,6 +344,16 @@ function upgradeToV3(db: DatabaseSync): void {
  */
 
 /** v6 → v7: turn threads (a topic's turns need not be adjacent) plus turns.thread_id. */
+export function upgradeToV14(db: DatabaseSync): void {
+  // Correct the semantics v13 used: a dated statement stops describing the present when the
+  // event is over. "小林在 10-24 被裁员" is valid on 10-24, not forever — otherwise every
+  // historical event would look like a current state.
+  db.exec(
+    `UPDATE facts SET valid_until = COALESCE(at_end, at)
+      WHERE valid_until IS NULL AND at IS NOT NULL AND status <> 'retracted'`,
+  );
+}
+
 export function upgradeToV13(db: DatabaseSync): void {
   // Two axes of time, like the legacy memory table had:
   //   created_at   when we recorded it (never changes)
@@ -552,7 +562,7 @@ export function openSqlite(file: string): SoulStore {
       if (version < 5) upgradeToV5(db);
       if (version < 7) upgradeToV7(db);
       if (version < 8) upgradeToV8(db);
-      if (version < 13) upgradeToV13(db);
+      if (version < 14) upgradeToV14(db);
       // v6 adds tables only; SCHEMA creates them on every open, nothing to copy.
       setVersion(db, SCHEMA_VERSION);
       db.exec('COMMIT');
@@ -1100,7 +1110,11 @@ export function openSqlite(file: string): SoulStore {
             spec.atEnd ?? null,
             spec.atPrecision ?? 'unknown',
             spec.validFrom ?? spec.at ?? createdAt,
-            spec.validUntil ?? null,
+            // A dated statement describes the world at that moment. For an event, validity
+            // ends when it is over (at, or at_end for a range); a standing state has no date
+            // and stays open until something replaces it. "Current" is therefore one query:
+            // valid_until IS NULL OR valid_until > now.
+            spec.validUntil ?? spec.atEnd ?? spec.at ?? null,
             spec.placeId ?? null,
             spec.status ?? 'active',
             spec.confidence ?? 1,

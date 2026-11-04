@@ -296,7 +296,7 @@ v1 → v2：memories.updated_at / memories.deleted_at / emotions.updated_at
 | `at` / `at_text` / `at_end` | 事件发生时间、原话、区间结束（断言可空） |
 | `at_precision` | day / range / relative / unknown |
 | `valid_from` | 这条内容从什么时候成立（默认 `at` 或记录时间） |
-| `valid_until` | 到什么时候不再成立（空 = 仍成立；被取代时写） |
+| `valid_until` | 到什么时候不再成立：**事件在结束时关（`at_end` 或 `at`），状态在被取代时关**；空 = 仍成立 |
 | `place_id` | 地点实体引用，可空 |
 | `status` | raw / candidate / active / retracted（`config/status.ts`） |
 | `confidence` | 0–1；空字段不落 0 |

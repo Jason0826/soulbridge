@@ -24,6 +24,21 @@
 
 ## 二、改动
 
+### 语义修正（2026-11-04，用户指出）
+
+第一版把“事件”写成 `valid_until` 永远为空——**错了**。按有效性读：
+
+```
+"10-24 被裁员"   valid_from=10-24   valid_until=10-24（事件结束，不再是"当前"）
+"小林在 A 公司"  valid_from=入职    valid_until=离开（空 = 现在还在）
+```
+
+好处是“当前状态”变成一个查询：`valid_until IS NULL OR valid_until > now`，历史事件自动
+落选，**不再需要单独判断“事件还是状态”**。
+
+- v14 迁移：已有带日期的事实按 `COALESCE(at_end, at)` 关闭；
+- 写入默认：`validUntil = 显式值 ?? atEnd ?? at ?? 空`。
+
 - schema v13：`facts` 加两列，回填 `valid_from = COALESCE(at, created_at)`；已撤回的行回填
   `valid_until = 后继的 created_at`；
 - `supersedeFact`：写 `valid_until`（取代发生的时间），状态仍是 `retracted`；
@@ -34,9 +49,9 @@
 ## 三、验证
 
 ```
-core 297 测试（+5：valid_from 默认、supersede 写 valid_until、v13 回填、人物卡按别名、
-              未知名字返回 null）
-插件 86 测试
+core 298 测试（+6：event 关闭 / range 关闭 / valid_from 默认 / supersede 写 valid_until /
+              v13 回填 / v14 关闭带日期行 / 人物卡按别名 / 未知名字返回 null）
+插件 87 测试
 ```
 
 过程中插件 hooks 测试先红了——因为 `openGapsAbout` 是 core 新导出，插件快照里还没有。

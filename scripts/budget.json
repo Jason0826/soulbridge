@@ -123,7 +123,7 @@
       "reason": "提示词外置：5 个模板从 prompts.ts 移到 packages/core/prompts/*.md，生成物替换声明（行数下降）。"
     }
   ],
-  "coreLines": 8416,
+  "coreLines": 8560,
   "pluginLines": 2428,
   "files": {
     "analyze.ts": 255,
@@ -150,13 +150,14 @@
     "retrieval.ts": 116,
     "roles.ts": 28,
     "scoring.ts": 170,
-    "sqlite.ts": 1879,
+    "sqlite.ts": 1893,
     "config.ts": 96,
     "merge.ts": 41,
     "steering.ts": 103,
     "transcript.ts": 96,
     "store.ts": 179,
     "measure.ts": 45,
+    "time.ts": 130,
     "types.ts": 776
   }
 }
