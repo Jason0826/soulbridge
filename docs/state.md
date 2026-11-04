@@ -16,10 +16,12 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   0027 读取方 1：时间检索接 precision（core 0.0.114 / plugin 0.0.115）
-已验证         插件 + core 测试全过；installed web profile 0.0.114 / 0.0.115（部署后 verify-installed 补）
-               时间检索：findWindow 把「上周/昨天」解析成窗口；factsInWindow 只让 day/range 进窗，
+现在在做什么   0027 读取方 1：时间检索接 precision（core 0.0.114 / plugin 0.0.115，已装 web profile）
+已验证         core 308 测试 / 插件 98 测试全过；installed web profile 0.0.114 / 0.0.115，verify-installed 全过
+               时间检索：findWindow 把「上周/昨天」解析成半开窗口；factsInWindow 只让 day/range 进窗，
                unknown/relative/retracted 0 条（7 条测试 + 变异检查：去掉过滤就变红）
+               实跑「上周都发生了什么」→ 注入 <time-window cue="上周" from="2026-10-26" to="2026-11-01">，
+               2 条 day 精度事实（其余 unknown 一条没进）
                v15 迁移实测：891 条事实，valid_from 空值 0；precision day 246 / range 6 / relative 13 / unknown 609
                取代引用 成功 50 / 失败 1（supersede-target-retracted）→ 失败率 2% PASS
                19:36 首个 turn-cost 落库：turn 2 → requests=5（steps=4 plugin=1）
@@ -42,6 +44,7 @@
 环境           固定端口 3080；重启 scripts/restart-web.ps1（不自动开 tab）
                运行中的 profile = ~/.dsh/profiles/web（→ C:\DSH\home\profiles\web）
                发版 = 推 tag → GitHub Actions → npm（当前 core 0.0.114 / plugin 0.0.115）
+               注意：npm 读侧复制延迟实测 3–15 分钟，`npm view` 马上查会 404，别判成发布失败
 成本导出       D:\Download\usage_data_*.zip（平台导出，含 amount/cost 两个 CSV）
 ```
 
