@@ -1,8 +1,8 @@
 # 整体 review：0026 成本可见（2026-11-04 19:30）
 
 > checklist A9：一项做完要整体看一遍，不是再跑一次检查。
-> 改动范围：插件 `index.js` + `test/turn-cost.test.mjs`；core `scripts/billing.mjs` + `docs/briefs/0026`。
-> 一句话结论：**钱有了唯一出口，轮有了唯一计数；观测量增了 174 行，语义没变。**
+> 改动范围：插件 `index.js` + `test/turn-cost.test.mjs`；账单脚本与说明在**插件仓库**（见第六节"归属修正"）。
+> 一句话结论：**钱有了唯一出口，轮有了唯一计数；观测量增了 174 行，语义没变——但这套东西不属于记忆层，已搬出本仓库。**
 
 ## 一、新增了什么
 
@@ -10,7 +10,7 @@
 |---|---|---|
 | `turn-cost` 记录（每轮一条） | `trace.jsonl` | 人看、`quality.mjs`（下一步） |
 | `turn cost:` 日志行（≥30 请求） | `plugin.log` | 人看 |
-| `scripts/billing.mjs` | core | 人看、`state.md` 的数据来源 |
+| `billing.mjs` + `docs/cost-visibility.md` | 插件仓库（19:43 从本仓库移出） | 人看、`state.md` 的成本数字来源 |
 
 ## 二、有没有出现"同一件事的第二个表示"
 
@@ -42,19 +42,44 @@
 - 金额的路径变简单了：以前"平台导出 → 人肉加"，现在"导出 → 一个脚本 → 一张表 + 一次对账"。
 - 代价说清：`trace.jsonl` 每天多 34 条；`plugin.log` 每天多约 9 行（阈值以上）。都不设轮转变更（trace 已有 10MB 轮转）。
 
-## 六、待办（进 backlog，不混进本次）
+## 六、归属修正（19:43）
+
+用户问了一句：「这个部分计算花费的部分，不是 soulbridge 应该有的东西吧？」
+
+对。核查结果：
+
+```
+packages/core/src 里没有一行价格逻辑（cost|price|billing 只命中三处字符预算注释）
+token 全是中文分词，不是 LLM token
+```
+
+所以错不在产品，在**我放文件的位置**：账单脚本读的是平台导出的 CSV，一个字节的 soulbridge
+数据都不用；更糟的是我给它编了 `briefs/0026` 的号，等于把"看账单"登记成了产品需求。
+
+已处置：
+
+| 东西 | 从 | 到 |
+|---|---|---|
+| `scripts/billing.mjs` | soulbridge | `dsh-plugin-soulbridge/scripts/`（与 `trace-stats.mjs` 同类） |
+| 说明文档 | `docs/briefs/0026-cost-visibility.md` | `dsh-plugin-soulbridge/docs/cost-visibility.md` |
+| 本仓库 | 只留数字（`state.md` 的成本行）+ 一张"已移出"登记 | — |
+
+`turn-cost` 留在插件里，理由：它是插件唯一能看到的数字，0024 §3 的调用预算要用它，且它只记
+请求与 token、不算钱。**编号 0026 不回收**，留给以后真正的产品需求。
+
+## 七、待办（进 backlog，不混进本次）
 
 1. `plugin.log` 的逐事件调试行退场（见第三节）。
 2. `quality.mjs` 读 `turn-cost`，把"每轮请求数分布"变成第五个指标，并重新校准事实密度通过线。
 3. 结论支持率 65.9% 的原因（是验证 prompt 太严，还是线索级抽取让证据对不上）。
 4. 子代理请求滚到父轮（需要 DSH 暴露会话谱系，事件流里没有）。
 
-## 七、这次改动的证据
+## 八、这次改动的证据
 
 ```
 插件 21 个测试文件全过（新增 turn-cost 6 条）；core 49 个测试文件全过
 npm test（插件 94 / core 302）全过
-node scripts/billing.mjs --days 4  → 11/01–11/04 ¥100.22，单价重算差 0.00%
+node scripts/billing.mjs --days 4  → 11/01–11/04 ¥100.22，单价重算差 0.00%（19:43 起在插件仓库跑）
 node scripts/review-probes.mjs     → 8 段全绿
 node scripts/health-check.mjs      → 0 FAIL / 17 WARN / 26 PASS
 部署后首轮实测（19:36）：turn 2 → requests=5（steps=4 plugin=1）input=4272 cacheHit=848128 output=7754 secs=24

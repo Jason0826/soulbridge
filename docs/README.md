@@ -85,6 +85,12 @@
 | [briefs/0007 检索排序](briefs/0007-retrieval-scoring.md) | 0019 + 0020 |
 | [briefs/0009 schema 重设计](briefs/0009-schema-redesign.md) | ADR 0032 |
 
+**曾经误放、已移出的**（不是设计被推翻，是归属错了）：
+
+| 文件 | 去哪了 | 为什么 |
+|---|---|---|
+| `briefs/0026 成本可见`（已删） | 插件仓库 `dsh-plugin-soulbridge`：`scripts/billing.mjs` + `docs/cost-visibility.md` | 成本与用量是**宿主的运维数据**，不是记忆层的需求。`packages/core` 里没有一行价格逻辑，这个仓库只留数字、不实现计量。编号 0026 不回收，留给以后真正的产品需求 |
+
 **维护规则**：一个设计被推翻时，不是删掉旧文件，而是①顶部加废弃横幅 ②状态行写接替者 ③在这张表里登记。删掉历史等于丢掉"为什么当初错了"。
 
 ## 维护规则
