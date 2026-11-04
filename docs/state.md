@@ -37,7 +37,7 @@
                账单与判读：dsh-plugin-soulbridge\scripts\billing.mjs · docs\cost-visibility.md
 环境           固定端口 3080；重启 scripts/restart-web.ps1（不自动开 tab）
                运行中的 profile = ~/.dsh/profiles/web（→ C:\DSH\home\profiles\web）
-               发版 = 推 tag → GitHub Actions → npm（当前 0.0.113）
+               发版 = 推 tag → GitHub Actions → npm（当前 core 0.0.113 / plugin 0.0.114）
 成本导出       D:\Download\usage_data_*.zip（平台导出，含 amount/cost 两个 CSV）
 ```
 
