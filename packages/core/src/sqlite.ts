@@ -1188,17 +1188,18 @@ export function openSqlite(file: string): SoulStore {
     },
 
     supersedeFact(oldId: string, newId: string): void {
-      // The old claim stopped holding when the new one was recorded. `valid_until` is the
-      // time axis; `status` is the lifecycle — both are written, and they answer different
-      // questions ("was it ever true?" vs "is it still the current state?").
-      const recordedAt = Number(
-        (db.prepare('SELECT created_at FROM facts WHERE id = ?').get(newId) as Row | undefined)?.created_at ??
-          Date.now(),
-      );
+      // A new claim ends the old one when the new claim became true — not when we happened to
+      // record it. "小林在 A 公司" ends at the layoff (10-24), not at the moment the layoff was
+      // mentioned. Falls back to the record time only when the successor has no validity start
+      // (an undated claim still replaces the old one now).
+      const successor = db
+        .prepare('SELECT created_at, valid_from FROM facts WHERE id = ?')
+        .get(newId) as Row | undefined;
+      const endedAt = Number(successor?.valid_from ?? successor?.created_at ?? Date.now());
       withRetry(() =>
         db
           .prepare(`UPDATE facts SET status = '${FACT_STATUS.retracted}', superseded_by = ?, valid_until = ? WHERE id = ?`)
-          .run(newId, recordedAt, oldId),
+          .run(newId, endedAt, oldId),
       );
     },
     /* ---------------- gaps ---------------- */

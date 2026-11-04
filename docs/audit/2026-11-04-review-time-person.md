@@ -24,24 +24,29 @@
 
 ## 二、改动
 
-### 语义修正（2026-11-04，用户指出）
+### 语义修正（2026-11-04，用户两次指出）
 
-第一版把“事件”写成 `valid_until` 永远为空——**错了**。按有效性读：
+**第一次修正**：事件不是永久的——`valid_until = atEnd ?? at`，事件结束就不再是“当前”。
+
+**第二次修正**：两条事实若是同一主题（都是小林），它们不是各自独立的区间：
+“10-24 被裁员”**结束**了“在 A 公司”。状态的有效期终点 = 事件发生的时间，不是
+“我记录这条的时间”。
 
 ```
-"10-24 被裁员"   valid_from=10-24   valid_until=10-24（事件结束，不再是"当前"）
-"小林在 A 公司"  valid_from=入职    valid_until=离开（空 = 现在还在）
+"小林在 A 公司"   valid_from=入职   valid_until=10-24
+"10-24 被裁员"    valid_from=10-24  valid_until=10-24
 ```
 
-好处是“当前状态”变成一个查询：`valid_until IS NULL OR valid_until > now`，历史事件自动
-落选，**不再需要单独判断“事件还是状态”**。
+由此 `supersedeFact` 的关闭时刻改为 **后继事实的 `valid_from`**（没有才回落 `created_at`）。
+语义判断仍归模型：它必须在抽取时输出「操作=取代 <旧 id>」；代码只负责用事件时间关闭，
+不猜哪两条矛盾。
 
 - v14 迁移：已有带日期的事实按 `COALESCE(at_end, at)` 关闭；
-- 写入默认：`validUntil = 显式值 ?? atEnd ?? at ?? 空`。
+- 写入默认：`validUntil = 显式值 ?? atEnd ?? at ?? 空`；
 
 - schema v13：`facts` 加两列，回填 `valid_from = COALESCE(at, created_at)`；已撤回的行回填
-  `valid_until = 后继的 created_at`；
-- `supersedeFact`：写 `valid_until`（取代发生的时间），状态仍是 `retracted`；
+  `valid_until = 后继的 created_at`（当时没记事件时间，是近似；v14 对带日期的行改用 `at`）；
+- `supersedeFact`：关闭时刻 = 后继的 `valid_from`（事件时间），状态仍是 `retracted`；
 - `Soul.personCard(name)`：按名字/别名找到人，返回最近事实 + 挂着这个人的未闭合问题；
 - CLI `soulbridge person <name>`；
 - 插件 `<about>` 块：在事实行后追加最多 2 条 `- 未闭合：…`。

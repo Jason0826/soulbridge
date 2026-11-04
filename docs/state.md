@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-04 15:00**（core 0.0.109 / plugin 0.0.111）
+最后核对：**2026-11-04 15:10**（core 0.0.110 / plugin 0.0.111）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -12,6 +12,8 @@
 > 名词/变量声明：[declarations.json](declarations.json)，定义文件在 `packages/core/src/config/`（`health-check` 第 8、9 节）。
 > 全系统审计：[audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md)。
 > 代码审查（今晚，含已修复 4 条）：[audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md)。
+
+**15:10 状态由事件关闭**：同一主题下，“10-24 被裁员”结束“在 A 公司”——`supersedeFact` 的关闭时刻改为后继事实的 `valid_from`（事件时间），而不是记录时间。语义判断（哪两条矛盾）仍由模型给「操作=取代」；代码只按事件时间关闭。测试 core 298。
 
 **15:00 valid_until 语义修正（v14）**：事件的有效期到事件结束——`valid_until = at_end ?? at`；无日期的状态保持开放，被取代时才关闭。于是“当前”= `valid_until IS NULL OR valid_until > now`，历史事件自动落选，不需要额外判断事件/状态。测试 core 298。
 

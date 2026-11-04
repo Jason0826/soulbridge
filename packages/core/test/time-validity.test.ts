@@ -28,18 +28,28 @@ test('validity: an event is valid until it is over; an undated claim stays open'
   store.close();
 });
 
-test('validity: supersede ends the old claim at the moment the new one was recorded', () => {
+test('validity: a dated event ends the state it contradicts at the event time', () => {
   const store = openSqlite(':memory:');
-  // A standing state, not an event: no date, so it is open until something replaces it.
-  const oldFact = store.putFact({ ...base, statement: '小林在 A 公司', source: 'told', confidence: 0.8 });
-  const newFact = store.putFact({ ...base, statement: '小林去了 B 公司', source: 'told', confidence: 0.8 });
-  store.supersedeFact(oldFact.id, newFact.id);
+  const layoff = Date.parse('2026-10-24T00:00:00+08:00');
+  // The state has no date of its own: it holds until the layoff ends it.
+  const atWork = store.putFact({ ...base, statement: '小林在 A 公司', source: 'told', confidence: 0.8 });
+  const event = store.putFact({
+    ...base,
+    statement: '小林在 10-24 被裁员',
+    at: layoff,
+    atText: '10-24',
+    source: 'told',
+    confidence: 0.8,
+  });
+  store.supersedeFact(atWork.id, event.id);
 
-  const retired = store.fact(oldFact.id);
+  const retired = store.fact(atWork.id);
   assert.equal(retired?.status, 'retracted');
-  assert.equal(retired?.validUntil, newFact.createdAt, 'valid_until is the successor record time');
-  assert.equal(retired?.validFrom, oldFact.validFrom, 'valid_from is untouched');
-  assert.equal(store.fact(newFact.id)?.validUntil, undefined);
+  assert.equal(retired?.validUntil, layoff, 'the state ends when the event happened, not when we recorded it');
+  assert.equal(retired?.validFrom, atWork.validFrom, 'valid_from is untouched');
+  const written = store.fact(event.id);
+  assert.equal(written?.validFrom, layoff);
+  assert.equal(written?.validUntil, layoff, 'an instantaneous event is not current after the day it happened');
   store.close();
 });
 
