@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-04 18:40**（core 0.0.112 / plugin 0.0.112）
+最后核对：**2026-11-04 19:15**（core 0.0.112 / plugin 0.0.112）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -12,6 +12,26 @@
 > 名词/变量声明：[declarations.json](declarations.json)，定义文件在 `packages/core/src/config/`（`health-check` 第 8、9 节）。
 > 全系统审计：[audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md)。
 > 代码审查（今晚，含已修复 4 条）：[audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md)。
+
+## 接手须知（新会话先读这一段，约 1K 字符）
+
+```
+现在在做什么   0025 主题级抽取：core + 插件已上线（0.0.112 / 0.0.112）
+已验证         18:46 重启，apply v0.0.112；事实按「轮次=N」落 source_turn_id
+下一步         1) 每轮成本日志（插件：一轮超过 30 次请求就打一行）
+               2) 每日账单脚本（读平台导出 CSV：金额/请求/三类 token）
+不要做         抽取输入上限 —— 用户明确否决（751 次里只有 1 次超 6 万字符）
+不能忘         抽取单位 = 线索；自包含闸门只对 holder 生效；事实必须写轮次
+最近成本       11/1–11/4 = ¥99.86；78% 是输入（缓存命中 56% / 未命中 22%）
+               6,028 次请求，平均 18 次/轮，最重单轮 108 次
+关键文件       docs/briefs/0025-thread-extraction.md
+               packages/core/src/{extract,prompts,time,sqlite,index}.ts
+               D:\git-workspace\repos\dsh-plugin-soulbridge\index.js
+环境           固定端口 3080；重启 scripts/restart-web.ps1（不自动开 tab）
+               发版 = 推 tag → GitHub Actions → npm（当前 0.0.112）
+成本导出       D:\Download\usage_data_*.zip（平台导出，含 amount/cost 两个 CSV）
+```
+
 
 **18:40 整条线索抽取接通（core + 插件）**：`Soul.extract` 接受 `turns`（整条线索一次调用），新增 `threadTurns()` / `turnThreadId()`；插件 drain 现在把「某轮的触发」解析成「它所属的线索」，一次抽取整条线索、事实按轮号落 `source_turn_id`，成功后清掉同线索的排队轮次。日志新增 `unit=Nturns threadId=…`。测试 core 302 / 插件 87。
 
