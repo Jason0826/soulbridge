@@ -849,4 +849,15 @@ for (const r of results.sort((a, b) => order[a.level] - order[b.level])) {
 const fails = results.filter((r) => r.level === 'FAIL').length;
 const warns = results.filter((r) => r.level === 'WARN').length;
 console.log(`\n合计：${fails} FAIL / ${warns} WARN / ${results.length - fails - warns} PASS`);
+
+// Machine-readable gate for the deploy script.
+//
+// Matching the output text was wrong twice over: the glyph '✗' is not ASCII, and PowerShell
+// 5.1 decodes child output with the system code page, so a regex over the text matched a PASS
+// line and refused a clean deploy. A caller that needs a yes/no gets an exit code instead.
+if (process.argv.includes('--gate=review')) {
+  const reviewRed = results.some((r) => r.level === 'FAIL' && r.area === 'review');
+  console.error(reviewRed ? 'REVIEW-GATE: fail' : 'REVIEW-GATE: ok');
+  process.exit(reviewRed ? 1 : 0);
+}
 process.exit(fails > 0 ? 1 : 0);
