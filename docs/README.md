@@ -50,7 +50,7 @@
 
 仓库级 `AGENTS.md` / `CLAUDE.md` 不属于这份地图：仓库约定归仓库，个人经验归 soulbridge（见 [ADR 0019](adr/0019-steering-files.md)）。这里不生成、不接管它们。
 
-## 当前权威（2026-11-02）
+## 当前权威（2026-11-04）
 
 改动前先读这几份，**它们冲突时以 ADR 为准**：
 
@@ -66,7 +66,8 @@
 | 存什么、怎么衰减 | [briefs/0019](briefs/0019-memory-selection.md) |
 | **画像的维度与准入** | [briefs/0021](briefs/0021-profile-dimensions.md) |
 | 怎么从有限窗口里取 | [briefs/0020](briefs/0020-retrieval-funnel.md) |
-| 抽取与归纳 | [briefs/0016](briefs/0016-extraction-consolidation.md) |
+| **抽取单位：一条线索一次，事实自包含** | [briefs/0025](briefs/0025-thread-extraction.md) |
+| 归纳（按关闭线索，两阶段） | [briefs/0016](briefs/0016-extraction-consolidation.md) |
 | 线索（跨中断的话题） | [briefs/0017](briefs/0017-topic-threads.md) |
 
 ## 已废弃（不要照做）

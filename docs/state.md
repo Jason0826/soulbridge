@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-04 15:10**（core 0.0.110 / plugin 0.0.111）
+最后核对：**2026-11-04 15:30**（core 0.0.110 / plugin 0.0.111）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -12,6 +12,8 @@
 > 名词/变量声明：[declarations.json](declarations.json)，定义文件在 `packages/core/src/config/`（`health-check` 第 8、9 节）。
 > 全系统审计：[audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md)。
 > 代码审查（今晚，含已修复 4 条）：[audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md)。
+
+**15:30 主题级抽取定案（0025）**：抽取单位改为整条线索（事实必须自包含，主体用名字、时间用绝对日期）；与 [ADR 0035](adr/0035-stage-input-contract.md) 和 [0016](briefs/0016-extraction-consolidation.md) 的“按轮”表述已在原文加修订说明；退场账本登记 `extract-per-turn`（pending，代码尚未切换）。**这一项只有设计，没有实现。**
 
 **15:10 状态由事件关闭**：同一主题下，“10-24 被裁员”结束“在 A 公司”——`supersedeFact` 的关闭时刻改为后继事实的 `valid_from`（事件时间），而不是记录时间。语义判断（哪两条矛盾）仍由模型给「操作=取代」；代码只按事件时间关闭。测试 core 298。
 

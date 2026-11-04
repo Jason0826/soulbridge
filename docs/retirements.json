@@ -87,6 +87,18 @@
         "pattern": "input.facts",
         "expect": "absent"
       }
+    },
+    {
+      "id": "extract-per-turn",
+      "old": "抽取按轮次入队（pending-extract.json 每项一个 turnId，输入上一轮问答）",
+      "replacedBy": "按线索抽取（每项一个 threadId，输入整条线索的轮次）",
+      "status": "pending",
+      "why": "一个主题的对话要合起来看；单轮抽出的句子缺主语（实测 33 条带实体槽却不含实体名）。设计见 [0025](briefs/0025-thread-extraction.md)，代码尚未切换。",
+      "check": {
+        "kind": "symbol",
+        "path": "PLUGIN",
+        "pattern": "enqueueExtraction("
+      }
     }
   ]
 }

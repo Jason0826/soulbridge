@@ -1,9 +1,13 @@
 # 需求说明：提取与归纳（两阶段）
 
-- 状态：Draft
+- 状态：Draft（**修订 2026-11-04**：抽取单位由“每轮”改为“整条线索”，见 [0025](0025-thread-extraction.md)；归纳部分仍然有效）
 - 日期：2026-11-01
 - 关联：[model.v0](../spec/model.v0.md)、[ADR 0027](../adr/0027-code-vs-model-boundary.md)、[ADR 0029](../adr/0029-extraction-is-the-models-job.md)、[ADR 0030](../adr/0030-core-adapter-boundary.md)
 - 补充：[0009 §4.6](../briefs/0009-schema-redesign.md)（缺口/疤痕的语义来源）
+
+> **修订说明（2026-11-04）**：本文表格里的「提取（每轮）」已被 [0025 主题级抽取](0025-thread-extraction.md)
+> 取代——抽取的输入是**一条线索的全部轮次**，不是上一轮的问答；事实必须自包含。
+> 归纳（定期、按线索）部分不受影响，仍以本文为准。
 
 ---
 
