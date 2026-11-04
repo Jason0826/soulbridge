@@ -2,7 +2,7 @@
  * Time normalisation: turn what someone said ("上周三", "下午") into a date the store can use.
  *
  * This is calendar arithmetic, not interpretation — the semantic part (did it happen? was the
- * expression vague?) stays with the model and with `at_precision`. Rules that shape this file:
+ * expression vague?) stays with the model and with `valid_from_precision`. Rules that shape this file:
  *
  *   - the result is always a *day start* in local time; "下午" does not become 14:00;
  *   - ranges keep both ends (`at` / `atEnd`) and say `range`;
@@ -13,10 +13,12 @@
  * week, not seven days from today.
  */
 
+import type { AtPrecision } from './config/status.ts';
+
 export interface ResolvedTime {
   at?: number;
   atEnd?: number;
-  precision: 'day' | 'range' | 'relative' | 'unknown';
+  precision: AtPrecision;
   /** What part of the phrase was understood, for the trace. */
   matched?: string;
 }
@@ -126,4 +128,33 @@ export function resolveRelativeTime(input: string, now = Date.now()): ResolvedTi
   }
 
   return UNKNOWN;
+}
+
+/** The cue vocabulary of a question: what makes "上周发生了什么" a time question. */
+export const TIME_CUE = /上周|上星期|昨天|前天|今天|那天|当时|上个月|月初|去年|\d{1,2}月\d{1,2}[日号]/;
+
+/** A half-open span `[from, to)` a question asked about. */
+export interface TimeWindow {
+  from: number;
+  to: number;
+  /** The cue as written, for the trace and the block header. */
+  cue: string;
+}
+
+/**
+ * Resolve the first time cue in a question into a window (brief 0027 §八, reader 1).
+ *
+ * One expression per question: "昨天和上周" asks two things, and one window is this
+ * primitive's unit. The cue is used as written — "上周三" resolves as the whole week
+ * rather than risking a wrong day, because a wider window over-fetches while a
+ * narrower one misses the answer. Cues no calendar can place ("那天", "月初") return
+ * undefined: the caller keeps its fallback and the log says why.
+ */
+export function findWindow(text: string, now = Date.now()): TimeWindow | undefined {
+  const match = TIME_CUE.exec(String(text ?? ''));
+  if (!match) return undefined;
+  const cue = match[0];
+  const resolved = resolveRelativeTime(cue, now);
+  if (resolved.at === undefined) return undefined;
+  return { from: resolved.at, to: resolved.atEnd ?? resolved.at + DAY, cue };
 }

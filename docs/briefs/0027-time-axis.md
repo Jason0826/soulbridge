@@ -130,3 +130,27 @@ sqlite: SELECT COUNT(*) FROM facts WHERE valid_from IS NULL
 问"那次吃饭是哪天" → relative 的那条回答"只知道是上次"，不编日期
 `soulbridge why`  → 打印 text + precision + 换算后的日期三样
 ```
+
+## 九、实施进度：读取方 1（时间检索），2026-11-04
+
+已实现（core 0.0.114；插件注入在 `dsh-plugin-soulbridge` 0.0.115 同批落地）：
+
+```
+路由      planRetrieval 的 time 分支带 window（cue → [from, to)）；解析不了（那天/月初）
+          不带窗口，reason=`time cue, no window` —— 「没有记录」与「不知道哪一天」可区分
+解析      time.ts findWindow：TIME_CUE 从 retrieval.ts 移到 time.ts（唯一声明），
+          resolveRelativeTime 拿到第一个读者；ResolvedTime.precision 改用 AtPrecision
+查询      Soul.factsInWindow({from,to})：valid_from ∈ [from,to) ∧ precision ∈ {day,range}
+          ∧ status=active；WINDOW_PRECISIONS 在 config/status.ts 一处声明
+语义      facts() 的 until 改成半开 [since,until)：窗口的结束就是下一个窗口的开始
+验收      7 条测试（core/test/time-window.test.ts）：findWindow（周/日/解析不了）、
+          plan 带窗口、unknown/relative/retracted 不进窗、右端归属下一个窗口、空窗口是空答案
+变异      去掉精度过滤 → 「only day/range facts enter」变红（已跑）
+```
+
+两个已定的判断，写下来免得下次重猜：
+
+1. **`relative` / `unknown` 不进窗口查询，但也没有被删掉**——实体时间轴、相关式、钩子照常取到它们。这就是「不能被过滤掉」的落点：过滤掉的只是「范围查询」这个入口，不是记忆本身。
+2. **「10月24日」暂不解析**：没有年份的日期要猜年份（今年？去年？），猜年份就是这条 brief 反对的假精确。这类问句照旧路由到 time、不带窗口、退回相关式，日志可查（`time cue, no window`）。要接它，得先定「年份从哪来」，那是一次独立改动。
+
+仍未接线（0027 §八 另外三个读者）：`<time-window>` 之外的注入措辞、排序与比较、追溯（`soulbridge why` 打印 precision）。

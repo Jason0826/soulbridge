@@ -1204,8 +1204,15 @@ export function openSqlite(file: string): SoulStore {
         args.push(query.since);
       }
       if (query.until !== undefined) {
-        where.push('f.valid_from <= ?');
+        // Half-open: a window's end is the next window's start (0027 §八).
+        where.push('f.valid_from < ?');
         args.push(query.until);
+      }
+      if (query.precisions) {
+        // An explicit empty set matches nothing: silence must not widen the filter.
+        if (query.precisions.length === 0) return [];
+        where.push(`f.valid_from_precision IN (${query.precisions.map(() => '?').join(', ')})`);
+        args.push(...query.precisions);
       }
       if (query.status) {
         where.push('f.status = ?');

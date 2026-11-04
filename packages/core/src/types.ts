@@ -481,8 +481,15 @@ export interface FactQuery {
   userId: string;
   /** Only facts that have a slot pointing at this entity. */
   entityId?: string;
+  /** Lower bound on `valid_from`, inclusive. */
   since?: number;
+  /** Upper bound on `valid_from`, exclusive: a window's end is the next window's start. */
   until?: number;
+  /**
+   * Only these `valid_from_precision` values. A time-window query passes the
+   * declared WINDOW_PRECISIONS; `relative` / `unknown` must never enter a range.
+   */
+  precisions?: readonly AtPrecision[];
   status?: FactStatus;
   /** Only facts whose holder is this (world / self / entity id). */
   holder?: string;

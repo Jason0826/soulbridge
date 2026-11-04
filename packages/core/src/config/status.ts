@@ -43,6 +43,16 @@ export const AT_PRECISION = {
 export type AtPrecision = (typeof AT_PRECISION)[keyof typeof AT_PRECISION];
 
 /**
+ * Precisions that may place a fact inside a time window (brief 0027 §八).
+ *
+ * Only a date the model actually located can answer "what happened last week". For
+ * `relative` and `unknown`, `valid_from` is often the day the fact was *recorded* —
+ * filtering a window on it would repeat v14's mistake one layer up. They stay
+ * retrievable by every other primitive; they just never enter a range query.
+ */
+export const WINDOW_PRECISIONS = [AT_PRECISION.day, AT_PRECISION.range] as const;
+
+/**
  * The legacy `memories` layer's lifecycle.
  *
  * It shares the word "superseded" with facts on purpose: one lifecycle concept, one

@@ -11,25 +11,22 @@
  * to "answer about somebody else", which is the one failure worse than silence.
  */
 
+import { TIME_CUE, findWindow } from './time.ts';
+import type { TimeWindow } from './time.ts';
+
 export type RetrievalPrimitive = 'entity' | 'continuity' | 'time' | 'related';
 
 export interface RetrievalPlan {
   primitive: RetrievalPrimitive;
   /** The entity the question is about, when one is named. */
   subject?: string;
+  /** The span a time question asked about, when its cue can be placed on a calendar. */
+  window?: TimeWindow;
   reason: string;
 }
 
 const CONTINUITY = /上次|刚才|上回|接着|继续|说到哪|聊到哪/;
-const TIME_CUE = /上周|上星期|昨天|前天|今天|那天|当时|上个月|月初|去年|\d{1,2}月\d{1,2}[日号]/;
 
-/**
- * Pick a primitive from the question and the entities we know.
- *
- * Longest name first: 小林 must win over 小, and 核桃暗号 over 核桃. A name that is
- * merely a substring of another word is a false positive the caller cannot
- * recover from, so this stays deliberately literal.
- */
 /** "和/跟/与/同 X" — how a companion question names the other person. */
 const WITH_SUBJECT = /(?:和|跟|与|同)\s*([A-Za-z0-9][A-Za-z0-9_]*|[\u4e00-\u9fa5]{1,4})/;
 /** The name ends where the predicate begins. */
@@ -98,7 +95,7 @@ export function subjectCandidate(text: string): string | undefined {
  * merely a substring of another word is a false positive the caller cannot
  * recover from, so this stays deliberately literal.
  */
-export function planRetrieval(text: string, entityNames: string[]): RetrievalPlan {
+export function planRetrieval(text: string, entityNames: string[], now = Date.now()): RetrievalPlan {
   const question = String(text ?? '');
   const names = [...new Set(entityNames.filter(Boolean))].sort((a, b) => [...b].length - [...a].length);
   const subject = names.find((name) => mentions(question, name));
@@ -110,6 +107,14 @@ export function planRetrieval(text: string, entityNames: string[]): RetrievalPla
   if (unnamed) return { primitive: 'entity', subject: unnamed, reason: `unknown subject "${unnamed}"` };
 
   if (CONTINUITY.test(question)) return { primitive: 'continuity', reason: 'continuity cue, no subject' };
-  if (TIME_CUE.test(question)) return { primitive: 'time', reason: 'time cue, no subject' };
+  if (TIME_CUE.test(question)) {
+    // A time question and a window are not the same thing: "那天" is a cue no calendar
+    // can place, and the caller must be able to tell "nothing happened then" from
+    // "I could not work out when". So the cue routes, the window is optional.
+    const window = findWindow(question, now);
+    return window
+      ? { primitive: 'time', window, reason: `time window "${window.cue}"` }
+      : { primitive: 'time', reason: 'time cue, no window' };
+  }
   return { primitive: 'related', reason: 'no subject, no cue' };
 }

@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-04 21:38**（core 0.0.113 / plugin 0.0.114）
+最后核对：**2026-11-04 23:50**（core 0.0.114 / plugin 0.0.115）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -16,33 +16,36 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   0027 时间轴：valid_from / valid_to 由模型判定（core 0.0.113 / plugin 0.0.114，schema v15 已迁移）
-已验证         插件 94 / core 301 测试；installed web profile core 0.0.113 / plugin 0.0.114，verify-installed 全过
-               v15 迁移实测：874 条事实，active 带 valid_to 的 0 条（原先 247 条"当天失效"的猜测已清）
-               valid_from 全部有值；precision day 246 / range 6 / relative 13 / unknown 609；retracted 57 条按时关闭
-               21:35 quality.mjs 新增时间轴观测：valid_from 空值率 0/891；0027 后 17 条新事实全 day、空 0；
+现在在做什么   0027 读取方 1：时间检索接 precision（core 0.0.114 / plugin 0.0.115）
+已验证         插件 + core 测试全过；installed web profile 0.0.114 / 0.0.115（部署后 verify-installed 补）
+               时间检索：findWindow 把「上周/昨天」解析成窗口；factsInWindow 只让 day/range 进窗，
+               unknown/relative/retracted 0 条（7 条测试 + 变异检查：去掉过滤就变红）
+               v15 迁移实测：891 条事实，valid_from 空值 0；precision day 246 / range 6 / relative 13 / unknown 609
                取代引用 成功 50 / 失败 1（supersede-target-retracted）→ 失败率 2% PASS
                19:36 首个 turn-cost 落库：turn 2 → requests=5（steps=4 plugin=1）
-下一步         1) 时间检索接 precision（0027 §八 四个读者里的第一个真读者）
-               2) 把 turn-cost 读进 quality.mjs（每轮请求数分布，现在只有 trace 原始行）
-               3) 子代理的请求要不要滚到父轮 —— 需要 DSH 暴露会话谱系，事件流里没有
+下一步         1) 把 turn-cost 读进 quality.mjs（每轮请求数分布 + 每请求上下文）
+               2) 子代理的请求要不要滚到父轮 —— 需要 DSH 暴露会话谱系，事件流里没有
+               3) 0027 §八 剩余三个读者：注入措辞 / 排序比较 / soulbridge why 打印 precision
 不要做         抽取输入上限 —— 用户明确否决（751 次里只有 1 次超 6 万字符）
 不能忘         抽取单位 = 线索；自包含闸门只对 holder 生效；事实必须写轮次
                **时间：created_at 代码写 / valid_from·valid_to 模型判定**（断言=说出口那天成立；
                valid_to 绝不从 valid_from 推导）。字段名不要用 at/at_end/valid_until
+               **时间窗口只信 day/range**：unknown 的 valid_from 常是「记下那天」，进范围查询就是 v14 同类错误
                成本不是记忆层的事：core 里没有一行价格逻辑，账单脚本在插件仓库
 最近成本       11/01–11/04 = ¥100.22；6,028 次请求，¥0.0166/请求（数字来源见下）
                金额构成：输入命中 56.3% / 输入未命中 23.3% / 输出 20.1%
                最重单轮 108 次请求（trace turn 406）；平均 18 次/轮
-关键文件       docs/briefs/0025-thread-extraction.md · docs/briefs/0027-time-axis.md
-               packages/core/src/{extract,prompts,time,sqlite,index}.ts
+关键文件       docs/briefs/0025-thread-extraction.md · docs/briefs/0027-time-axis.md（§八 读取方 / §九 实施）
+               packages/core/src/{time,retrieval,extract,prompts,sqlite,index}.ts
                D:\git-workspace\repos\dsh-plugin-soulbridge\index.js
                账单与判读：dsh-plugin-soulbridge\scripts\billing.mjs · docs\cost-visibility.md
 环境           固定端口 3080；重启 scripts/restart-web.ps1（不自动开 tab）
                运行中的 profile = ~/.dsh/profiles/web（→ C:\DSH\home\profiles\web）
-               发版 = 推 tag → GitHub Actions → npm（当前 core 0.0.113 / plugin 0.0.114）
+               发版 = 推 tag → GitHub Actions → npm（当前 core 0.0.114 / plugin 0.0.115）
 成本导出       D:\Download\usage_data_*.zip（平台导出，含 amount/cost 两个 CSV）
 ```
+
+**23:50 时间检索接 precision（core 0.0.114 / 插件 0.0.115）**：`time.ts` 的 `resolveRelativeTime` 第一次有了调用方——`findWindow` 把「上周/昨天」解析成半开区间 `[from,to)`，`planRetrieval` 的 time 分支带上 `window`（解析不了「那天/月初」就不带，`reason` 里写明）。查询走新原语 `Soul.factsInWindow`：`valid_from ∈ [from,to)` **且** `precision ∈ {day,range}` **且** active——`WINDOW_PRECISIONS` 在 `config/status.ts` 一处声明。这是 0027 §八 的第一个真读者：以前"上周发生了什么"走相关式兜底，`since/until` 过滤不看精度，会把 unknown 的「记下那天」当成「事情发生那天」。`facts()` 的 `until` 同时改成半开：窗口的结束就是下一个窗口的开始。实测 7 条新测试 + 变异检查（去掉精度过滤必红）。brief [0027](briefs/0027-time-axis.md) §九。
 
 **19:30 成本可见（0026，宿主侧）**：插件每轮写一条 `turn-cost`（`trace.jsonl`：请求/步骤/失败尝试/插件调用/四类 token/耗时/结束原因），≥30 次请求时另在 `plugin.log` 打一行；账单脚本读平台导出 zip，按天给金额、请求、三类 token 与"钱花在命中/未命中/输出"的构成，并用 `price×amount` 重算对账（实测差 0.00%）。
 **19:43 归属修正**：这两样都不属于记忆层——`packages/core` 里没有一行价格逻辑，账单只是宿主的运维数据。脚本与说明已搬到插件仓库 `dsh-plugin-soulbridge`（`scripts/billing.mjs` + `docs/cost-visibility.md`）；本仓库只留数字，不实现计量。review 见 [audit/2026-11-04-review-cost.md](audit/2026-11-04-review-cost.md)。

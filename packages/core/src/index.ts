@@ -63,6 +63,7 @@ export { fires, parseRuleClassifications, parseTrigger, selectRules } from './ru
 export type { Rule, RuleTrigger, RuleClassification } from './rules.ts';
 export { planRetrieval } from './retrieval.ts';
 export type { RetrievalPlan, RetrievalPrimitive } from './retrieval.ts';
+export type { TimeWindow } from './time.ts';
 export * from './affect/index.ts';
 export { escapeBlockText, escapeAttr } from './inject-text.ts';
 export { measureStyle } from './style/measure.ts';
@@ -108,7 +109,7 @@ import type {
 } from './types.ts';
 import { buildPortableBundle } from './portable.ts';
 import type { SoulStore } from './store.ts';
-import { FACT_STATUS, MEMORY_STATUS } from './config/status.ts';
+import { FACT_STATUS, MEMORY_STATUS, WINDOW_PRECISIONS } from './config/status.ts';
 import { HOLDER_WORDS } from './config/domains.ts';
 import { isActive, isRetracted, roleOf } from './roles.ts';
 import type { AffectAnalyzer } from './affect/port.ts';
@@ -1034,7 +1035,7 @@ export class Soul {
    * The subject is resolved against the entities we hold, so "上次和 a 吃饭" can
    * never be answered with the last closed topic.
    */
-  planRetrieval(text: string): RetrievalPlan {
+  planRetrieval(text: string, now = Date.now()): RetrievalPlan {
     // Only people and places can be a question's subject. A concept entity like 情绪
     // or a product like dsh matches ordinary technical messages, and routing to it
     // suppresses the related-conversation block — which is how "把 package.json 改
@@ -1043,7 +1044,28 @@ export class Soul {
       .findEntities({ soulId: this.soulId, userId: this.userId, limit: 500 })
       .filter((entity) => entity.type === 'person' || entity.type === 'place' || entity.type === 'self')
       .map((entity) => entity.name);
-    return planRetrieval(text, names);
+    return planRetrieval(text, names, now);
+  }
+
+  /**
+   * What happened in one span of time — the time-window primitive (0027 §八).
+   *
+   * Only facts with a located date enter: filtering `valid_from` alone would answer
+   * "what happened last week" with "what was recorded last week", because an
+   * unknown-precision fact's `valid_from` is often the record day. The window is
+   * half-open `[from, to)`, and it is read in event order — a window is a story.
+   */
+  factsInWindow(window: { from: number; to: number }, options: { limit?: number } = {}): Fact[] {
+    return this.store.facts({
+      soulId: this.soulId,
+      userId: this.userId,
+      since: window.from,
+      until: window.to,
+      precisions: WINDOW_PRECISIONS,
+      status: FACT_STATUS.active,
+      order: 'asc',
+      limit: options.limit ?? 200,
+    });
   }
 
   /** The entity timeline: what is known about one person/thing, newest first. */

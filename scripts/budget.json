@@ -136,14 +136,19 @@
       "date": "2026-11-04",
       "delta": 2,
       "reason": "0027 改名跟进：插件三处显示路径与 soul_detail 工具改读 validFrom/validFromText/validTo（插件 +2 行，-6/+8）。旧字段已不存在，不改就是静默显示空日期。"
+    },
+    {
+      "date": "2026-11-04",
+      "delta": 80,
+      "reason": "0027 读取方 1：时间检索接 precision（core 0.0.114）——TIME_CUE 从 retrieval.ts 移到 time.ts 并接上 findWindow（第一个读者），facts() 增加精度过滤与半开区间，Soul.factsInWindow 成为新原语（+80 行，含注释）。功能新增，按 0026 先例记一次；同期删掉 retrieval.ts 与 sqlite.ts 两处死注释。"
     }
   ],
-  "coreLines": 8716,
+  "coreLines": 8798,
   "pluginLines": 2640,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 1585,
+    "index.ts": 1607,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 194,
@@ -151,7 +156,7 @@
     "dimensions.ts": 38,
     "domains.ts": 78,
     "labels.ts": 43,
-    "status.ts": 59,
+    "status.ts": 69,
     "consolidate.ts": 373,
     "context.ts": 164,
     "dimension-text.ts": 31,
@@ -162,17 +167,17 @@
     "prompts.generated.ts": 15,
     "prompts.ts": 421,
     "reflect.ts": 417,
-    "retrieval.ts": 116,
+    "retrieval.ts": 121,
     "roles.ts": 28,
     "scoring.ts": 170,
-    "sqlite.ts": 1937,
+    "sqlite.ts": 1944,
     "config.ts": 96,
     "merge.ts": 41,
     "steering.ts": 103,
     "transcript.ts": 96,
     "store.ts": 181,
     "measure.ts": 45,
-    "time.ts": 130,
-    "types.ts": 785
+    "time.ts": 161,
+    "types.ts": 792
   }
 }
