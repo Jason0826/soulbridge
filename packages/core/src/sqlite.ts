@@ -1394,6 +1394,11 @@ export function openSqlite(file: string): SoulStore {
         .all(threadId) as Row[];
       return rows.map(rowToTurnPair);
     },
+    turnThreadId(turnId: string): string | null {
+      const row = db.prepare('SELECT thread_id FROM turns WHERE id = ?').get(turnId) as Row | undefined;
+      const threadId = row?.thread_id;
+      return threadId ? String(threadId) : null;
+    },
     /**
      * The thread worth handing over: a finished topic that produced a conclusion.
      *

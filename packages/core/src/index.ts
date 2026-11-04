@@ -121,7 +121,7 @@ import { buildContext } from './context.ts';
 import { reflect, ruleExtract, nextEmotion } from './reflect.ts';
 import { rank, tokenize } from './scoring.ts';
 import { analyzeAffect, emptyAffect, lexiconAnalyzer } from './affect/analyze.ts';
-import { extractByRules, extractWithModel } from './extract.ts';
+import { extractByRules, extractThreadWithModel, extractWithModel } from './extract.ts';
 import type { ExtractionContext } from './extract.ts';
 export { gateDrafts } from './reflect.ts';
 
@@ -429,10 +429,18 @@ export class Soul {
        * without this half, "my promises" is a rule the model can never use.
        */
       assistantText?: string;
+      /**
+       * The whole topic (0025). When given, the prompt carries every turn and the model
+       * sees the conversation as one unit; `text`/`assistantText` are then ignored.
+       */
+      turns?: Array<{ turnNo: number; userText: string; assistantText?: string; at?: number }>;
     } = {},
   ): Promise<ExtractDraft> {
     const at = options.at ?? Date.now();
-    const byRules = extractByRules(text, at);
+    // Rules work on one message; for a thread that is the last turn (the rules floor
+    // exists for "no model", not for reconstructing a topic).
+    const fallbackText = options.turns?.length ? options.turns[options.turns.length - 1].userText : text;
+    const byRules = extractByRules(fallbackText, at);
     // No length gate here: "做" and "重来" are one and two characters and are
     // real decisions. The host decides what is worth a model call; core only
     // reports which path it took.
@@ -450,8 +458,26 @@ export class Soul {
           return raw;
         }
       : options.llm;
-    const result = await extractWithModel(text, wrapped, at, context, options.assistantText);
+    const result = options.turns?.length
+      ? await extractThreadWithModel(options.turns, wrapped, at, context)
+      : await extractWithModel(text, wrapped, at, context, options.assistantText);
     return result.draft ?? { ...byRules, reason: `model-${result.error ? 'failed' : 'empty'}` };
+  }
+
+  /** The turns of one thread, in order, as the extraction input (0025). */
+  threadTurns(threadId: string): Array<{ turnNo: number; userText: string; assistantText?: string; at?: number; id: string }> {
+    return this.store.threadTurns(threadId).map((turn, index) => ({
+      id: turn.id,
+      turnNo: index + 1,
+      userText: turn.userText,
+      assistantText: turn.assistantText,
+      at: turn.at,
+    }));
+  }
+
+  /** Which thread a turn belongs to, if any — the bridge from a turn trigger to a topic. */
+  turnThreadId(turnId: string): string | null {
+    return this.store.turnThreadId(turnId);
   }
 
   /** The slice of the store the extractor is allowed to know about. */

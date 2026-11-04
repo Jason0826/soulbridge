@@ -109,6 +109,8 @@ export interface SoulStore {
   lastClosedThread(soulId: string, userId: string): TurnThread | null;
   /** Every turn of a thread, in order — the chapter, not one page. */
   threadTurns(threadId: string): TurnPair[];
+  /** Which thread a turn belongs to, if any (0025: turn trigger → topic unit). */
+  turnThreadId(turnId: string): string | null;
   /**
    * Facts whose source turn belongs to the given turns. Live facts only; candidates are
    * included when asked, because promotion needs to see lessons not yet classified.

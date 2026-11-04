@@ -61,3 +61,31 @@ test('self-containment: a person-layer fact that never names the person is refus
   assert.deepEqual(result.skipped.map((entry) => entry.reason), ['not-self-contained:小林']);
   store.close();
 });
+
+test('extract: a thread is one model call and the fact names its turn', async () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, ...base });
+  soul.rememberEntity('小林', 'person');
+  let seenPrompt = '';
+  const llm = async (prompt: string) => {
+    seenPrompt = prompt;
+    return [
+      '事实: 小林 2024-10-24 被裁员 | 裁员 | 2024-10-24 | 10-24 | told | 0.8 | 持有=world | 精度=day | 轮次=2',
+    ].join('\n');
+  };
+  const turns = [
+    { turnNo: 1, userText: '小林 2020 年入职 A 公司', at: NOW - 86_400_000 },
+    { turnNo: 2, userText: '她 10-24 被裁员了', assistantText: '记下了', at: NOW },
+  ];
+  const draft = await soul.extract('她 10-24 被裁员了', { llm, turns, mode: 'auto', at: NOW });
+  assert.match(seenPrompt, /<turn n="1"[^>]*>\n\s+用户：小林 2020 年入职 A 公司/);
+  assert.match(seenPrompt, /<turn n="2"[^>]*>\n\s+用户：她 10-24 被裁员了/);
+  const result = soul.commitDrafts(draft, {
+    turnId: 'tp_two',
+    turnIds: { 1: 'tp_one', 2: 'tp_two' },
+    at: NOW,
+  });
+  assert.equal(result.facts.length, 1);
+  assert.equal(result.facts[0].sourceTurnId, 'tp_two');
+  store.close();
+});

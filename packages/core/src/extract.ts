@@ -276,10 +276,26 @@ export async function extractWithModel(
   context?: ExtractionContext,
   assistantText?: string,
 ): Promise<ModelParseResult> {
+  // A single exchange is a thread of one: the renderer has one shape, and the caller
+  // that has a whole topic passes all its turns instead (0025).
+  return extractThreadWithModel([{ turnNo: 1, userText: text, assistantText, at }], llm, at, context);
+}
+
+/**
+ * Model extraction over a whole topic (0025).
+ *
+ * The turns are numbered in the prompt; a fact may name which turn it came from, and the
+ * writer maps that number to a real turn id. The parser is shared with the single-turn path
+ * on purpose — a second parser would drift.
+ */
+export async function extractThreadWithModel(
+  turns: Array<{ turnNo: number; userText: string; assistantText?: string; at?: number }>,
+  llm: (prompt: string) => Promise<string> | string,
+  at = Date.now(),
+  context?: ExtractionContext,
+): Promise<ModelParseResult> {
   const prompt = renderExtractionPrompt({
-    // A single exchange is a thread of one: the renderer has one shape, and the caller
-    // that has a whole topic passes all its turns instead (0025).
-    turns: [{ turnNo: 1, userText: text, assistantText, at }],
+    turns,
     now: at,
     entities: context?.entities,
     facts: context?.facts,
