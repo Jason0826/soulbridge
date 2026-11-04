@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-04 19:15**（core 0.0.112 / plugin 0.0.112）
+最后核对：**2026-11-04 19:32**（core 0.0.112 / plugin 0.0.113）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -16,21 +16,29 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   0025 主题级抽取：core + 插件已上线（0.0.112 / 0.0.112）
-已验证         18:46 重启，apply v0.0.112；事实按「轮次=N」落 source_turn_id
-下一步         1) 每轮成本日志（插件：一轮超过 30 次请求就打一行）
-               2) 每日账单脚本（读平台导出 CSV：金额/请求/三类 token）
+现在在做什么   0026 成本可见：插件每轮一条 turn-cost + scripts/billing.mjs（plugin 0.0.113）
+已验证         插件 94 测试 / core 302 测试；installed web profile 为 0.0.113，verify-installed 全过
+               billing 与导出单价重算差 0.00%（11/01–11/04 ¥100.22）
+               待观察：重启后真实轮次的 turn-cost 是否落进 trace.jsonl
+下一步         1) 把 turn-cost 读进 quality.mjs（每轮请求数分布，现在只有 trace 原始行）
+               2) 子代理的请求要不要滚到父轮 —— 需要 DSH 暴露会话谱系，事件流里没有
 不要做         抽取输入上限 —— 用户明确否决（751 次里只有 1 次超 6 万字符）
 不能忘         抽取单位 = 线索；自包含闸门只对 holder 生效；事实必须写轮次
-最近成本       11/1–11/4 = ¥99.86；78% 是输入（缓存命中 56% / 未命中 22%）
-               6,028 次请求，平均 18 次/轮，最重单轮 108 次
-关键文件       docs/briefs/0025-thread-extraction.md
+               钱只在 scripts/billing.mjs 里算（插件只记请求与 token，不猜价目）
+最近成本       11/01–11/04 = ¥100.22；6,028 次请求，¥0.0166/请求
+               金额构成：输入命中 56.3% / 输入未命中 23.3% / 输出 20.1%
+               最重单轮 108 次请求（trace turn 406）；平均 18 次/轮
+关键文件       docs/briefs/0026-cost-visibility.md · scripts/billing.mjs
+               docs/briefs/0025-thread-extraction.md
                packages/core/src/{extract,prompts,time,sqlite,index}.ts
                D:\git-workspace\repos\dsh-plugin-soulbridge\index.js
 环境           固定端口 3080；重启 scripts/restart-web.ps1（不自动开 tab）
-               发版 = 推 tag → GitHub Actions → npm（当前 0.0.112）
+               运行中的 profile = ~/.dsh/profiles/web（→ C:\DSH\home\profiles\web）
+               发版 = 推 tag → GitHub Actions → npm（当前 0.0.113）
 成本导出       D:\Download\usage_data_*.zip（平台导出，含 amount/cost 两个 CSV）
 ```
+
+**19:30 成本可见（0026）**：插件每轮写一条 `turn-cost`（`trace.jsonl`：请求/步骤/失败尝试/插件调用/四类 token/耗时/结束原因），≥30 次请求时另在 `plugin.log` 打一行；`scripts/billing.mjs` 读平台导出 zip，按天给金额、请求、三类 token 与"钱花在命中/未命中/输出"的构成，并用导出里的 `price×amount` 重算一遍对账（实测差 0.00%）。钱只在脚本里算——价目有峰谷两档且会变，插件不抄第二份。brief 见 [0026](briefs/0026-cost-visibility.md)，整体 review 见 [audit/2026-11-04-review-cost.md](audit/2026-11-04-review-cost.md)。
 
 
 **18:40 整条线索抽取接通（core + 插件）**：`Soul.extract` 接受 `turns`（整条线索一次调用），新增 `threadTurns()` / `turnThreadId()`；插件 drain 现在把「某轮的触发」解析成「它所属的线索」，一次抽取整条线索、事实按轮号落 `source_turn_id`，成功后清掉同线索的排队轮次。日志新增 `unit=Nturns threadId=…`。测试 core 302 / 插件 87。
@@ -265,6 +273,7 @@ cd D:\git-workspace\repos\soulbridge
 
 node scripts/health-check.mjs        # 全系统：规模/测试/声明/文档/结构漂移（唯一入口）
 node scripts/quality.mjs --days 7    # 四个比率
+node scripts/billing.mjs             # 每天花了多少：金额/请求/三类 token（读平台导出）
 node scripts/rule-stats.mjs          # 规则总数与触发覆盖
 node scripts/profile-coverage.mjs    # 画像维度覆盖与可追溯
 node scripts/health-check.mjs        # 结构体检（含本文版本表是否与 package.json 一致）

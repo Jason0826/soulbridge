@@ -121,10 +121,15 @@
       "date": "2026-11-03",
       "delta": -20,
       "reason": "提示词外置：5 个模板从 prompts.ts 移到 packages/core/prompts/*.md，生成物替换声明（行数下降）。"
+    },
+    {
+      "date": "2026-11-04",
+      "delta": 174,
+      "reason": "0026 成本可见：插件新增每轮 turn-cost 计数（createTurnCostTracker，含注释与上限淘汰）、collectText 增加 usage 回调、apply/makeLlm 接线（插件 +174 行）。观测设施允许涨一次，旧机制没有退场。"
     }
   ],
   "coreLines": 8662,
-  "pluginLines": 2464,
+  "pluginLines": 2638,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
