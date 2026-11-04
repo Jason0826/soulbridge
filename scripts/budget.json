@@ -123,12 +123,12 @@
       "reason": "提示词外置：5 个模板从 prompts.ts 移到 packages/core/prompts/*.md，生成物替换声明（行数下降）。"
     }
   ],
-  "coreLines": 8561,
+  "coreLines": 8613,
   "pluginLines": 2428,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 1539,
+    "index.ts": 1558,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 194,
@@ -140,12 +140,12 @@
     "consolidate.ts": 373,
     "context.ts": 164,
     "dimension-text.ts": 31,
-    "extract.ts": 671,
+    "extract.ts": 681,
     "inject-text.ts": 27,
     "portable.ts": 115,
     "profile-prompt.ts": 119,
     "prompts.generated.ts": 15,
-    "prompts.ts": 402,
+    "prompts.ts": 419,
     "reflect.ts": 417,
     "retrieval.ts": 116,
     "roles.ts": 28,
@@ -158,6 +158,6 @@
     "store.ts": 179,
     "measure.ts": 45,
     "time.ts": 130,
-    "types.ts": 776
+    "types.ts": 782
   }
 }

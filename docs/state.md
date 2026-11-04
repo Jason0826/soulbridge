@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-04 15:30**（core 0.0.110 / plugin 0.0.111）
+最后核对：**2026-11-04 17:10**（core 0.0.111 / plugin 0.0.111）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -12,6 +12,8 @@
 > 名词/变量声明：[declarations.json](declarations.json)，定义文件在 `packages/core/src/config/`（`health-check` 第 8、9 节）。
 > 全系统审计：[audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md)。
 > 代码审查（今晚，含已修复 4 条）：[audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md)。
+
+**17:10 主题级抽取（core 侧落地）**：`<source>` 改成编号的 `<turn n>`，事实行支持「轮次=N」→ `sourceTurnNo`，`commitDrafts` 用 `turnIds` 映射真实轮号；自包含闸门只对 holder 生效（角色槽不是主语，全量检查会误杀）。插件队列仍按轮入队，**整条线索的切换还没做**。测试 core 301。
 
 **15:30 主题级抽取定案（0025）**：抽取单位改为整条线索（事实必须自包含，主体用名字、时间用绝对日期）；与 [ADR 0035](adr/0035-stage-input-contract.md) 和 [0016](briefs/0016-extraction-consolidation.md) 的“按轮”表述已在原文加修订说明；退场账本登记 `extract-per-turn`（pending，代码尚未切换）。**这一项只有设计，没有实现。**
 

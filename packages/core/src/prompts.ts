@@ -45,22 +45,26 @@ export interface KnownThreadPrompt {
   recent?: Array<{ role: 'user' | 'assistant'; text: string }>;
 }
 
+export interface ThreadTurnPrompt {
+  /** 1-based position inside the thread; the model quotes this number as 轮次=N. */
+  turnNo: number;
+  userText: string;
+  assistantText?: string;
+  at?: number;
+}
+
 export interface ExtractionPromptInput {
-  /** The turn's user text. */
-  text: string;
-  /** Date the turn happened; relative times resolve against it. */
+  /** The whole thread, in order (0025). Takes precedence over the single-turn fields. */
+  turns?: ThreadTurnPrompt[];
+  /** @deprecated single-turn input; the switch to thread-only lands with the queue change. */
+  text?: string;
+  /** @deprecated see `text`. */
+  assistantText?: string;
+  /** Date the extraction runs; relative times resolve against it. */
   now: number;
   entities?: KnownEntityPrompt[];
   facts?: KnownFactPrompt[];
   previousUserText?: string;
-  /**
-   * My reply in the same turn (ADR 0035).
-   *
-   * The unit of memory is the exchange, not the user's message: without the reply, the
-   * prompt's own fourth category ("my promises") can never fire, and "did this turn
-   * decide anything" is unanswerable.
-   */
-  assistantText?: string;
   /** Open topic threads: the candidate list for attribution. */
   threads?: KnownThreadPrompt[];
   /** Which thread the previous turn belonged to, when known. */
@@ -125,12 +129,25 @@ export function renderExtractionPrompt(input: ExtractionPromptInput): string {
     .filter(Boolean)
     .join('\n');
 
-  // The exchange, not the message (ADR 0035). Both sides are labelled, so a fact taken
-  // from my reply is visibly mine — the prompt's fourth category ("my promises") lives
-  // in that half, and the provenance rules depend on knowing which half it came from.
-  const source = input.assistantText
-    ? `<source>\n用户：${input.text}\n我：${input.assistantText}\n</source>`
-    : `<source>\n用户：${input.text}\n</source>`;
+  // The whole thread, one labelled block per turn (0025). Reading the topic as a whole is
+  // what lets "10-24 被裁员" become "小林 2024-10-24 被裁员": the subject is in an earlier
+  // turn, and a per-turn extraction never saw it.
+  const turns = input.turns?.length
+    ? input.turns
+    : input.text !== undefined
+      ? [{ turnNo: 1, userText: input.text, assistantText: input.assistantText, at: input.now }]
+      : [];
+  const source = [
+    '<source>',
+    ...turns.map((turn) => {
+      const when = turn.at ? ` at="${isoDate(turn.at)}"` : '';
+      const head = `  <turn n="${turn.turnNo}"${when}>`;
+      const lines = [`用户：${turn.userText}`];
+      if (turn.assistantText) lines.push(`我：${turn.assistantText}`);
+      return `${head}\n${lines.map((line) => `    ${line}`).join('\n')}\n  </turn>`;
+    }),
+    '</source>',
+  ].join('\n');
 
   return [
     extractionRole,

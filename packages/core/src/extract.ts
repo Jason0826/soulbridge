@@ -277,9 +277,10 @@ export async function extractWithModel(
   assistantText?: string,
 ): Promise<ModelParseResult> {
   const prompt = renderExtractionPrompt({
-    text,
+    // A single exchange is a thread of one: the renderer has one shape, and the caller
+    // that has a whole topic passes all its turns instead (0025).
+    turns: [{ turnNo: 1, userText: text, assistantText, at }],
     now: at,
-    assistantText,
     entities: context?.entities,
     facts: context?.facts,
     previousUserText: context?.previousUserText,
@@ -418,8 +419,13 @@ function parseFactDraft(obj: Record<string, unknown>): FactDraft | null {
           ? 'relative'
           : 'unknown';
   const roleRaw = typeof obj.role === 'string' ? obj.role.trim() : '';
+  const turnNoRaw = obj.source_turn_no;
+  const sourceTurnNo =
+    typeof turnNoRaw === 'number' && Number.isInteger(turnNoRaw) && turnNoRaw > 0 ? turnNoRaw : undefined;
   return {
     statement,
+    // Which turn of the thread this came from (0025); the writer maps it to a real turn id.
+    ...(sourceTurnNo ? { sourceTurnNo } : {}),
     // The model's structural answer. An unrecognised value is dropped rather than guessed:
     // the writer's neutral default is observation, never a guess from the type label.
     ...(roleRaw && ROLES.has(roleRaw) ? { role: roleRaw as FactDraft['role'] } : {}),
@@ -591,9 +597,13 @@ export function parseLineDraft(raw: string): Record<string, unknown> | null {
       let supersedes = '';
       let wantsSupersede = false;
       for (const part of rest) {
-        const keyed = /^(持有|精度|原则候选|槽位|操作|角色)\s*[=＝]\s*(.*)$/.exec(part);
+        const keyed = /^(持有|精度|原则候选|槽位|操作|角色|轮次)\s*[=＝]\s*(.*)$/.exec(part);
         if (keyed) {
           if (keyed[1] === '持有') fact.holder = keyed[2].trim();
+          else if (keyed[1] === '轮次') {
+            const turnNo = Number(keyed[2].trim());
+            if (Number.isInteger(turnNo) && turnNo > 0) fact.source_turn_no = turnNo;
+          }
           else if (keyed[1] === '精度') fact.at_precision = keyed[2].trim();
           else if (keyed[1] === '角色') {
             const role = keyed[2].trim();

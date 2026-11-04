@@ -283,6 +283,12 @@ export type DraftSlotValue =
 
 export interface FactDraft {
   statement: string;
+  /**
+   * Which turn of the thread this fact came from (1-based, as the prompt numbers them).
+   * Provenance for a thread-level extraction: a fact synthesising several turns still
+   * names the turn a reader can go back to. Absent = the last turn of the thread.
+   */
+  sourceTurnNo?: number;
   /** Structured role, chosen by the model (config/domains.ts FACT_ROLES). */
   role?: FactRole;
   /** world or a person's name — where the fact holds (ADR 0032). */

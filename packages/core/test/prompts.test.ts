@@ -94,10 +94,11 @@ test('extraction prompt: the exchange goes in whole, both sides labelled', () =>
     assistantText: '改好了，用的是 edit 工具',
   });
   // ADR 0035: without the reply half, the prompt's "my promises" category is dead.
-  assert.match(prompt, /<source>\n用户：把版本号改一下\n我：改好了，用的是 edit 工具\n<\/source>/);
+  // 0025: the words are wrapped in a numbered turn, so a thread can carry many of them.
+  assert.match(prompt, /<turn n="1"[^>]*>\n\s+用户：把版本号改一下\n\s+我：改好了，用的是 edit 工具\n\s+<\/turn>/);
 
   const oneSided = renderExtractionPrompt({ text: '只说了这一句', now: NOW });
-  assert.match(oneSided, /<source>\n用户：只说了这一句\n<\/source>/);
+  assert.match(oneSided, /<turn n="1"[^>]*>\n\s+用户：只说了这一句\n\s+<\/turn>/);
   assert.equal(oneSided.includes('我：'), false, '没有回复时不编一个');
 });
 
@@ -111,7 +112,8 @@ test('extraction prompt: provenance rules name both sides', () => {
 test('extraction prompt: stays within a sane size', () => {
   const prompt = renderExtractionPrompt({ text: 'x'.repeat(200), now: NOW });
   // A guard against runaway growth, not a target. Raised from 4700 to 5000 when the role
-  // field became part of the required line template (~4787 chars with a 200-char source);
-  // the terms block is still the bulk, and candidate text is added on top at runtime.
-  assert.ok(prompt.length < 5000, `prompt grew to ${prompt.length} chars`);
+  // field became part of the required line template; raised to 5200 when 0025 added the
+  // 轮次 key and the self-containment sentence (+226 chars, measured 5026). The terms block
+  // is still the bulk; candidate text and whole threads are added on top at runtime.
+  assert.ok(prompt.length < 5200, `prompt grew to ${prompt.length} chars`);
 });

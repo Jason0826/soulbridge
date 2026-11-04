@@ -585,7 +585,10 @@ export class Soul {
    * exact duplicate is refused. Everything degraded or refused is reported, so the
    * loss is visible instead of silent.
    */
-  commitDrafts(draft: ExtractDraft, options: { turnId?: string; at?: number } = {}): CommitResult {
+  commitDrafts(
+    draft: ExtractDraft,
+    options: { turnId?: string; at?: number; turnIds?: Record<number, string> } = {},
+  ): CommitResult {
     const entities = new Map<string, Entity>();
     const skipped: CommitResult['skipped'] = [];
     const droppedSlots: CommitResult['droppedSlots'] = [];
@@ -676,13 +679,24 @@ export class Soul {
       // above), never a new entity created from a holder string.
       const holderName = factDraft.holder?.trim() || HOLDER_WORDS[0];
       let holder: string = HOLDER_WORDS[0];
+      let holderEntity: Entity | undefined;
       if (holderName !== HOLDER_WORDS[0]) {
         if (holderName === HOLDER_WORDS[1]) {
           holder = HOLDER_WORDS[1];
         } else {
-          const holderEntity = byName.get(holderName);
+          holderEntity = byName.get(holderName);
           if (holderEntity) holder = holderEntity.id;
           else holderFallbacks.push({ fact: statement, holder: holderName });
+        }
+      }
+      // 0025: a fact that holds in someone's mind must name that person. "10-24 被裁员"
+      // with holder=小林 but no 小林 in the sentence is unreadable a month later; a role
+      // slot (提出者/对象) is not the subject and is not required to appear.
+      if (holderEntity) {
+        const names = [holderEntity.name, ...(holderEntity.aliases ?? [])];
+        if (!names.some((name) => statement.includes(name))) {
+          skipped.push({ what: statement, reason: `not-self-contained:${holderEntity.name}` });
+          return null;
         }
       }
 
@@ -702,11 +716,16 @@ export class Soul {
       // This replaced the old `原则候选` slot, which was the same decision stored as text.
       const role = factDraft.principle && !factDraft.role ? 'lesson' : factDraft.role;
       const status = factDraft.principle && !factDraft.role ? 'candidate' : undefined;
+      // Which turn this fact came from: the model's 轮次=N when it named one, else the
+      // turn the caller passed. A thread-level extraction needs the per-fact answer.
+      const sourceTurnId = factDraft.sourceTurnNo
+        ? options.turnIds?.[factDraft.sourceTurnNo] ?? options.turnId
+        : options.turnId;
       // ADR 0035: a fact from my side of the exchange is `inferred`, and inferred
       // claims must carry their evidence. The turn id is the evidence available here —
       // claims that need a tool or test result are kept out by the prompt instead.
-      if (factDraft.source === 'inferred' && options.turnId && !slots.some((slot) => slot.slot === '依据')) {
-        slots.push({ slot: '依据', value: { kind: 'text', value: options.turnId } });
+      if (factDraft.source === 'inferred' && sourceTurnId && !slots.some((slot) => slot.slot === '依据')) {
+        slots.push({ slot: '依据', value: { kind: 'text', value: sourceTurnId } });
       }
 
       const written = this.store.putFact({
@@ -722,7 +741,7 @@ export class Soul {
         atPrecision: factDraft.atPrecision,
         source: factDraft.source,
         confidence: factDraft.confidence,
-        sourceTurnId: options.turnId,
+        sourceTurnId,
         slots,
       });
       facts.push(written);
