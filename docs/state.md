@@ -162,9 +162,9 @@ node scripts/attribution-stats.mjs`（`--all` 看历史）输出归属分布与 
 | 8 | 结论=事实+≥2 证据 `ADR 0031` | `recordConclusion` / `conclusionSlots` | 5 条结论，关闭线索 153 条 | ⚠️ 产出率低 |
 | 9 | 系统提示只放稳定内容 | `section` 88 字符 | 无抖动 | ✅ |
 | 10 | 动态记忆走消息通道 | 锚点 + `<about>` + `<related>` + `<handoff>` | 注入 1.9–5.4KB | ✅ |
-| 11 | 上次聊到哪 = 上一闭合线索 `0017 §4.5` | `lastClosedThread` + `renderHandoff` | **仍未被跨会话触发** | ⏳ |
-| 12 | 情绪读出用户状态 | 词典 `analyzeAffect`（模型未接） | **2.4%**（13/540） | ❌ |
-| 13 | 可携带（导出契约）`ADR 0028` | **无导出实现** | — | ❌ |
+| 11 | 上次聊到哪 = 上一闭合线索 `0017 §4.5` | `lastClosedThread` + `renderHandoff` | **已触发 14 次**（trace `inject` 的 `handoff:true`，最近 19:52） | ✅ 机制 / ⏳ 对不对没判据 |
+| 12 | 情绪读出用户状态 | 词典 `analyzeAffect`（模型未接） | **2.4%**（17/699，11-04） | ❌ |
+| 13 | 可携带（导出契约）`ADR 0028` | `Soul.portableBundle()` + `soulbridge export --dir` | 3822 条记录 / 6.9MB（11-04 实测） | ✅ |
 | 14 | 行为影响（记忆改变行为） | 无（0018 挂起） | — | ⏳ |
 | 15 | **三层：规则 / 画像 / 记忆** `ADR 0033` | 规则 62 / 画像 56 / 事实 223 | 三层都在注入 | ✅ |
 | 16 | 规则按触发注入（不常驻） | `selectRules` + `<rules fired=…>` | 触发过 **12/62（19%）** | ✅ |
@@ -188,6 +188,21 @@ one`/`superseded` | "候选不生效"**无处表达** | ❌ |
 老 memories：active 0，16 条已迁移成事实并标 superseded
 队列：抽取 0 · 分类 0 · 画像 1 · 归纳 0
 ```
+
+## 三·零之二、2026-11-04 20:00 现状快照（今天所有改动之后）
+
+```
+轮次 407 · 事实 819（active 702 / candidate 61 / retracted 56）
+角色：observation 466 · judgment 112 · rule 84 · lesson 81 · profile 57 · promise 19
+结论 21 · 线索 207（closed 205 / open 2）· 缺口 86 开
+实体 96：thing 90 · person 4 · place 1 · self 1
+带来源轮 625/819（76%）· 有 valid_until 270
+情绪样本 699，非零 17（2.4%）
+注入：408 次，平均 7.9 条 id/轮，其中 handoff 14 次
+`soul_recall` 被模型调用次数：0
+```
+
+**这张表读出来的三件事**：① 数量级够（2 条事实/轮），可追溯 76%；② 世界层仍薄（person 4、place 1）；③ **模型从不主动 `recall`**——检索这条能力目前只在注入侧被用到，主动查询是零。
 
 管线（一条）：`turn → 抽取队列 → extract（唯一 prompt）→ commitDrafts（标注器）→ facts → 归纳按线索 → 结论 → 画像按维度合并`
 
