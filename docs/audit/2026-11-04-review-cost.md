@@ -52,9 +52,10 @@
 ## 七、这次改动的证据
 
 ```
-插件 21 个测试文件全过（新增 turn-cost 6 条）
-core 49 个测试文件全过
+插件 21 个测试文件全过（新增 turn-cost 6 条）；core 49 个测试文件全过
+npm test（插件 94 / core 302）全过
 node scripts/billing.mjs --days 4  → 11/01–11/04 ¥100.22，单价重算差 0.00%
 node scripts/review-probes.mjs     → 8 段全绿
-node scripts/health-check.mjs      → 见交付消息（沙箱内 prompts 同步检查 EPERM，属环境限制，单独跑 sync-prompts --check 为绿）
+node scripts/health-check.mjs      → 0 FAIL / 17 WARN / 26 PASS
+部署后首轮实测（19:36）：turn 2 → requests=5（steps=4 plugin=1）input=4272 cacheHit=848128 output=7754 secs=24
 ```

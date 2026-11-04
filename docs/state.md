@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-04 19:32**（core 0.0.112 / plugin 0.0.113）
+最后核对：**2026-11-04 19:37**（core 0.0.112 / plugin 0.0.113）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -19,7 +19,8 @@
 现在在做什么   0026 成本可见：插件每轮一条 turn-cost + scripts/billing.mjs（plugin 0.0.113）
 已验证         插件 94 测试 / core 302 测试；installed web profile 为 0.0.113，verify-installed 全过
                billing 与导出单价重算差 0.00%（11/01–11/04 ¥100.22）
-               待观察：重启后真实轮次的 turn-cost 是否落进 trace.jsonl
+               19:36 首个 turn-cost 落库：turn 2 → requests=5（steps=4 plugin=1）
+               input=4272 cacheHit=848128 output=7754 secs=24 reason=completed
 下一步         1) 把 turn-cost 读进 quality.mjs（每轮请求数分布，现在只有 trace 原始行）
                2) 子代理的请求要不要滚到父轮 —— 需要 DSH 暴露会话谱系，事件流里没有
 不要做         抽取输入上限 —— 用户明确否决（751 次里只有 1 次超 6 万字符）
