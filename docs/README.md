@@ -68,6 +68,7 @@
 | **画像的维度与准入** | [briefs/0021](briefs/0021-profile-dimensions.md) |
 | 怎么从有限窗口里取 | [briefs/0020](briefs/0020-retrieval-funnel.md) |
 | **抽取单位：一条线索一次，事实自包含** | [briefs/0025](briefs/0025-thread-extraction.md) |
+| **事实的时间与有效期（valid_from / valid_to）** | [briefs/0027](briefs/0027-time-axis.md) |
 | 归纳（按关闭线索，两阶段） | [briefs/0016](briefs/0016-extraction-consolidation.md) |
 | 线索（跨中断的话题） | [briefs/0017](briefs/0017-topic-threads.md) |
 

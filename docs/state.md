@@ -24,11 +24,13 @@
                2) 子代理的请求要不要滚到父轮 —— 需要 DSH 暴露会话谱系，事件流里没有
 不要做         抽取输入上限 —— 用户明确否决（751 次里只有 1 次超 6 万字符）
 不能忘         抽取单位 = 线索；自包含闸门只对 holder 生效；事实必须写轮次
+               **时间：created_at 代码写 / valid_from·valid_to 模型判定**（断言=说出口那天成立；
+               valid_to 绝不从 valid_from 推导）。字段名不要用 at/at_end/valid_until
                成本不是记忆层的事：core 里没有一行价格逻辑，账单脚本在插件仓库
 最近成本       11/01–11/04 = ¥100.22；6,028 次请求，¥0.0166/请求（数字来源见下）
                金额构成：输入命中 56.3% / 输入未命中 23.3% / 输出 20.1%
                最重单轮 108 次请求（trace turn 406）；平均 18 次/轮
-关键文件       docs/briefs/0025-thread-extraction.md
+关键文件       docs/briefs/0025-thread-extraction.md · docs/briefs/0027-time-axis.md
                packages/core/src/{extract,prompts,time,sqlite,index}.ts
                D:\git-workspace\repos\dsh-plugin-soulbridge\index.js
                账单与判读：dsh-plugin-soulbridge\scripts\billing.mjs · docs\cost-visibility.md
