@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-04 00:05**（core 0.0.104 / plugin 0.0.107）
+最后核对：**2026-11-04 10:20**（core 0.0.105 / plugin 0.0.108）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -12,6 +12,8 @@
 > 名词/变量声明：[declarations.json](declarations.json)，定义文件在 `packages/core/src/config/`（`health-check` 第 8、9 节）。
 > 全系统审计：[audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md)。
 > 代码审查（今晚，含已修复 4 条）：[audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md)。
+
+**10:20 依据有了读者（A+B）**：注入里给推断事实加「我:」前缀（2 字符），并在块后写一次 `<source-notes>` 说明；core 的 `<memories>` 与插件的 `<about>` 都生效。新增 `soulbridge why <factId>`：打印事实、来源、依据轮次（用户话 + 我上一轮回复前 200 字）、证据 id。真实数据实测：`fc_mw0ajy8u_1` 的依据是 `tp_mw0ad7h0_wlct`（用户「看看还有什么问题」）。测试 core 290 / 插件 86。
 
 **00:05 过夜批次（B–E）**：**B 槽位收敛**：`原则候选` → role=lesson + status=candidate；`来源` → `证据`；未分类教训 → status=candidate。schema v11 打开库时迁移（61 条候选槽、54 条来源槽）。`factsByTurns` 增加 `includeCandidates`：归纳证据只取 active，晋升才看 candidate。**C 行为影响**：规则注入已有（插件 `<rules fired=…>`），情绪指令经 pre-step 的 `<affect>`；新增 `scripts/rule-compliance.mjs`：用「规则触发后 10 分钟内、且纠正文本命中该规则触发词」作为疑似未遵守代理。首轮真实数据：`fc_lg_mem_mvwnil1k_lv9s` 触发 8 次、5 次随后被纠正（63%）；`fc_lg_mem_mvwk3vsm_y15l` 5 次 0%；样本 <5 不判决。代理会误报，报告里已注明。**D 导出契约**：`Soul.portableBundle()` 三层（archive.jsonl 全量含原始轮次 / summary.md 可读 /injection.txt 当前注入）；CLI `soulbridge export --dir <目录>`。真实库实测 3822 条记录、6.9MB。**未做**：⑤实体池清理（10 个术语实体、23 个名字编码 id）——属于数据判断，留给你确认；`依据` 槽仍无消费者（225+ 条），需要先定「推断证据怎么用」再做。
 

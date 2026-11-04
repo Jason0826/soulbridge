@@ -58,3 +58,20 @@ test('context: includeAffect=false keeps the affect block out of a stable prompt
   assert.equal(without.affect, undefined);
   store.close();
 });
+
+test('context: a fact I said is marked, and the explanation appears once', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  soul.recordFact({ statement: '小林在 A 公司', role: 'judgment', source: 'told' });
+  soul.recordFact({ statement: '我认为小林会先休息', role: 'judgment', source: 'inferred' });
+
+  const result = soul.context({ track: false, includeSoul: false, includeStyle: false });
+  assert.match(result.text, /- 我: \[/, 'an inferred fact carries the two-character marker');
+  assert.match(result.text, /- \[[^\]]+\] 小林在 A 公司/, 'a told fact stays unmarked');
+  assert.equal(
+    result.text.split('<source-notes>').length - 1,
+    1,
+    'the explanation is written once, not per line',
+  );
+  store.close();
+});

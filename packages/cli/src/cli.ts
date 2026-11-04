@@ -492,6 +492,41 @@ async function main(): Promise<void> {
       return;
     }
 
+    case 'why': {
+      // The reader for the 依据 slot: a fact I said must be traceable to the turn I said it
+      // in, and a conclusion must be traceable to the facts that support it.
+      const factId = positional[0];
+      if (!factId) throw new Error('usage: soulbridge why <factId>');
+      const { soul } = open(flags);
+      const fact = soul.store.fact(factId);
+      if (!fact) {
+        out({ ok: false, error: `no fact ${factId}` });
+        return;
+      }
+      const basisSlot = fact.slots.find((slot) => slot.slot === '依据' && slot.value.kind === 'text');
+      const turn = basisSlot?.value.kind === 'text' ? soul.store.turn(basisSlot.value.value) : null;
+      out({
+        id: fact.id,
+        statement: fact.statement,
+        role: fact.role,
+        status: fact.status,
+        source: fact.source,
+        basis: turn
+          ? {
+              turnId: turn.id,
+              at: new Date(turn.at).toISOString(),
+              userText: turn.userText,
+              assistantText: turn.assistantText.slice(0, 200),
+            }
+          : null,
+        evidence: fact.slots
+          .filter((slot) => slot.slot === '证据' && slot.value.kind === 'fact')
+          .map((slot) => (slot.value.kind === 'fact' ? slot.value.factId : undefined))
+          .filter(Boolean),
+      });
+      return;
+    }
+
     case 'demo':
       await demo();
       return;
@@ -511,6 +546,7 @@ async function main(): Promise<void> {
           '  reflect --text|--file           会话反思',
           '  export --out <file>             导出 JSONL',
           '  export --dir <directory>        导出可携带档案（archive/summary/injection）',
+          '  why <factId>                    这条事实的依据：来源轮次 / 证据',
           '  import --in <file>              导入 JSONL',
           '  import --from <steering.md>     导入 AGENTS.md / CLAUDE.md',
           '  ingest --file <transcript.jsonl> 会话转写 → 记忆与情绪采样',

@@ -95,7 +95,7 @@ export function buildContext(
     (fact.slots ?? []).some(
       (slot) => slot.slot === '锚点' && slot.value.kind === 'text' && slot.value.value === '是',
     );
-  type Anchor = { id: string; label: string; text: string; score: number };
+  type Anchor = { id: string; label: string; text: string; score: number; inferred: boolean };
   // Roles replace the old type-name check; roleOf() falls back to typeName for rows written
   // before the migration, so anchors stay stable across the switch.
   const ANCHOR_ROLES = new Set(['judgment', 'lesson']);
@@ -106,11 +106,20 @@ export function buildContext(
         isActive(fact) &&
         (ANCHOR_ROLES.has(roleOf(fact)) || anchorTypes.has(fact.typeName ?? '') || explicitAnchor(fact)),
     )
-    .map((fact) => ({ id: fact.id, label: fact.typeName ?? '事实', text: fact.statement, score: fact.confidence }));
+    .map((fact) => ({
+      id: fact.id,
+      label: fact.typeName ?? '事实',
+      text: fact.statement,
+      score: fact.confidence,
+      // ADR 0035: my own side of the exchange is inferred and must not read like something
+      // the user said. The marker is two characters; a per-line sentence would double the
+      // injection, so the explanation is written once below the block.
+      inferred: fact.source === 'inferred',
+    }));
   for (const memory of store.query({ soulId: request.soulId, userId: request.userId })) {
     if (request.types !== undefined && !request.types.includes(memory.type)) continue;
     if (request.minImportance !== undefined && memory.importance < request.minImportance) continue;
-    anchors.push({ id: memory.id, label: memory.type, text: memory.content, score: memory.importance / 10 });
+    anchors.push({ id: memory.id, label: memory.type, text: memory.content, score: memory.importance / 10, inferred: false });
   }
   anchors.sort((a, b) => b.score - a.score);
 
@@ -120,6 +129,7 @@ export function buildContext(
   let dropped = 0;
   const lines: string[] = [];
   const used: string[] = [];
+  let sawInferred = false;
 
   for (const anchor of anchors) {
     if (lines.length >= maxItems) {
@@ -128,7 +138,9 @@ export function buildContext(
     }
     // Escaping can lengthen a line (one `&lt;` is four characters), so cost is charged
     // on the escaped text — the budget has to measure what actually gets injected.
-    const line = `- [${escapeBlockText(anchor.label)}] ${escapeBlockText(anchor.text)}`;
+    const marker = anchor.inferred ? '我: ' : '';
+    const line = `- ${marker}[${escapeBlockText(anchor.label)}] ${escapeBlockText(anchor.text)}`;
+    if (anchor.inferred) sawInferred = true;
     const cost = line.length + 1 + 10; // line + newline + section overhead share
     if (chars + cost > maxChars) {
       dropped += 1;
@@ -140,6 +152,11 @@ export function buildContext(
   }
 
   if (request.includeAnchors !== false && lines.length > 0) sections.push(`<memories>\n${lines.join('\n')}\n</memories>`);
+  if (sawInferred) {
+    sections.push(
+      '<source-notes>以「我:」开头的是我上一轮说的话，未经用户确认；没标的都是用户说的。</source-notes>',
+    );
+  }
 
   const text = sections.join('\n\n');
   if (request.track !== false && used.length > 0) store.touch(used, now);
