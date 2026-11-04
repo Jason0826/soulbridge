@@ -131,10 +131,15 @@
       "date": "2026-11-04",
       "delta": 54,
       "reason": "0027 时间轴：五个旧名字（at/at_text/at_end/at_precision/valid_until）换成一轴两端（valid_from/valid_to + 原文/精度），旧字段全部退场；净增来自迁移函数 upgradeToV15、解析器多读两个键、写入不再猜（core +54）。这是一次改名 + 补一个端，不是新增能力。"
+    },
+    {
+      "date": "2026-11-04",
+      "delta": 2,
+      "reason": "0027 改名跟进：插件三处显示路径与 soul_detail 工具改读 validFrom/validFromText/validTo（插件 +2 行，-6/+8）。旧字段已不存在，不改就是静默显示空日期。"
     }
   ],
   "coreLines": 8716,
-  "pluginLines": 2638,
+  "pluginLines": 2640,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
