@@ -726,24 +726,10 @@ export class Soul {
         slots,
       });
       facts.push(written);
-      // Known to have happened, unknown when: keep the memory and turn the missing
-      // date into something to ask about later, instead of inventing one.
-      if (holder === 'world' && written.atPrecision === 'unknown') {
-        const subject = slots.find((slot) => slot.value.kind === 'entity');
-        gaps.push(
-          this.store.putGap({
-            soulId: this.soulId,
-            userId: this.userId,
-            aboutEntityId: subject?.value.kind === 'entity' ? subject.value.entityId : undefined,
-            aboutFactId: written.id,
-            // Whole statement: the gap asks "when did this happen", so the sentence it
-            // refers to cannot be a prefix of itself.
-            topic: `日期不明：${statement}`,
-            tension: 0.3,
-            openedAt: at,
-          }),
-        );
-      }
+      // A missing date is a property of the fact (`atPrecision: unknown`), not an open
+      // question. Turning every undated fact into a gap produced 223 open gaps in two days,
+      // of which 78% were '日期不明：…' — they can never be closed, and they bury the gaps
+      // that are worth asking about. The fact stays; the question is not created.
       return written;
     };
 
@@ -1044,6 +1030,23 @@ export class Soul {
       options.archivedSessionIds ?? [],
       options.at ?? Date.now(),
     );
+  }
+
+  /**
+   * Housekeeping that should run once per turn: close open questions nobody answered.
+   *
+   * A gap is only worth asking about while it is fresh; 14 days of silence means the moment
+   * passed. Closing is not deleting — the row keeps its topic, opened_at and the reason.
+   */
+  sweep(now = Date.now(), options: { gapMaxAgeDays?: number } = {}): { gapsClosed: number } {
+    const maxAgeDays = options.gapMaxAgeDays ?? 14;
+    const gapsClosed = this.store.closeStaleGaps(
+      this.soulId,
+      this.userId,
+      now - maxAgeDays * 86_400_000,
+      'expired',
+    );
+    return { gapsClosed };
   }
 
   /** The thread the previous turn belonged to, for the attribution candidate list. */

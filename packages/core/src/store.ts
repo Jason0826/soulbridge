@@ -122,6 +122,11 @@ export interface SoulStore {
   putGap(spec: GapSpec): Gap;
   openGaps(soulId: string, userId: string, limit?: number): Gap[];
   closeGap(id: string, closedByFactId?: string, at?: number): void;
+  /**
+   * Close every open gap older than `beforeAt`, recording why. Returns how many were closed.
+   * An open question that nobody answered in weeks is not a question any more.
+   */
+  closeStaleGaps(soulId: string, userId: string, beforeAt: number, reason: string): number;
   /** Corrections the user made, newest first — the objective signal for behaviour changes. */
   corrections(soulId: string, userId: string, limit?: number): Correction[];
   /** Everything a portable bundle needs, scoped to one soul/user. */

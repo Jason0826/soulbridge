@@ -297,7 +297,7 @@ test('line format: 持有 and 精度 are keyed, so old lines still parse', () =>
   assert.equal((world.slots as unknown[]).length, 1);
 });
 
-test('commit: a world fact with unknown time is kept, and opens a gap', () => {
+test('commit: unknown time is kept on the fact, and is not turned into a gap', () => {
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
   const result = soul.commitDrafts({
@@ -317,8 +317,9 @@ test('commit: a world fact with unknown time is kept, and opens a gap', () => {
   });
   assert.equal(result.facts.length, 1, 'unknown time is not a reason to discard');
   assert.equal(result.facts[0].atPrecision, 'unknown');
-  assert.equal(result.gaps.length, 1, 'the missing date becomes something to ask');
-  assert.match(result.gaps[0].topic, /日期不明/);
+  // A missing date is a property of the fact. Turning it into an open question produced 223
+  // gaps in two days, none closable, and buried the gaps worth asking about.
+  assert.equal(result.gaps.length, 0, 'no gap is opened for an undated fact');
   store.close();
 });
 

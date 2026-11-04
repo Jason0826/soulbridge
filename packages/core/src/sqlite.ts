@@ -44,7 +44,7 @@ import type {
 import type { SoulStore } from './store.ts';
 import { bm25, buildCorpusStats, tokenize } from './scoring.ts';
 
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 /** How many recent pairs are considered before scoring. Bounded so recall stays O(candidates). */
 const RECALL_CANDIDATES = 500;
 export const AFFECT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -247,7 +247,8 @@ CREATE TABLE IF NOT EXISTS gaps (
   status            TEXT NOT NULL DEFAULT 'open',
   opened_at         INTEGER NOT NULL,
   closed_at         INTEGER,
-  closed_by_fact_id TEXT
+  closed_by_fact_id TEXT,
+  close_reason      TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_gaps_open ON gaps(soul_id, user_id, status, tension DESC);
 
@@ -341,6 +342,17 @@ function upgradeToV3(db: DatabaseSync): void {
  */
 
 /** v6 → v7: turn threads (a topic's turns need not be adjacent) plus turns.thread_id. */
+export function upgradeToV12(db: DatabaseSync): void {
+  // A missing date is a property of the fact, not an open question. Existing gaps created by
+  // that old rule are closed with the reason, so the remaining open gaps are the ones that
+  // were worth asking about.
+  ensureColumn(db, 'gaps', 'close_reason', 'TEXT');
+  db.prepare(
+    `UPDATE gaps SET status = 'closed', closed_at = ?, close_reason = 'time-unknown-not-a-gap'
+      WHERE status = 'open' AND topic LIKE '日期不明：%'`,
+  ).run(Date.now());
+}
+
 export function upgradeToV11(db: DatabaseSync): void {
   // 原则候选 stored a decision as a slot; it is role+status now. The row becomes a lesson
   // candidate — held and shown to the classifier, injected nowhere until it is placed.
@@ -516,7 +528,7 @@ export function openSqlite(file: string): SoulStore {
       if (version < 5) upgradeToV5(db);
       if (version < 7) upgradeToV7(db);
       if (version < 8) upgradeToV8(db);
-      if (version < 11) upgradeToV11(db);
+      if (version < 12) upgradeToV12(db);
       // v6 adds tables only; SCHEMA creates them on every open, nothing to copy.
       setVersion(db, SCHEMA_VERSION);
       db.exec('COMMIT');
@@ -1190,6 +1202,20 @@ export function openSqlite(file: string): SoulStore {
           )
           .run(at, closedByFactId ?? null, id),
       );
+    },
+
+    closeStaleGaps(soulId: string, userId: string, beforeAt: number, reason: string): number {
+      let changed = 0;
+      withRetry(() => {
+        const result = db
+          .prepare(
+            `UPDATE gaps SET status = 'closed', closed_at = ?, close_reason = ?
+              WHERE soul_id = ? AND user_id = ? AND status = 'open' AND opened_at < ?`,
+          )
+          .run(Date.now(), reason, soulId, userId, beforeAt);
+        changed = Number(result.changes);
+      });
+      return changed;
     },
 
     turn(id: string): TurnPair | null {

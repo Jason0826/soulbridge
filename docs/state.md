@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-04 11:40**（core 0.0.106 / plugin 0.0.109）
+最后核对：**2026-11-04 14:20**（core 0.0.107 / plugin 0.0.110）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -12,6 +12,8 @@
 > 名词/变量声明：[declarations.json](declarations.json)，定义文件在 `packages/core/src/config/`（`health-check` 第 8、9 节）。
 > 全系统审计：[audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md)。
 > 代码审查（今晚，含已修复 4 条）：[audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md)。
+
+**14:20 缺口收缩**：不再为「无日期」生成缺口（两天产生 223 条 open、0 closed，其中 154 条是「日期不明」）；schema v12 关闭存量并加 `close_reason`；`Soul.sweep()` 每次 pre-step 关闭 14 天未回答的缺口。review 见 [audit/2026-11-04-review-gaps](audit/2026-11-04-review-gaps.md)。
 
 **11:40 review 修复**：`我:` 前缀与 `<source-notes>` 从两处副本收敛到 `config/labels.ts` 单点声明（core 0.0.106 / 插件 0.0.109）；插件 T1 测试 fixture 从旧 `原则候选` 槽改到 role/status；`restart-web.ps1` 增加部署前 review 门：health-check 出现 `✗ [review]` 就拒绝重启。review 记录见 [audit/2026-11-04-review-ab](audit/2026-11-04-review-ab.md)。
 

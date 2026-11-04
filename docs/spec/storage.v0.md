@@ -329,6 +329,7 @@ v1 → v2：memories.updated_at / memories.deleted_at / emotions.updated_at
 | `status` | open / closed / dropped |
 | `opened_at` / `closed_at` | 开合时间 |
 | `closed_by_fact_id` | 被哪条事实关闭 |
+| `close_reason` | 为什么关：`time-unknown-not-a-gap` / `expired`（代码写） |
 
 `threads`（线索 = 可跨中断的话题章节）
 
