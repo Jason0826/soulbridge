@@ -291,12 +291,14 @@ v1 → v2：memories.updated_at / memories.deleted_at / emotions.updated_at
 | `soul_id` / `user_id` | 归属 |
 | `statement` | 陈述，15–80 字，原文语义不截断 |
 | `type_name` | 自由文本类型名（偏好/裁员/结论…），不设枚举 |
-| `role` | 结构角色：observation / judgment / rule / profile / promise / lesson（`config/domains.ts` 唯一声明）；写入时由类型名派生 |
+| `role` | 结构角色：observation / judgment / rule / profile / promise / lesson（`config/domains.ts` 唯一声明）；由调用方/模型给出，写方不猜 |
 | `holder` | 成立位置：`world` / `self` / 实体 id（ADR 0032） |
-| `at` / `at_text` / `at_end` | 时间、原话、区间结束 |
+| `at` / `at_text` / `at_end` | 事件发生时间、原话、区间结束（断言可空） |
 | `at_precision` | day / range / relative / unknown |
+| `valid_from` | 这条内容从什么时候成立（默认 `at` 或记录时间） |
+| `valid_until` | 到什么时候不再成立（空 = 仍成立；被取代时写） |
 | `place_id` | 地点实体引用，可空 |
-| `status` | none / open / kept / broken / superseded（`config/status.ts`） |
+| `status` | raw / candidate / active / retracted（`config/status.ts`） |
 | `confidence` | 0–1；空字段不落 0 |
 | `source` | experienced / told / inferred（ADR 0035 的来源不对称） |
 | `source_turn_id` | 来自哪一轮，证据链 |

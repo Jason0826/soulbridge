@@ -411,6 +411,10 @@ export interface Fact {
   atEnd?: number;
   /** Locatability, not precision: unknown is a value (ADR 0032). */
   atPrecision?: AtPrecision;
+  /** When this claim became true (defaults to `at` or the record time). */
+  validFrom?: number;
+  /** When it stopped being true; undefined means it still holds. */
+  validUntil?: number;
   placeId?: string;
   status: FactStatus;
   confidence: number;
@@ -440,6 +444,10 @@ export interface FactSpec {
   atText?: string;
   atEnd?: number;
   atPrecision?: AtPrecision;
+  /** When the claim became true; the writer defaults it to `at` or the record time. */
+  validFrom?: number;
+  /** When it stopped being true; omitted means it still holds. */
+  validUntil?: number;
   placeId?: string;
   status?: FactStatus;
   confidence?: number;

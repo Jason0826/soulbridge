@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-04 14:20**（core 0.0.107 / plugin 0.0.110）
+最后核对：**2026-11-04 14:50**（core 0.0.108 / plugin 0.0.111）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -12,6 +12,8 @@
 > 名词/变量声明：[declarations.json](declarations.json)，定义文件在 `packages/core/src/config/`（`health-check` 第 8、9 节）。
 > 全系统审计：[audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md)。
 > 代码审查（今晚，含已修复 4 条）：[audit/2026-11-02-code-review.md](audit/2026-11-02-code-review.md)。
+
+**14:50 三条时间轴 + 人物卡**：`facts` 新增 `valid_from` / `valid_until`（v13 回填，取代时写 `valid_until`）；`Soul.personCard(name)` 按名字/别名返回最近事实与未闭合问题，CLI `person <name>`，插件 `<about>` 追加最多两行 `未闭合：…`。测试 core 297 / 插件 86。review 见 [audit/2026-11-04-review-time-person](audit/2026-11-04-review-time-person.md)。
 
 **14:20 缺口收缩**：不再为「无日期」生成缺口（两天产生 223 条 open、0 closed，其中 154 条是「日期不明」）；schema v12 关闭存量并加 `close_reason`；`Soul.sweep()` 每次 pre-step 关闭 14 天未回答的缺口。review 见 [audit/2026-11-04-review-gaps](audit/2026-11-04-review-gaps.md)。
 

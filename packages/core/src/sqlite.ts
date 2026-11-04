@@ -44,7 +44,7 @@ import type {
 import type { SoulStore } from './store.ts';
 import { bm25, buildCorpusStats, tokenize } from './scoring.ts';
 
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 /** How many recent pairs are considered before scoring. Bounded so recall stays O(candidates). */
 const RECALL_CANDIDATES = 500;
 export const AFFECT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -209,6 +209,8 @@ CREATE TABLE IF NOT EXISTS facts (
   at_text        TEXT,
   at_end         INTEGER,
   at_precision   TEXT NOT NULL DEFAULT 'unknown',
+  valid_from     INTEGER,
+  valid_until    INTEGER,
   place_id       TEXT,
   status         TEXT NOT NULL DEFAULT 'active',
   confidence     REAL NOT NULL DEFAULT 1,
@@ -342,6 +344,28 @@ function upgradeToV3(db: DatabaseSync): void {
  */
 
 /** v6 → v7: turn threads (a topic's turns need not be adjacent) plus turns.thread_id. */
+export function upgradeToV13(db: DatabaseSync): void {
+  // Two axes of time, like the legacy memory table had:
+  //   created_at   when we recorded it (never changes)
+  //   at           when the event happened (events only)
+  //   valid_from   when this claim became true
+  //   valid_until  when it stopped being true (NULL = still true)
+  // A state ("小林在 A 公司") ends when another fact replaces it; a historical event never
+  // stops being true, so its valid_until stays NULL.
+  ensureColumn(db, 'facts', 'valid_from', 'INTEGER');
+  ensureColumn(db, 'facts', 'valid_until', 'INTEGER');
+  db.exec(
+    "UPDATE facts SET valid_from = COALESCE(at, created_at) WHERE valid_from IS NULL",
+  );
+  // Retracted rows stopped holding when their successor was recorded (or when they were).
+  db.exec(
+    `UPDATE facts SET valid_until = COALESCE(
+         (SELECT n.created_at FROM facts n WHERE n.id = facts.superseded_by),
+         created_at)
+      WHERE valid_until IS NULL AND status = 'retracted'`,
+  );
+}
+
 export function upgradeToV12(db: DatabaseSync): void {
   // A missing date is a property of the fact, not an open question. Existing gaps created by
   // that old rule are closed with the reason, so the remaining open gaps are the ones that
@@ -528,7 +552,7 @@ export function openSqlite(file: string): SoulStore {
       if (version < 5) upgradeToV5(db);
       if (version < 7) upgradeToV7(db);
       if (version < 8) upgradeToV8(db);
-      if (version < 12) upgradeToV12(db);
+      if (version < 13) upgradeToV13(db);
       // v6 adds tables only; SCHEMA creates them on every open, nothing to copy.
       setVersion(db, SCHEMA_VERSION);
       db.exec('COMMIT');
@@ -1059,8 +1083,9 @@ export function openSqlite(file: string): SoulStore {
           .prepare(
             `INSERT OR IGNORE INTO facts
                (id, soul_id, user_id, statement, type_name, role, holder, at, at_text, at_end, at_precision,
-                place_id, status, confidence, source, source_turn_id, superseded_by, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                valid_from, valid_until, place_id, status, confidence, source, source_turn_id, superseded_by,
+                created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
             id,
@@ -1074,6 +1099,8 @@ export function openSqlite(file: string): SoulStore {
             spec.atText ?? null,
             spec.atEnd ?? null,
             spec.atPrecision ?? 'unknown',
+            spec.validFrom ?? spec.at ?? createdAt,
+            spec.validUntil ?? null,
             spec.placeId ?? null,
             spec.status ?? 'active',
             spec.confidence ?? 1,
@@ -1147,10 +1174,17 @@ export function openSqlite(file: string): SoulStore {
     },
 
     supersedeFact(oldId: string, newId: string): void {
+      // The old claim stopped holding when the new one was recorded. `valid_until` is the
+      // time axis; `status` is the lifecycle — both are written, and they answer different
+      // questions ("was it ever true?" vs "is it still the current state?").
+      const recordedAt = Number(
+        (db.prepare('SELECT created_at FROM facts WHERE id = ?').get(newId) as Row | undefined)?.created_at ??
+          Date.now(),
+      );
       withRetry(() =>
         db
-          .prepare(`UPDATE facts SET status = '${FACT_STATUS.retracted}', superseded_by = ? WHERE id = ?`)
-          .run(newId, oldId),
+          .prepare(`UPDATE facts SET status = '${FACT_STATUS.retracted}', superseded_by = ?, valid_until = ? WHERE id = ?`)
+          .run(newId, recordedAt, oldId),
       );
     },
     /* ---------------- gaps ---------------- */
@@ -1754,6 +1788,8 @@ function rowToFact(row: Row, slots: Map<string, FactSlot[]>): Fact {
     atText: row.at_text === null ? undefined : String(row.at_text),
     atEnd: row.at_end === null ? undefined : Number(row.at_end),
     atPrecision: (row.at_precision ?? 'unknown') as Fact['atPrecision'],
+    validFrom: row.valid_from == null ? undefined : Number(row.valid_from),
+    validUntil: row.valid_until == null ? undefined : Number(row.valid_until),
     placeId: row.place_id === null ? undefined : String(row.place_id),
     status: String(row.status) as Fact['status'],
     confidence: Number(row.confidence),

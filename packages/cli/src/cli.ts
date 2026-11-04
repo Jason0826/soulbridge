@@ -492,6 +492,28 @@ async function main(): Promise<void> {
       return;
     }
 
+    case 'person': {
+      // The reading side of the person layer: who they are, what happened recently, and the
+      // questions about them that are still open. No model call.
+      const name = positional[0];
+      if (!name) throw new Error('usage: soulbridge person <name>');
+      const { soul } = open(flags);
+      const card = soul.personCard(name);
+      out({
+        entity: card.entity
+          ? { id: card.entity.id, name: card.entity.name, type: card.entity.type, aliases: card.entity.aliases }
+          : null,
+        recent: card.recent.map((fact) => ({
+          at: fact.atText ?? (fact.at ? new Date(fact.at).toISOString().slice(0, 10) : undefined),
+          role: fact.role,
+          source: fact.source,
+          statement: fact.statement,
+        })),
+        openGaps: card.openGaps.map((gap) => gap.topic),
+      });
+      return;
+    }
+
     case 'why': {
       // The reader for the 依据 slot: a fact I said must be traceable to the turn I said it
       // in, and a conclusion must be traceable to the facts that support it.
@@ -547,6 +569,7 @@ async function main(): Promise<void> {
           '  export --out <file>             导出 JSONL',
           '  export --dir <directory>        导出可携带档案（archive/summary/injection）',
           '  why <factId>                    这条事实的依据：来源轮次 / 证据',
+          '  person <name>                   某人的近况：最近事实 + 未闭合的问题',
           '  import --in <file>              导入 JSONL',
           '  import --from <steering.md>     导入 AGENTS.md / CLAUDE.md',
           '  ingest --file <transcript.jsonl> 会话转写 → 记忆与情绪采样',

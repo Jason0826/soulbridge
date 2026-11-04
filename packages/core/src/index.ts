@@ -1214,6 +1214,36 @@ export class Soul {
     });
   }
 
+  /**
+   * What we know about one person right now: their record, the recent events, and the
+   * questions about them that are still open.
+   *
+   * This is the reading side of the person layer. It deliberately does not summarise with a
+   * model — the caller asks "how is she" and the model decides how to use these lines.
+   */
+  personCard(
+    nameOrId: string,
+    options: { limit?: number } = {},
+  ): { entity: Entity | null; recent: Fact[]; openGaps: Gap[] } {
+    const entity = this.store.entity(nameOrId) ?? this.findEntities(nameOrId, 1)[0] ?? null;
+    if (!entity) return { entity: null, recent: [], openGaps: [] };
+    const recent = this.store.facts({
+      soulId: this.soulId,
+      userId: this.userId,
+      entityId: entity.id,
+      limit: options.limit ?? 8,
+    });
+    const openGaps = this.openGapsAbout(entity.id);
+    return { entity, recent, openGaps };
+  }
+
+  /** The open questions still attached to one person (the ones worth asking about). */
+  openGapsAbout(entityId: string): Gap[] {
+    return this.store
+      .openGaps(this.soulId, this.userId, 500)
+      .filter((gap) => gap.aboutEntityId === entityId);
+  }
+
   /** A fact plus the conversation behind it: hook first, detail on demand. */
   factDetail(factId: string): FactDetail | null {
     const fact = this.store.fact(factId);
