@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-04 20:45**（core 0.0.113 / plugin 0.0.113）
+最后核对：**2026-11-04 21:38**（core 0.0.113 / plugin 0.0.114）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -20,9 +20,12 @@
 已验证         插件 94 / core 301 测试；installed web profile core 0.0.113 / plugin 0.0.114，verify-installed 全过
                v15 迁移实测：874 条事实，active 带 valid_to 的 0 条（原先 247 条"当天失效"的猜测已清）
                valid_from 全部有值；precision day 246 / range 6 / relative 13 / unknown 609；retracted 57 条按时关闭
+               21:35 quality.mjs 新增时间轴观测：valid_from 空值率 0/891；0027 后 17 条新事实全 day、空 0；
+               取代引用 成功 50 / 失败 1（supersede-target-retracted）→ 失败率 2% PASS
                19:36 首个 turn-cost 落库：turn 2 → requests=5（steps=4 plugin=1）
-下一步         1) 把 turn-cost 读进 quality.mjs（每轮请求数分布，现在只有 trace 原始行）
-               2) 子代理的请求要不要滚到父轮 —— 需要 DSH 暴露会话谱系，事件流里没有
+下一步         1) 时间检索接 precision（0027 §八 四个读者里的第一个真读者）
+               2) 把 turn-cost 读进 quality.mjs（每轮请求数分布，现在只有 trace 原始行）
+               3) 子代理的请求要不要滚到父轮 —— 需要 DSH 暴露会话谱系，事件流里没有
 不要做         抽取输入上限 —— 用户明确否决（751 次里只有 1 次超 6 万字符）
 不能忘         抽取单位 = 线索；自包含闸门只对 holder 生效；事实必须写轮次
                **时间：created_at 代码写 / valid_from·valid_to 模型判定**（断言=说出口那天成立；
