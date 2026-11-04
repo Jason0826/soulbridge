@@ -12,7 +12,7 @@
 import type { ContextRequest, ContextResult, Emotion } from './types.ts';
 import type { SoulStore } from './store.ts';
 import { FACT_STATUS } from './config/status.ts';
-import { ANCHOR_TYPES } from './config/labels.ts';
+import { ANCHOR_TYPES, INFERRED_MARKER, SOURCE_NOTES } from './config/labels.ts';
 import { isActive, roleOf } from './roles.ts';
 import { escapeAttr, escapeBlockText } from './inject-text.ts';
 import { selectDirectives } from './affect/directives.ts';
@@ -138,7 +138,7 @@ export function buildContext(
     }
     // Escaping can lengthen a line (one `&lt;` is four characters), so cost is charged
     // on the escaped text — the budget has to measure what actually gets injected.
-    const marker = anchor.inferred ? '我: ' : '';
+    const marker = anchor.inferred ? INFERRED_MARKER : '';
     const line = `- ${marker}[${escapeBlockText(anchor.label)}] ${escapeBlockText(anchor.text)}`;
     if (anchor.inferred) sawInferred = true;
     const cost = line.length + 1 + 10; // line + newline + section overhead share
@@ -152,11 +152,7 @@ export function buildContext(
   }
 
   if (request.includeAnchors !== false && lines.length > 0) sections.push(`<memories>\n${lines.join('\n')}\n</memories>`);
-  if (sawInferred) {
-    sections.push(
-      '<source-notes>以「我:」开头的是我上一轮说的话，未经用户确认；没标的都是用户说的。</source-notes>',
-    );
-  }
+  if (sawInferred) sections.push(SOURCE_NOTES);
 
   const text = sections.join('\n\n');
   if (request.track !== false && used.length > 0) store.touch(used, now);

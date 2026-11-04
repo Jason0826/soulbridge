@@ -14,6 +14,7 @@ export {
   AFFECT_BUDGET,
   AFFECT_WINDOW_MS,
 } from './context.ts';
+export { INFERRED_MARKER, SOURCE_NOTES } from './config/labels.ts';
 export {
   reflect,
   ruleExtract,
