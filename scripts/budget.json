@@ -141,10 +141,15 @@
       "date": "2026-11-04",
       "delta": 80,
       "reason": "0027 读取方 1：时间检索接 precision（core 0.0.114）——TIME_CUE 从 retrieval.ts 移到 time.ts 并接上 findWindow（第一个读者），facts() 增加精度过滤与半开区间，Soul.factsInWindow 成为新原语（+80 行，含注释）。功能新增，按 0026 先例记一次；同期删掉 retrieval.ts 与 sqlite.ts 两处死注释。"
+    },
+    {
+      "date": "2026-11-04",
+      "delta": 65,
+      "reason": "0027 读取方 1 的宿主侧（插件 0.0.115）：planBlocks 增加 window 开关；renderTimeWindow 注入 <time-window cue from to>（range 用原话、空窗明说、截断明说、推断事实带标记）；buildRelatedContext 接线并写 trace time_window（+65 行，含注释）。与 core 0.0.114 同一批。"
     }
   ],
   "coreLines": 8798,
-  "pluginLines": 2640,
+  "pluginLines": 2705,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
