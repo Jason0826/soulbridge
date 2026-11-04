@@ -16,8 +16,8 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   0027 时间轴：valid_from / valid_to 由模型判定（core 0.0.113，schema v15 已迁移）
-已验证         插件 94 测试 / core 301 测试；installed web profile core 0.0.113 / plugin 0.0.113，verify-installed 全过
+现在在做什么   0027 时间轴：valid_from / valid_to 由模型判定（core 0.0.113 / plugin 0.0.114，schema v15 已迁移）
+已验证         插件 94 / core 301 测试；installed web profile core 0.0.113 / plugin 0.0.114，verify-installed 全过
                v15 迁移实测：874 条事实，active 带 valid_to 的 0 条（原先 247 条"当天失效"的猜测已清）
                valid_from 全部有值；precision day 246 / range 6 / relative 13 / unknown 609；retracted 57 条按时关闭
                19:36 首个 turn-cost 落库：turn 2 → requests=5（steps=4 plugin=1）
