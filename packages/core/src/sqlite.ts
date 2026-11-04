@@ -44,7 +44,7 @@ import type {
 import type { SoulStore } from './store.ts';
 import { bm25, buildCorpusStats, tokenize } from './scoring.ts';
 
-export const SCHEMA_VERSION = 14;
+export const SCHEMA_VERSION = 15;
 /** How many recent pairs are considered before scoring. Bounded so recall stays O(candidates). */
 const RECALL_CANDIDATES = 500;
 export const AFFECT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -205,12 +205,10 @@ CREATE TABLE IF NOT EXISTS facts (
   type_name      TEXT,
   role           TEXT NOT NULL DEFAULT 'observation',
   holder         TEXT NOT NULL DEFAULT 'world',
-  at             INTEGER,
-  at_text        TEXT,
-  at_end         INTEGER,
-  at_precision   TEXT NOT NULL DEFAULT 'unknown',
   valid_from     INTEGER,
-  valid_until    INTEGER,
+  valid_from_text TEXT,
+  valid_from_precision TEXT NOT NULL DEFAULT 'unknown',
+  valid_to       INTEGER,
   place_id       TEXT,
   status         TEXT NOT NULL DEFAULT 'active',
   confidence     REAL NOT NULL DEFAULT 1,
@@ -221,7 +219,7 @@ CREATE TABLE IF NOT EXISTS facts (
   recall_count   INTEGER NOT NULL DEFAULT 0,
   last_recalled_at INTEGER
 );
-CREATE INDEX IF NOT EXISTS idx_facts_scope ON facts(soul_id, user_id, at DESC);
+CREATE INDEX IF NOT EXISTS idx_facts_scope ON facts(soul_id, user_id, valid_from DESC);
 CREATE INDEX IF NOT EXISTS idx_facts_status ON facts(soul_id, user_id, status);
 CREATE INDEX IF NOT EXISTS idx_facts_created ON facts(soul_id, user_id, created_at DESC);
 
@@ -344,7 +342,49 @@ function upgradeToV3(db: DatabaseSync): void {
  */
 
 /** v6 → v7: turn threads (a topic's turns need not be adjacent) plus turns.thread_id. */
+/**
+ * v14 → v15: one time axis for facts (brief 0027).
+ *
+ * `at` and `valid_from` both meant "when the content starts to hold", and having two names
+ * for one value is what produced the bug v14 wrote: every dated row got `valid_until = at`,
+ * so 236 living facts were marked expired the day they were recorded.
+ *
+ * The model decides both ends now; the code only carries the columns.
+ */
+export function upgradeToV15(db: DatabaseSync): void {
+  ensureColumn(db, 'facts', 'valid_to', 'INTEGER');
+  ensureColumn(db, 'facts', 'valid_from_text', 'TEXT');
+  ensureColumn(db, 'facts', 'valid_from_precision', "TEXT NOT NULL DEFAULT 'unknown'");
+  // A fresh database is created with the new shape already; nothing to copy.
+  if (!columnExists(db, 'facts', 'at')) return;
+  db.exec('DROP INDEX IF EXISTS idx_facts_scope');
+  db.exec('UPDATE facts SET valid_from_text = at_text WHERE at_text IS NOT NULL');
+  db.exec('UPDATE facts SET valid_from_precision = at_precision WHERE at_precision IS NOT NULL');
+  // The model's date wins: for a claim it is the day the claim was made, for a state the
+  // day it began, for an event the day it happened.
+  db.exec('UPDATE facts SET valid_from = COALESCE(at, valid_from, created_at)');
+  // An explicit end survives; the v14 guess (valid_until = at) does not.
+  db.exec('UPDATE facts SET valid_to = at_end WHERE at_end IS NOT NULL');
+  db.exec(
+    `UPDATE facts SET valid_to = COALESCE(
+         (SELECT n.valid_from FROM facts n WHERE n.id = facts.superseded_by),
+         valid_until,
+         valid_from)
+      WHERE status = 'retracted'`,
+  );
+  db.exec('ALTER TABLE facts DROP COLUMN at');
+  db.exec('ALTER TABLE facts DROP COLUMN at_text');
+  db.exec('ALTER TABLE facts DROP COLUMN at_end');
+  db.exec('ALTER TABLE facts DROP COLUMN at_precision');
+  db.exec('ALTER TABLE facts DROP COLUMN valid_until');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_facts_scope ON facts(soul_id, user_id, valid_from DESC)');
+}
+
 export function upgradeToV14(db: DatabaseSync): void {
+  // A database created by the current SCHEMA already has the 0027 shape: it has no `at`
+  // and no valid_until, so this step has nothing to say. Checking the column keeps a
+  // fresh database from failing on a migration that describes a shape it never had.
+  if (!columnExists(db, 'facts', 'at')) return;
   // Correct the semantics v13 used: a dated statement stops describing the present when the
   // event is over. "小林在 10-24 被裁员" is valid on 10-24, not forever — otherwise every
   // historical event would look like a current state.
@@ -413,7 +453,8 @@ export function upgradeToV10(db: DatabaseSync): void {
 export function upgradeToV9(db: DatabaseSync): void {
   // Time became locatability (ADR 0032): a fact may be known to exist without a
   // date, and that is a value — unknown — not a reason to discard it.
-  ensureColumn(db, 'facts', 'at_precision', "TEXT NOT NULL DEFAULT 'unknown'");
+  // (The `at_precision` column this step used to add was retired by v15 / brief 0027;
+  // re-adding it here would recreate a name the store no longer has.)
   // What a fact is *for* (config/domains.ts FACT_ROLES). Backfill from the old type label so
   // rows written before this column still reach the right consumer.
   ensureColumn(db, 'facts', 'role', "TEXT NOT NULL DEFAULT 'observation'");
@@ -563,6 +604,7 @@ export function openSqlite(file: string): SoulStore {
       if (version < 7) upgradeToV7(db);
       if (version < 8) upgradeToV8(db);
       if (version < 14) upgradeToV14(db);
+      if (version < 15) upgradeToV15(db);
       // v6 adds tables only; SCHEMA creates them on every open, nothing to copy.
       setVersion(db, SCHEMA_VERSION);
       db.exec('COMMIT');
@@ -1092,10 +1134,11 @@ export function openSqlite(file: string): SoulStore {
         const inserted = db
           .prepare(
             `INSERT OR IGNORE INTO facts
-               (id, soul_id, user_id, statement, type_name, role, holder, at, at_text, at_end, at_precision,
-                valid_from, valid_until, place_id, status, confidence, source, source_turn_id, superseded_by,
+               (id, soul_id, user_id, statement, type_name, role, holder,
+                valid_from, valid_from_text, valid_from_precision, valid_to,
+                place_id, status, confidence, source, source_turn_id, superseded_by,
                 created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
             id,
@@ -1105,16 +1148,13 @@ export function openSqlite(file: string): SoulStore {
             spec.typeName ?? null,
             role,
             spec.holder ?? 'world',
-            spec.at ?? null,
-            spec.atText ?? null,
-            spec.atEnd ?? null,
-            spec.atPrecision ?? 'unknown',
-            spec.validFrom ?? spec.at ?? createdAt,
-            // A dated statement describes the world at that moment. For an event, validity
-            // ends when it is over (at, or at_end for a range); a standing state has no date
-            // and stays open until something replaces it. "Current" is therefore one query:
-            // valid_until IS NULL OR valid_until > now.
-            spec.validUntil ?? spec.atEnd ?? spec.at ?? null,
+            // The model decides both ends (brief 0027). The writer fills neither from the
+            // other: a claim made today is not "over" today, and an undated fact is not an
+            // error. `created_at` already records when we wrote it down.
+            spec.validFrom ?? null,
+            spec.validFromText ?? null,
+            spec.validFromPrecision ?? 'unknown',
+            spec.validTo ?? null,
             spec.placeId ?? null,
             spec.status ?? 'active',
             spec.confidence ?? 1,
@@ -1160,11 +1200,11 @@ export function openSqlite(file: string): SoulStore {
         args.push(query.entityId);
       }
       if (query.since !== undefined) {
-        where.push('f.at >= ?');
+        where.push('f.valid_from >= ?');
         args.push(query.since);
       }
       if (query.until !== undefined) {
-        where.push('f.at <= ?');
+        where.push('f.valid_from <= ?');
         args.push(query.until);
       }
       if (query.status) {
@@ -1179,7 +1219,7 @@ export function openSqlite(file: string): SoulStore {
       const rows = db
         .prepare(
           `SELECT f.* FROM facts f WHERE ${where.join(' AND ')}
-           ORDER BY COALESCE(f.at, f.created_at) ${direction} LIMIT ?`,
+           ORDER BY COALESCE(f.valid_from, f.created_at) ${direction} LIMIT ?`,
         )
         .all(...args, query.limit ?? 200) as Row[];
       const ids = rows.map((r) => String(r.id));
@@ -1198,7 +1238,7 @@ export function openSqlite(file: string): SoulStore {
       const endedAt = Number(successor?.valid_from ?? successor?.created_at ?? Date.now());
       withRetry(() =>
         db
-          .prepare(`UPDATE facts SET status = '${FACT_STATUS.retracted}', superseded_by = ?, valid_until = ? WHERE id = ?`)
+          .prepare(`UPDATE facts SET status = '${FACT_STATUS.retracted}', superseded_by = ?, valid_to = ? WHERE id = ?`)
           .run(newId, endedAt, oldId),
       );
     },
@@ -1574,7 +1614,7 @@ export function openSqlite(file: string): SoulStore {
            WHERE f.soul_id = ? AND f.user_id = ? AND f.status = '${FACT_STATUS.active}'
              AND (e.name = ? OR e.aliases LIKE ?)
              AND (? IS NULL OR f.statement LIKE ? OR COALESCE(f.type_name, '') LIKE ?)
-           ORDER BY COALESCE(f.at, f.created_at) DESC
+           ORDER BY COALESCE(f.valid_from, f.created_at) DESC
            LIMIT ?`,
         )
         .all(
@@ -1598,7 +1638,7 @@ export function openSqlite(file: string): SoulStore {
       const stats = buildCorpusStats(facts.map((fact) => tokenize(fact.statement)));
       const scored = facts.map((fact) => {
         const relevanceScore = bm25(queryTokens, tokenize(fact.statement), stats);
-        const ageDays = Math.max(0, (now - (fact.at ?? fact.createdAt)) / 86_400_000);
+        const ageDays = Math.max(0, (now - (fact.validFrom ?? fact.createdAt)) / 86_400_000);
         // Power law, not exponential: the tail of a memory stays reachable (0019).
         const decay = 1 / Math.sqrt(1 + ageDays);
         const practice = 1 + 0.2 * Math.log(1 + fact.recallCount);
@@ -1804,12 +1844,10 @@ function rowToFact(row: Row, slots: Map<string, FactSlot[]>): Fact {
     typeName: row.type_name === null ? undefined : String(row.type_name),
     role: row.role === null || row.role === undefined ? undefined : (String(row.role) as Fact['role']),
     holder: String(row.holder),
-    at: row.at === null ? undefined : Number(row.at),
-    atText: row.at_text === null ? undefined : String(row.at_text),
-    atEnd: row.at_end === null ? undefined : Number(row.at_end),
-    atPrecision: (row.at_precision ?? 'unknown') as Fact['atPrecision'],
     validFrom: row.valid_from == null ? undefined : Number(row.valid_from),
-    validUntil: row.valid_until == null ? undefined : Number(row.valid_until),
+    validFromText: row.valid_from_text == null ? undefined : String(row.valid_from_text),
+    validFromPrecision: (row.valid_from_precision ?? 'unknown') as Fact['validFromPrecision'],
+    validTo: row.valid_to == null ? undefined : Number(row.valid_to),
     placeId: row.place_id === null ? undefined : String(row.place_id),
     status: String(row.status) as Fact['status'],
     confidence: Number(row.confidence),

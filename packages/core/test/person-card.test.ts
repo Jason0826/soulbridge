@@ -11,8 +11,8 @@ test('person card: resolves by alias and returns recent facts plus open question
   const her = soul.rememberEntity('小林', 'person', { aliases: ['阿林'] });
   soul.recordFact({
     statement: '小林在 2026-10-24 那周被裁员',
-    at: Date.parse('2026-10-24T00:00:00Z'),
-    atText: '2026-10-24',
+    validFrom: Date.parse('2026-10-24T00:00:00Z'),
+    validFromText: '2026-10-24',
     source: 'told',
     confidence: 0.8,
     slots: [{ slot: '被裁员者', value: { kind: 'entity', entityId: her.id } }],

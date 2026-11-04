@@ -504,7 +504,8 @@ async function main(): Promise<void> {
           ? { id: card.entity.id, name: card.entity.name, type: card.entity.type, aliases: card.entity.aliases }
           : null,
         recent: card.recent.map((fact) => ({
-          at: fact.atText ?? (fact.at ? new Date(fact.at).toISOString().slice(0, 10) : undefined),
+          validFrom: fact.validFromText ?? (fact.validFrom ? new Date(fact.validFrom).toISOString().slice(0, 10) : undefined),
+          validTo: fact.validTo ? new Date(fact.validTo).toISOString().slice(0, 10) : undefined,
           role: fact.role,
           source: fact.source,
           statement: fact.statement,

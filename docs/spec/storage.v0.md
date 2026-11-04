@@ -293,10 +293,10 @@ v1 → v2：memories.updated_at / memories.deleted_at / emotions.updated_at
 | `type_name` | 自由文本类型名（偏好/裁员/结论…），不设枚举 |
 | `role` | 结构角色：observation / judgment / rule / profile / promise / lesson（`config/domains.ts` 唯一声明）；由调用方/模型给出，写方不猜 |
 | `holder` | 成立位置：`world` / `self` / 实体 id（ADR 0032） |
-| `at` / `at_text` / `at_end` | 事件发生时间、原话、区间结束（断言可空） |
-| `at_precision` | day / range / relative / unknown |
-| `valid_from` | 这条内容从什么时候成立（默认 `at` 或记录时间） |
-| `valid_until` | 到什么时候不再成立：**事件在结束时关（`at_end` 或 `at`），状态在被取代时关**（关闭点 = 后继的 `valid_from`）；空 = 仍成立 |
+| `valid_from` | 这条内容从什么时候开始成立；**由模型判定**（事件=发生日、状态=开始日、断言=说出口那天），代码不兜底（brief 0027） |
+| `valid_to` | 到什么时候不再成立；**由模型判定**：只有状态结束或被取代时才写（关闭点 = 后继的 `valid_from`）；空 = 仍成立。事件永远不写——历史事件不会过期 |
+| `valid_from_text` | 时间的原话（"上周三"），证据，不参与排序 |
+| `valid_from_precision` | day / range / relative / unknown（`config/status.ts` 声明） |
 | `place_id` | 地点实体引用，可空 |
 | `status` | raw / candidate / active / retracted（`config/status.ts`） |
 | `confidence` | 0–1；空字段不落 0 |

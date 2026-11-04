@@ -418,7 +418,7 @@ export class Soul {
   async extract(
     text: string,
     options: {
-      at?: number;
+      now?: number;
       llm?: (prompt: string) => Promise<string> | string;
       /** 'auto' (default) uses the model then falls back; 'rules' forces rules. */
       mode?: 'auto' | 'rules';
@@ -433,14 +433,14 @@ export class Soul {
        * The whole topic (0025). When given, the prompt carries every turn and the model
        * sees the conversation as one unit; `text`/`assistantText` are then ignored.
        */
-      turns?: Array<{ turnNo: number; userText: string; assistantText?: string; at?: number }>;
+      turns?: Array<{ turnNo: number; userText: string; assistantText?: string; startedAt?: number }>;
     } = {},
   ): Promise<ExtractDraft> {
-    const at = options.at ?? Date.now();
+    const now = options.now ?? Date.now();
     // Rules work on one message; for a thread that is the last turn (the rules floor
     // exists for "no model", not for reconstructing a topic).
     const fallbackText = options.turns?.length ? options.turns[options.turns.length - 1].userText : text;
-    const byRules = extractByRules(fallbackText, at);
+    const byRules = extractByRules(fallbackText, now);
     // No length gate here: "做" and "重来" are one and two characters and are
     // real decisions. The host decides what is worth a model call; core only
     // reports which path it took.
@@ -459,19 +459,19 @@ export class Soul {
         }
       : options.llm;
     const result = options.turns?.length
-      ? await extractThreadWithModel(options.turns, wrapped, at, context)
-      : await extractWithModel(text, wrapped, at, context, options.assistantText);
+      ? await extractThreadWithModel(options.turns, wrapped, now, context)
+      : await extractWithModel(text, wrapped, now, context, options.assistantText);
     return result.draft ?? { ...byRules, reason: `model-${result.error ? 'failed' : 'empty'}` };
   }
 
   /** The turns of one thread, in order, as the extraction input (0025). */
-  threadTurns(threadId: string): Array<{ turnNo: number; userText: string; assistantText?: string; at?: number; id: string }> {
+  threadTurns(threadId: string): Array<{ turnNo: number; userText: string; assistantText?: string; startedAt?: number; id: string }> {
     return this.store.threadTurns(threadId).map((turn, index) => ({
       id: turn.id,
       turnNo: index + 1,
       userText: turn.userText,
       assistantText: turn.assistantText,
-      at: turn.at,
+      startedAt: turn.at,
     }));
   }
 
@@ -492,7 +492,7 @@ export class Soul {
       }));
     const facts = this.store
       .facts({ soulId: this.soulId, userId: this.userId, limit: 12 })
-      .map((f) => ({ id: f.id, statement: f.statement, atText: f.atText }));
+      .map((f) => ({ id: f.id, statement: f.statement, validFromText: f.validFromText }));
     // Candidate threads, most recently used first. "How many turns ago" is what
     // lets the model tell "just now" from "a while back" without counting. Each
     // candidate also carries its last lines: a label cannot answer "does this turn
@@ -613,13 +613,13 @@ export class Soul {
    */
   commitDrafts(
     draft: ExtractDraft,
-    options: { turnId?: string; at?: number; turnIds?: Record<number, string> } = {},
+    options: { turnId?: string; now?: number; turnIds?: Record<number, string> } = {},
   ): CommitResult {
     const entities = new Map<string, Entity>();
     const skipped: CommitResult['skipped'] = [];
     const droppedSlots: CommitResult['droppedSlots'] = [];
     const holderFallbacks: CommitResult['holderFallbacks'] = [];
-    const at = options.at ?? Date.now();
+    const now = options.now ?? Date.now();
 
     // One entity per name, whatever its declared type: the same 核桃 appearing as
     // both person and thing splits every recall that mentions it. Existing rows
@@ -650,7 +650,7 @@ export class Soul {
         userId: this.userId,
         type,
         name,
-        seenAt: at,
+        seenAt: now,
         attrs: draft.entities.find((e) => e.name === name)?.attrs,
         aliases: draft.entities.find((e) => e.name === name)?.aliases,
       });
@@ -729,8 +729,8 @@ export class Soul {
       const duplicated = recent.some(
         (f) =>
           f.statement === statement &&
-          (f.atText ?? '') === (factDraft.atText ?? '') &&
-          Math.abs((f.at ?? f.createdAt) - (factDraft.at ?? at)) < 86400000,
+          (f.validFromText ?? '') === (factDraft.validFromText ?? '') &&
+          Math.abs((f.validFrom ?? f.createdAt) - (factDraft.validFrom ?? now)) < 86400000,
       );
       if (duplicated) {
         skipped.push({ what: statement, reason: 'duplicate' });
@@ -762,19 +762,20 @@ export class Soul {
         role,
         status,
         typeName: factDraft.typeName,
-        at: factDraft.at,
-        atText: factDraft.atText,
-        atPrecision: factDraft.atPrecision,
+        validFrom: factDraft.validFrom,
+        validFromText: factDraft.validFromText,
+        validFromPrecision: factDraft.validFromPrecision,
+        validTo: factDraft.validTo,
         source: factDraft.source,
         confidence: factDraft.confidence,
         sourceTurnId,
         slots,
       });
       facts.push(written);
-      // A missing date is a property of the fact (`atPrecision: unknown`), not an open
-      // question. Turning every undated fact into a gap produced 223 open gaps in two days,
-      // of which 78% were '日期不明：…' — they can never be closed, and they bury the gaps
-      // that are worth asking about. The fact stays; the question is not created.
+      // A missing time is a property of the fact (`validFromPrecision: unknown`), not an
+      // open question. Turning every undated fact into a gap produced 223 open gaps in two
+      // days, of which 78% were '日期不明：…' — they can never be closed, and they bury the
+      // gaps that are worth asking about. The fact stays; the question is not created.
       return written;
     };
 
@@ -819,7 +820,7 @@ export class Soul {
           aboutFactId: facts.length === 1 ? facts[0].id : undefined,
           topic: gapDraft.topic,
           tension: gapDraft.tension,
-          openedAt: at,
+          openedAt: now,
         }),
       );
     }

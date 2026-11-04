@@ -13,7 +13,7 @@ test('rules: person, relation, time and verb from one sentence', () => {
   assert.deepEqual(draft.entities[0].attrs, { relation: '同事' });
   const fact = draft.facts[0];
   assert.equal(fact.typeName, '裁员');
-  assert.equal(fact.atText, '上周');
+  assert.equal(fact.validFromText, '上周');
   assert.equal(fact.source, 'told');
   const slot = fact.slots[0];
   assert.equal(slot.slot, '被裁员者', 'passive voice picks the passive slot');
@@ -24,7 +24,7 @@ test('rules: an event with no person still becomes a fact', () => {
   const draft = extractByRules('今天下雨了', NOW);
   assert.equal(draft.facts.length, 1);
   assert.equal(draft.facts[0].slots.length, 0, 'no invented entity for the weather');
-  assert.equal(draft.facts[0].atText, '今天');
+  assert.equal(draft.facts[0].validFromText, '今天');
 });
 
 test('rules: un uncertainty gap inside one turn binds the pronoun to the last person', () => {
@@ -45,7 +45,7 @@ test('extract: the model goes first even when the rules would match', async () =
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
   const llm = () =>
     '{"entities":[{"name":"小林","type":"person"}],"facts":[{"statement":"模型抽取的结果","slots":[{"slot":"当事人","entity":"小林"}]}],"gaps":[]}';
-  const draft = await soul.extract('我同事小林上周被裁员了', { at: NOW, llm });
+  const draft = await soul.extract('我同事小林上周被裁员了', { now: NOW, llm });
   assert.equal(draft.by, 'llm', 'model answer wins over the rule draft');
   assert.equal(draft.facts[0].statement, '模型抽取的结果');
   store.close();
@@ -55,7 +55,7 @@ test('extract: a broken model falls back to the rules instead of losing the turn
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
   const draft = await soul.extract('我同事小林上周被裁员了', {
-    at: NOW,
+    now: NOW,
     llm: () => {
       throw new Error('model down');
     },
@@ -70,7 +70,7 @@ test('extract: rules mode never calls the model', async () => {
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
   let called = false;
   const draft = await soul.extract('我同事小林上周被裁员了', {
-    at: NOW,
+    now: NOW,
     mode: 'rules',
     llm: () => {
       called = true;
@@ -104,7 +104,7 @@ test('model: sees existing entities and facts in the prompt', async () => {
       return '{"entities":[],"operations":[],"gaps":[]}';
     },
     NOW,
-    { entities: [{ id: 'en_1', name: '小林', relation: '同事' }], facts: [{ id: 'fc_1', statement: '小林被裁员', atText: '上周' }] },
+    { entities: [{ id: 'en_1', name: '小林', relation: '同事' }], facts: [{ id: 'fc_1', statement: '小林被裁员', validFromText: '上周' }] },
   );
   assert.match(prompt, /<known-entities>/);
   assert.match(prompt, /小林/);
@@ -117,7 +117,7 @@ test('model: supersede retires the old fact and writes the new one', async () =>
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
   const first = soul.commitDrafts({
     entities: [{ name: '小林', type: 'person' }],
-    facts: [{ statement: '小林在找工作', atText: '上周', source: 'told', confidence: 0.7, slots: [{ slot: '求职者', value: { kind: 'entity', entityName: '小林' } }] }],
+    facts: [{ statement: '小林在找工作', validFromText: '上周', source: 'told', confidence: 0.7, slots: [{ slot: '求职者', value: { kind: 'entity', entityName: '小林' } }] }],
     gaps: [],
     by: 'rules',
   });
@@ -125,10 +125,10 @@ test('model: supersede retires the old fact and writes the new one', async () =>
 
   const llm = () =>
     `{"entities":[],"operations":[{"op":"supersede","target":"${oldFact.id}",
-      "fact":{"statement":"小林找到新工作了","at_text":"今天","source":"told",
+      "fact":{"statement":"小林找到新工作了","valid_from_text":"今天","source":"told",
               "slots":[{"slot":"入职者","entity":"小林"}]}}],"gaps":[]}`;
-  const draft = await soul.extract('小林找到新工作了', { llm, at: NOW });
-  const result = soul.commitDrafts(draft, { at: NOW });
+  const draft = await soul.extract('小林找到新工作了', { llm, now: NOW });
+  const result = soul.commitDrafts(draft, { now: NOW });
 
   assert.equal(result.facts.length, 1);
   const all = store.facts({ soulId: 's1', userId: 'u1' });
@@ -142,12 +142,12 @@ test('model: an unknown supersede target keeps the news and reports why it did n
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
   const llm = () => '{"operations":[{"op":"supersede","target":"fc_nope","fact":{"statement":"小林搬走了","at_text":"昨天","slots":[{"slot":"搬家者","entity":"小林"}]}}],"entities":[{"name":"小林","type":"person"}],"gaps":[]}';
-  const draft = await soul.extract('小林搬走了', { llm, at: NOW });
+  const draft = await soul.extract('小林搬走了', { llm, now: NOW });
   // The writer decides whether a predecessor exists (single place for that judgement);
   // the extractor keeps what the model said so the skip report can explain it.
   assert.equal(draft.operations?.[0].op, 'supersede');
   assert.equal(draft.operations?.[0].targetId, 'fc_nope');
-  const result = soul.commitDrafts(draft, { at: NOW });
+  const result = soul.commitDrafts(draft, { now: NOW });
   assert.equal(result.facts.length, 1, '句子不丢');
   assert.match(result.skipped[0]?.reason ?? '', /unknown-supersede-target/);
   store.close();
@@ -157,8 +157,8 @@ test('model: noop writes nothing', async () => {
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
   const llm = () => '{"operations":[{"op":"noop"}],"entities":[{"name":"小林","type":"person"}],"gaps":[]}';
-  const draft = await soul.extract('好的知道了', { llm, at: NOW });
-  const result = soul.commitDrafts(draft, { at: NOW });
+  const draft = await soul.extract('好的知道了', { llm, now: NOW });
+  const result = soul.commitDrafts(draft, { now: NOW });
   assert.equal(result.facts.length, 0);
   assert.equal(store.facts({ soulId: 's1', userId: 'u1' }).length, 0);
   store.close();
@@ -199,20 +199,20 @@ test('commit: writes entities, facts and slots; repeats are refused, not duplica
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
 
-  const draft = await soul.extract('我同事小林上周被裁员了', { at: NOW });
-  const first = soul.commitDrafts(draft, { at: NOW });
+  const draft = await soul.extract('我同事小林上周被裁员了', { now: NOW });
+  const first = soul.commitDrafts(draft, { now: NOW });
   assert.equal(first.entities.length, 1);
   assert.equal(first.facts.length, 1);
   assert.equal(first.skipped.length, 0);
 
   const fact = first.facts[0];
-  assert.equal(fact.atText, '上周');
+  assert.equal(fact.validFromText, '上周');
   const slot = fact.slots[0];
   assert.equal(slot.value.kind, 'entity');
   const entityId = slot.value.kind === 'entity' ? slot.value.entityId : '';
   assert.equal(first.entities[0].id, entityId, 'slot points at the entity that was written');
 
-  const second = soul.commitDrafts(draft, { at: NOW });
+  const second = soul.commitDrafts(draft, { now: NOW });
   assert.equal(second.facts.length, 0);
   assert.equal(second.skipped[0].reason, 'duplicate');
   assert.equal(store.facts({ soulId: 's1', userId: 'u1' }).length, 1, 'still one fact');
@@ -264,7 +264,7 @@ test('commit: time or a holder makes a fact easier to find, but neither is requi
     facts: [
       {
         statement: '今天很热',
-        atText: '今天',
+        validFromText: '今天',
         source: 'told',
         confidence: 0.6,
         slots: [{ slot: '天气', value: { kind: 'text', value: '热' } }],
@@ -291,9 +291,9 @@ test('line format: 持有 and 精度 are keyed, so old lines still parse', () =>
   const world = operations[0].fact;
   const mind = operations[1].fact;
   assert.equal(world.holder, 'world');
-  assert.equal(world.at_precision, 'day');
+  assert.equal(world.valid_from_precision, 'day');
   assert.equal(mind.holder, '用户');
-  assert.equal(mind.at_precision, 'unknown');
+  assert.equal(mind.valid_from_precision, 'unknown');
   assert.equal((world.slots as unknown[]).length, 1);
 });
 
@@ -306,7 +306,7 @@ test('commit: unknown time is kept on the fact, and is not turned into a gap', (
       {
         statement: '用户与a吃了火锅',
         holder: 'world',
-        atPrecision: 'unknown',
+        validFromPrecision: 'unknown',
         source: 'told',
         confidence: 0.7,
         slots: [{ slot: '对象', value: { kind: 'entity', entityName: 'a', entityType: 'person' } }],
@@ -316,7 +316,7 @@ test('commit: unknown time is kept on the fact, and is not turned into a gap', (
     by: 'rules',
   });
   assert.equal(result.facts.length, 1, 'unknown time is not a reason to discard');
-  assert.equal(result.facts[0].atPrecision, 'unknown');
+  assert.equal(result.facts[0].validFromPrecision, 'unknown');
   // A missing date is a property of the fact. Turning it into an open question produced 223
   // gaps in two days, none closable, and buried the gaps worth asking about.
   assert.equal(result.gaps.length, 0, 'no gap is opened for an undated fact');
@@ -335,7 +335,7 @@ test('commit: a fact in someone\'s mind carries that holder and opens no gap', (
       {
         statement: '用户认为改 prompt 不能让模型稳定输出',
         holder: '用户',
-        atPrecision: 'unknown',
+        validFromPrecision: 'unknown',
         source: 'told',
         confidence: 0.8,
         slots: [{ slot: '提出者', value: { kind: 'entity', entityName: '用户', entityType: 'self' } }],

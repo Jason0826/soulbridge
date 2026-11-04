@@ -17,7 +17,7 @@ test('lines: a filled template becomes a draft', () => {
   assert.equal(draft?.facts.length, 1);
   const fact = draft?.facts[0];
   assert.equal(fact?.statement, '小林在 2026-10-24 那周被裁员');
-  assert.equal(fact?.atText, '上周');
+  assert.equal(fact?.validFromText, '上周');
   assert.equal(fact?.source, 'told');
   assert.equal(fact?.slots.length, 2);
   assert.deepEqual(fact?.slots[0].value, { kind: 'entity', entityName: '小林', entityType: 'person' }, '@ 才是实体引用');

@@ -11,7 +11,7 @@
  *    only asked when the rules miss — synthesis is the model's job, parsing is
  *    the code's (ADR 0027).
  * 3. Nothing is invented. A rule that cannot decide emits less, not a guess:
- *    an unknown time stays `atText`, an unresolved "她" stays unresolved.
+ *    an unknown time stays `validFromText`, an unresolved "她" stays unresolved.
  *
  * Pure functions, no I/O, no dependencies.
  */
@@ -56,7 +56,7 @@ const TIME_WORDS = [
   '去年', '今年', '去年年底', '上周末', '这周末',
 ];
 
-/** Rough offsets in days; good enough to sort, and `atText` keeps the original. */
+/** Rough offsets in days; good enough to sort, and `validFromText` keeps the original. */
 const TIME_OFFSET_DAYS: Record<string, number> = {
   昨天: -1, 前天: -2, 大前天: -3, 今天: 0,
   明天: 1, 后天: 2, 上周: -7, 上周末: -5, 本周: 0, 这周: 0, 这周末: 2,
@@ -95,12 +95,12 @@ export function parseIsoDate(text: string): number | undefined {
   return calendarDate(Number(match[1]), Number(match[2]), Number(match[3]));
 }
 
-/** First time expression in the sentence, with a rough timestamp. */
-function findTime(sentence: string, now: number): { at?: number; atText?: string } {
+/** First time expression in the sentence, with a rough timestamp for `validFrom`. */
+function findTime(sentence: string, now: number): { validFrom?: number; validFromText?: string } {
   for (const word of TIME_WORDS) {
     if (sentence.includes(word)) {
       const days = TIME_OFFSET_DAYS[word];
-      return days === undefined ? { atText: word } : { atText: word, at: now + days * 86400000 };
+      return days === undefined ? { validFromText: word } : { validFromText: word, validFrom: now + days * 86400000 };
     }
   }
   const explicit = sentence.match(/(\d{1,2})月(\d{1,2})[日号]/);
@@ -109,13 +109,13 @@ function findTime(sentence: string, now: number): { at?: number; atText?: string
     const day = Number(explicit[2]);
     const year = new Date(now).getUTCFullYear();
     // "2月31日" is not a date; keep the words and let the precision stay unknown.
-    const at = calendarDate(year, month, day);
-    return at === undefined ? { atText: explicit[0] } : { atText: explicit[0], at };
+    const validFrom = calendarDate(year, month, day);
+    return validFrom === undefined ? { validFromText: explicit[0] } : { validFromText: explicit[0], validFrom };
   }
   const yearMonth = sentence.match(/(\d{4})年(\d{1,2})月/);
   if (yearMonth) {
-    const at = calendarDate(Number(yearMonth[1]), Number(yearMonth[2]), 1);
-    return at === undefined ? { atText: yearMonth[0] } : { atText: yearMonth[0], at };
+    const validFrom = calendarDate(Number(yearMonth[1]), Number(yearMonth[2]), 1);
+    return validFrom === undefined ? { validFromText: yearMonth[0] } : { validFromText: yearMonth[0], validFrom };
   }
   return {};
 }
@@ -174,7 +174,7 @@ function toStatement(sentence: string): string {
  * the turn itself said who she is. Across turns we do not guess — an unresolved
  * "她" stays unresolved instead of being attached to the wrong person.
  */
-export function extractByRules(text: string, at = Date.now()): ExtractDraft {
+export function extractByRules(text: string, now = Date.now()): ExtractDraft {
   const entities: EntityDraft[] = [];
   const facts: FactDraft[] = [];
   const gaps: GapDraft[] = [];
@@ -190,7 +190,7 @@ export function extractByRules(text: string, at = Date.now()): ExtractDraft {
     const boundByPronoun = explicit.length === 0 && people.length > 0;
 
     const verb = findVerb(sentence);
-    const time = findTime(sentence, at);
+    const time = findTime(sentence, now);
 
     // A sentence with neither a person nor a known verb carries no structure;
     // it may still be worth keeping as a fact with no slots (e.g. "今天下雨了").
@@ -203,7 +203,8 @@ export function extractByRules(text: string, at = Date.now()): ExtractDraft {
       });
     }
 
-    const hasStructure = people.length > 0 || verb !== null || time.at !== undefined || time.atText !== undefined;
+    const hasStructure =
+      people.length > 0 || verb !== null || time.validFrom !== undefined || time.validFromText !== undefined;
     if (!hasStructure) continue;
 
     facts.push({
@@ -212,12 +213,13 @@ export function extractByRules(text: string, at = Date.now()): ExtractDraft {
       // is for, so it stores the minimal claim. The model path may say otherwise.
       role: 'observation',
       typeName: verb?.word,
-      at: time.at,
-      atText: time.atText,
+      validFrom: time.validFrom,
+      validFromText: time.validFromText,
       // Precision follows what the rules actually resolved: a parsed date is `day`, a
       // bare expression ("上次") is `relative`. Without this every rules fact claimed
       // unknown and could not join time retrieval even when it had a date.
-      atPrecision: time.at !== undefined ? 'day' : time.atText !== undefined ? 'relative' : 'unknown',
+      validFromPrecision:
+        time.validFrom !== undefined ? 'day' : time.validFromText !== undefined ? 'relative' : 'unknown',
       source: boundByPronoun ? 'inferred' : 'told',
       confidence: people.length > 0 ? (boundByPronoun ? 0.5 : 0.7) : 0.5,
       slots,
@@ -247,7 +249,7 @@ interface ModelParseResult {
 /** What the model is allowed to know about the store before extracting. */
 export interface ExtractionContext {
   entities: Array<{ id: string; name: string; aliases?: string[]; relation?: string }>;
-  facts: Array<{ id: string; statement: string; atText?: string }>;
+  facts: Array<{ id: string; statement: string; validFromText?: string }>;
   previousUserText?: string;
   /** Open threads, for attribution (labels plus their last lines, ADR 0034). */
   threads?: Array<{
@@ -272,13 +274,13 @@ export interface ExtractionContext {
 export async function extractWithModel(
   text: string,
   llm: (prompt: string) => Promise<string> | string,
-  at = Date.now(),
+  now = Date.now(),
   context?: ExtractionContext,
   assistantText?: string,
 ): Promise<ModelParseResult> {
   // A single exchange is a thread of one: the renderer has one shape, and the caller
   // that has a whole topic passes all its turns instead (0025).
-  return extractThreadWithModel([{ turnNo: 1, userText: text, assistantText, at }], llm, at, context);
+  return extractThreadWithModel([{ turnNo: 1, userText: text, assistantText, startedAt: now }], llm, now, context);
 }
 
 /**
@@ -289,14 +291,14 @@ export async function extractWithModel(
  * on purpose — a second parser would drift.
  */
 export async function extractThreadWithModel(
-  turns: Array<{ turnNo: number; userText: string; assistantText?: string; at?: number }>,
+  turns: Array<{ turnNo: number; userText: string; assistantText?: string; startedAt?: number }>,
   llm: (prompt: string) => Promise<string> | string,
-  at = Date.now(),
+  now = Date.now(),
   context?: ExtractionContext,
 ): Promise<ModelParseResult> {
   const prompt = renderExtractionPrompt({
     turns,
-    now: at,
+    now,
     entities: context?.entities,
     facts: context?.facts,
     previousUserText: context?.previousUserText,
@@ -316,7 +318,7 @@ export async function extractThreadWithModel(
   const threadLine = threadRead.kind === 'continue' || threadRead.kind === 'new' ? 'present' : threadRead.kind;
   const fromLines = parseLineDraft(raw);
   if (fromLines) {
-    const result = validateDraft(fromLines, at, context);
+    const result = validateDraft(fromLines, now, context);
     if (result.draft) {
       if (thread) result.draft.thread = thread;
       result.draft.threadLine = threadLine;
@@ -325,7 +327,7 @@ export async function extractThreadWithModel(
   }
   const json = extractJson(raw);
   if (!json) return { draft: null, error: `unparseable output: ${String(raw).slice(0, 60)}` };
-  const result = validateDraft(json, at, context);
+  const result = validateDraft(json, now, context);
   if (result.draft) {
     if (thread) result.draft.thread = thread;
     result.draft.threadLine = threadLine;
@@ -423,15 +425,16 @@ function parseFactDraft(obj: Record<string, unknown>): FactDraft | null {
   }
   const source = String(obj.source ?? 'told');
   const holderRaw = typeof obj.holder === 'string' ? obj.holder.trim() : '';
-  const precisionRaw = typeof obj.at_precision === 'string' ? obj.at_precision.trim() : '';
-  const at = typeof obj.at === 'number' ? obj.at : undefined;
-  const atText = typeof obj.at_text === 'string' ? obj.at_text : undefined;
+  const precisionRaw = typeof obj.valid_from_precision === 'string' ? obj.valid_from_precision.trim() : '';
+  const validFrom = typeof obj.valid_from === 'number' ? obj.valid_from : undefined;
+  const validFromText = typeof obj.valid_from_text === 'string' ? obj.valid_from_text : undefined;
+  const validTo = typeof obj.valid_to === 'number' ? obj.valid_to : undefined;
   const precision =
     precisionRaw && PRECISIONS.has(precisionRaw)
-      ? (precisionRaw as FactDraft['atPrecision'])
-      : at !== undefined
+      ? (precisionRaw as FactDraft['validFromPrecision'])
+      : validFrom !== undefined
         ? 'day'
-        : atText
+        : validFromText
           ? 'relative'
           : 'unknown';
   const roleRaw = typeof obj.role === 'string' ? obj.role.trim() : '';
@@ -448,9 +451,10 @@ function parseFactDraft(obj: Record<string, unknown>): FactDraft | null {
     // `world` unless the model named a mind; the commit gate resolves the name.
     holder: holderRaw || 'world',
     typeName: typeof obj.type_name === 'string' ? obj.type_name : undefined,
-    at,
-    atText,
-    atPrecision: precision,
+    validFrom,
+    validFromText,
+    validFromPrecision: precision,
+    ...(validTo === undefined ? {} : { validTo }),
     source: (SOURCES.has(source) ? source : 'told') as FactDraft['source'],
     confidence: typeof obj.confidence === 'number' ? Math.min(1, Math.max(0, obj.confidence)) : UNKNOWN_CONFIDENCE,
     // Only an explicit yes counts: the field is read by the promotion rules, and a
@@ -470,9 +474,10 @@ function parseFactDraft(obj: Record<string, unknown>): FactDraft | null {
  */
 export function validateDraft(
   json: unknown,
-  at = Date.now(),
+  now = Date.now(),
   context?: ExtractionContext,
 ): ModelParseResult {
+  void now;
   if (!json || typeof json !== 'object') return { draft: null, error: 'not an object' };
   const input = json as Record<string, unknown>;
   const knownFactIds = new Set((context?.facts ?? []).map((f) => f.id));
@@ -539,7 +544,6 @@ export function validateDraft(
   if (!hasOps && !hasNoop && facts.length === 0 && entities.length === 0 && gaps.length === 0) {
     return { draft: null, error: 'model returned nothing usable' };
   }
-  void at;
   return { draft: { entities, facts, gaps, operations, by: 'llm' }, error: undefined };
 }
 
@@ -589,15 +593,15 @@ export function parseLineDraft(raw: string): Record<string, unknown> | null {
     }
 
     if (kind === '事实') {
-      const [statement, typeName, at, atText, source, confidence, ...rest] = parts;
+      const [statement, typeName, validFromRaw, validFromText, source, confidence, ...rest] = parts;
       if (!statement) continue;
       const fact: Record<string, unknown> = { statement };
       if (typeName) fact.type_name = typeName;
       // A date that is not a real day on the calendar is dropped, not rolled:
       // '2026-02-31' used to become 03-03 and still claim precision=day.
-      const parsedAt = at ? parseIsoDate(at) : undefined;
-      if (parsedAt !== undefined) fact.at = parsedAt;
-      if (atText) fact.at_text = atText;
+      const parsedFrom = validFromRaw ? parseIsoDate(validFromRaw) : undefined;
+      if (parsedFrom !== undefined) fact.valid_from = parsedFrom;
+      if (validFromText) fact.valid_from_text = validFromText;
       if (source) fact.source = source;
       // An empty field is "the model did not say", not "the model said zero".
       // `Number('')` is 0, so an empty confidence used to rank the fact last — the
@@ -607,20 +611,26 @@ export function parseLineDraft(raw: string): Record<string, unknown> | null {
         fact.confidence = Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : UNKNOWN_CONFIDENCE;
       }
 
-      // 持有= / 精度= / 原则候选= / 操作= are keyed so the positional fields stay
-      // backward compatible; anything else in the tail is the slot list.
+      // 持有= / 精度= / 有效到= / 原则候选= / 操作= are keyed so the positional fields
+      // stay backward compatible; anything else in the tail is the slot list.
       let slotText: string | undefined;
       let supersedes = '';
       let wantsSupersede = false;
       for (const part of rest) {
-        const keyed = /^(持有|精度|原则候选|槽位|操作|角色|轮次)\s*[=＝]\s*(.*)$/.exec(part);
+        const keyed = /^(持有|精度|有效到|原则候选|槽位|操作|角色|轮次)\s*[=＝]\s*(.*)$/.exec(part);
         if (keyed) {
           if (keyed[1] === '持有') fact.holder = keyed[2].trim();
           else if (keyed[1] === '轮次') {
             const turnNo = Number(keyed[2].trim());
             if (Number.isInteger(turnNo) && turnNo > 0) fact.source_turn_no = turnNo;
           }
-          else if (keyed[1] === '精度') fact.at_precision = keyed[2].trim();
+          else if (keyed[1] === '精度') fact.valid_from_precision = keyed[2].trim();
+          else if (keyed[1] === '有效到') {
+            // The model may say when the content stops holding. An invalid date is
+            // dropped rather than repaired; "no end" stays absent, never guessed.
+            const parsedTo = parseIsoDate(keyed[2]);
+            if (parsedTo !== undefined) fact.valid_to = parsedTo;
+          }
           else if (keyed[1] === '角色') {
             const role = keyed[2].trim();
             if (ROLES.has(role)) fact.role = role;
@@ -660,11 +670,11 @@ export function parseLineDraft(raw: string): Record<string, unknown> | null {
       if (slots.length > 0) fact.slots = slots;
       // Precision must agree with what survived: a model that wrote 精度=day for a date
       // we rejected would otherwise claim exactness it does not have.
-      const precision = typeof fact.at_precision === 'string' ? fact.at_precision : '';
-      if (fact.at === undefined && precision === 'day') {
-        fact.at_precision = fact.at_text ? 'relative' : 'unknown';
-      } else if (fact.at !== undefined && !precision) {
-        fact.at_precision = 'day';
+      const precision = typeof fact.valid_from_precision === 'string' ? fact.valid_from_precision : '';
+      if (fact.valid_from === undefined && precision === 'day') {
+        fact.valid_from_precision = fact.valid_from_text ? 'relative' : 'unknown';
+      } else if (fact.valid_from !== undefined && !precision) {
+        fact.valid_from_precision = 'day';
       }
       // A supersede without a target is still recorded as an operation: the gate decides
       // whether the target exists, and a missing one becomes a skipped reason instead of

@@ -45,7 +45,7 @@ test('latestAbout: an entity timeline never leaves its subject', () => {
     userId: 'u1',
     id: 'f1',
     statement: '用户与a初次见面时一起吃了火锅',
-    at: 1000,
+    validFrom: 1000,
     slots: [{ slot: '对象', value: { kind: 'entity', entityId: a.id } }],
   });
   store.putFact({
@@ -53,7 +53,7 @@ test('latestAbout: an entity timeline never leaves its subject', () => {
     userId: 'u1',
     id: 'f2',
     statement: '用户和c吵架了',
-    at: 2000,
+    validFrom: 2000,
     slots: [{ slot: '对象', value: { kind: 'entity', entityId: c.id } }],
   });
 
@@ -73,7 +73,7 @@ test('latestAbout: a predicate narrows inside the subject', () => {
     userId: 'u1',
     id: 'f1',
     statement: '用户与a吃了火锅',
-    at: 1000,
+    validFrom: 1000,
     slots: [{ slot: '对象', value: { kind: 'entity', entityId: a.id } }],
   });
   store.putFact({
@@ -81,7 +81,7 @@ test('latestAbout: a predicate narrows inside the subject', () => {
     userId: 'u1',
     id: 'f2',
     statement: 'a换了工作',
-    at: 2000,
+    validFrom: 2000,
     slots: [{ slot: '对象', value: { kind: 'entity', entityId: a.id } }],
   });
 
@@ -145,7 +145,7 @@ test('latestAbout: relevance to the question beats plain recency', () => {
     userId: 'u1',
     id: 'old-meal',
     statement: '用户和a一起吃火锅',
-    at: now - 100 * day,
+    validFrom: now - 100 * day,
     slots: [{ slot: '对象', value: { kind: 'entity', entityId: a.id } }],
   });
   store.putFact({
@@ -153,7 +153,7 @@ test('latestAbout: relevance to the question beats plain recency', () => {
     userId: 'u1',
     id: 'new-job',
     statement: 'a换了工作',
-    at: now - day,
+    validFrom: now - day,
     slots: [{ slot: '对象', value: { kind: 'entity', entityId: a.id } }],
   });
 
@@ -176,7 +176,7 @@ test('latestAbout: a frequently recalled fact decays more slowly', () => {
       userId: 'u1',
       id,
       statement: 'a搬家了',
-      at: now - daysAgo * day,
+      validFrom: now - daysAgo * day,
       slots: [{ slot: '对象', value: { kind: 'entity', entityId: a.id } }],
     });
   }

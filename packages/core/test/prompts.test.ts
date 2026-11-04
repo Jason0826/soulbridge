@@ -9,7 +9,7 @@ test('extraction prompt: every block is present, in order', () => {
     text: '我同事小林上周被裁员了',
     now: NOW,
     entities: [{ id: 'en_1', name: '小林', aliases: ['小林姐'], relation: '同事' }],
-    facts: [{ id: 'fc_9', statement: '小林在找工作', atText: '上周' }],
+    facts: [{ id: 'fc_9', statement: '小林在找工作', validFromText: '上周' }],
     previousUserText: '她最近有消息吗',
   });
   for (const block of ['<role>', '<terms>', '<output-format>', '<rules>', '<examples>', '<context>', '<source>', '<output>', '<when-to-write>']) {
@@ -30,7 +30,7 @@ test('extraction prompt: known entities carry aliases and relation', () => {
     text: 'x',
     now: NOW,
     entities: [{ id: 'en_1', name: '小林', aliases: ['小林姐'], relation: '同事' }],
-    facts: [{ id: 'fc_9', statement: '小林在找工作', atText: '上周' }],
+    facts: [{ id: 'fc_9', statement: '小林在找工作', validFromText: '上周' }],
   });
   assert.match(prompt, /小林（别名：小林姐），同事/);
   assert.match(prompt, /\[fc_9\] 小林在找工作（上周）/);
@@ -48,7 +48,7 @@ test('extraction prompt: every term is defined once, with its boundary', () => {
   // of restating it. Two copies of "what is an entity" is how the model learned to
   // write topics into slots.
   assert.match(prompt, /<terms>/);
-  for (const term of ['实体', '事实', '持有', '槽位', '日期与精度', '来源', '类型名', '置信', '原则候选', '缺口', '线索']) {
+  for (const term of ['实体', '事实', '持有', '槽位', '有效从与有效到', '来源', '类型名', '置信', '原则候选', '缺口', '线索']) {
     assert.ok(prompt.includes(`**${term}**`), `术语缺少定义：${term}`);
   }
   // Each boundary shows what counts and what does not — the pair is what a model can
@@ -113,7 +113,9 @@ test('extraction prompt: stays within a sane size', () => {
   const prompt = renderExtractionPrompt({ text: 'x'.repeat(200), now: NOW });
   // A guard against runaway growth, not a target. Raised from 4700 to 5000 when the role
   // field became part of the required line template; raised to 5200 when 0025 added the
-  // 轮次 key and the self-containment sentence (+226 chars, measured 5026). The terms block
-  // is still the bulk; candidate text and whole threads are added on top at runtime.
-  assert.ok(prompt.length < 5200, `prompt grew to ${prompt.length} chars`);
+  // 轮次 key and the self-containment sentence (+226 chars, measured 5026); raised to 5450
+  // when 0027 split the time into 有效从/有效到 with an example for each kind (+240 chars,
+  // measured 5266). The terms block is still the bulk; candidate text and whole threads are
+  // added on top at runtime.
+  assert.ok(prompt.length < 5450, `prompt grew to ${prompt.length} chars`);
 });

@@ -12,7 +12,7 @@ test('thread prompt: every turn is numbered, both sides labelled', () => {
   const prompt = renderExtractionPrompt({
     now: NOW,
     turns: [
-      { turnNo: 1, userText: '小林 2020 年入职 A 公司', at: NOW - 86400000 },
+      { turnNo: 1, userText: '小林 2020 年入职 A 公司', startedAt: NOW - 86400000 },
       { turnNo: 2, userText: '她最近怎么样', assistantText: '她 10-24 被裁员了' },
     ],
   });
@@ -33,7 +33,7 @@ test('draft parsing: 轮次 becomes sourceTurnNo, and the writer maps it to a tu
   soul.rememberEntity('小林', 'person');
   const result = soul.commitDrafts(parsed.draft, {
     turnIds: { 1: 'tp_one', 2: 'tp_two' },
-    at: NOW,
+    now: NOW,
   });
   assert.equal(result.facts[0].sourceTurnId, 'tp_two');
   store.close();
@@ -74,16 +74,16 @@ test('extract: a thread is one model call and the fact names its turn', async ()
     ].join('\n');
   };
   const turns = [
-    { turnNo: 1, userText: '小林 2020 年入职 A 公司', at: NOW - 86_400_000 },
-    { turnNo: 2, userText: '她 10-24 被裁员了', assistantText: '记下了', at: NOW },
+    { turnNo: 1, userText: '小林 2020 年入职 A 公司', startedAt: NOW - 86_400_000 },
+    { turnNo: 2, userText: '她 10-24 被裁员了', assistantText: '记下了', startedAt: NOW },
   ];
-  const draft = await soul.extract('她 10-24 被裁员了', { llm, turns, mode: 'auto', at: NOW });
+  const draft = await soul.extract('她 10-24 被裁员了', { llm, turns, mode: 'auto', now: NOW });
   assert.match(seenPrompt, /<turn n="1"[^>]*>\n\s+用户：小林 2020 年入职 A 公司/);
   assert.match(seenPrompt, /<turn n="2"[^>]*>\n\s+用户：她 10-24 被裁员了/);
   const result = soul.commitDrafts(draft, {
     turnId: 'tp_two',
     turnIds: { 1: 'tp_one', 2: 'tp_two' },
-    at: NOW,
+    now: NOW,
   });
   assert.equal(result.facts.length, 1);
   assert.equal(result.facts[0].sourceTurnId, 'tp_two');

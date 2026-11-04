@@ -294,9 +294,13 @@ export interface FactDraft {
   /** world or a person's name — where the fact holds (ADR 0032). */
   holder?: string;
   typeName?: string;
-  at?: number;
-  atText?: string;
-  atPrecision?: AtPrecision;
+  /** When the content starts to hold. The model decides it (brief 0027). */
+  validFrom?: number;
+  /** The words the time was said in ("上周三"), kept as evidence. */
+  validFromText?: string;
+  validFromPrecision?: AtPrecision;
+  /** When the content stops holding; absent means it still holds (brief 0027). */
+  validTo?: number;
   source: FactSource;
   confidence: number;
   /**
@@ -410,17 +414,18 @@ export interface Fact {
   role?: FactRole;
   /** Where it holds: `world`, `self`, or an entity id (in someone's mind). */
   holder: string;
-  /** Event time. Optional: a preference is a standing fact without one. */
-  at?: number;
-  /** The fuzzy time expression as said ("上周三"), when `at` is approximate. */
-  atText?: string;
-  atEnd?: number;
-  /** Locatability, not precision: unknown is a value (ADR 0032). */
-  atPrecision?: AtPrecision;
-  /** When this claim became true (defaults to `at` or the record time). */
+  /**
+   * When this content starts to hold (brief 0027). The model decides it: an event's
+   * occurrence, a state's beginning, the day a claim was made. Absent when the model
+   * could not place it — that is a value, not a gap to be filled by the code.
+   */
   validFrom?: number;
-  /** When it stopped being true; undefined means it still holds. */
-  validUntil?: number;
+  /** The fuzzy time expression as said ("上周三"), kept as evidence. */
+  validFromText?: string;
+  /** Locatability, not precision: unknown is a value (ADR 0032). */
+  validFromPrecision?: AtPrecision;
+  /** When it stopped holding; undefined means it still holds. */
+  validTo?: number;
   placeId?: string;
   status: FactStatus;
   confidence: number;
@@ -446,14 +451,12 @@ export interface FactSpec {
   /** Structural role (config/domains.ts FACT_ROLES); the writer derives it if omitted. */
   role?: FactRole;
   holder?: string;
-  at?: number;
-  atText?: string;
-  atEnd?: number;
-  atPrecision?: AtPrecision;
-  /** When the claim became true; the writer defaults it to `at` or the record time. */
+  /** When the content starts to hold; the model supplies it (brief 0027). */
   validFrom?: number;
-  /** When it stopped being true; omitted means it still holds. */
-  validUntil?: number;
+  validFromText?: string;
+  validFromPrecision?: AtPrecision;
+  /** When it stops holding; absent means it still holds. */
+  validTo?: number;
   placeId?: string;
   status?: FactStatus;
   confidence?: number;

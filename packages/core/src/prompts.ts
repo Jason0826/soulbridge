@@ -27,7 +27,8 @@ export interface KnownEntityPrompt {
 export interface KnownFactPrompt {
   id: string;
   statement: string;
-  atText?: string;
+  /** The words the fact's start was said in ("上周"), when it had any. */
+  validFromText?: string;
 }
 
 export interface KnownThreadPrompt {
@@ -50,7 +51,8 @@ export interface ThreadTurnPrompt {
   turnNo: number;
   userText: string;
   assistantText?: string;
-  at?: number;
+  /** When the turn happened; shown as `<turn ... at="YYYY-MM-DD">`, not a fact's validity. */
+  startedAt?: number;
 }
 
 export interface ExtractionPromptInput {
@@ -104,7 +106,7 @@ function renderKnownEntities(entities: KnownEntityPrompt[]): string {
 
 function renderKnownFacts(facts: KnownFactPrompt[]): string {
   if (facts.length === 0) return '<known-facts>（空）</known-facts>';
-  const lines = facts.slice(0, 20).map((f) => `  - [${f.id}] ${f.statement}${f.atText ? `（${f.atText}）` : ''}`);
+  const lines = facts.slice(0, 20).map((f) => `  - [${f.id}] ${f.statement}${f.validFromText ? `（${f.validFromText}）` : ''}`);
   return ['<known-facts>', ...lines, '</known-facts>'].join('\n');
 }
 
@@ -135,12 +137,12 @@ export function renderExtractionPrompt(input: ExtractionPromptInput): string {
   const turns = input.turns?.length
     ? input.turns
     : input.text !== undefined
-      ? [{ turnNo: 1, userText: input.text, assistantText: input.assistantText, at: input.now }]
+      ? [{ turnNo: 1, userText: input.text, assistantText: input.assistantText, startedAt: input.now }]
       : [];
   const source = [
     '<source>',
     ...turns.map((turn) => {
-      const when = turn.at ? ` at="${isoDate(turn.at)}"` : '';
+      const when = turn.startedAt ? ` at="${isoDate(turn.startedAt)}"` : '';
       const head = `  <turn n="${turn.turnNo}"${when}>`;
       const lines = [`用户：${turn.userText}`];
       if (turn.assistantText) lines.push(`我：${turn.assistantText}`);

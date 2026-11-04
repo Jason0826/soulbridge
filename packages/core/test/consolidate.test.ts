@@ -21,8 +21,8 @@ const base = { soulId: 's1', userId: 'u1' };
 function seed() {
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
-  const a = store.putFact({ ...base, statement: '用户讨厌同一件事反复讲', at: 1000 });
-  const b = store.putFact({ ...base, statement: '用户说换工具又要重新交代很烦', at: 2000 });
+  const a = store.putFact({ ...base, statement: '用户讨厌同一件事反复讲', validFrom: 1000 });
+  const b = store.putFact({ ...base, statement: '用户说换工具又要重新交代很烦', validFrom: 2000 });
   return { store, soul, a, b };
 }
 

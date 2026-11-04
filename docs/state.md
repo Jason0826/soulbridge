@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-04 19:45**（core 0.0.112 / plugin 0.0.113）
+最后核对：**2026-11-04 20:45**（core 0.0.113 / plugin 0.0.113）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -16,10 +16,11 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   0026 成本可见（宿主侧）：插件每轮一条 turn-cost（plugin 0.0.113）
-已验证         插件 94 测试 / core 302 测试；installed web profile 为 0.0.113，verify-installed 全过
+现在在做什么   0027 时间轴：valid_from / valid_to 由模型判定（core 0.0.113，schema v15 已迁移）
+已验证         插件 94 测试 / core 301 测试；installed web profile core 0.0.113 / plugin 0.0.113，verify-installed 全过
+               v15 迁移实测：874 条事实，active 带 valid_to 的 0 条（原先 247 条"当天失效"的猜测已清）
+               valid_from 全部有值；precision day 246 / range 6 / relative 13 / unknown 609；retracted 57 条按时关闭
                19:36 首个 turn-cost 落库：turn 2 → requests=5（steps=4 plugin=1）
-               input=4272 cacheHit=848128 output=7754 secs=24 reason=completed
 下一步         1) 把 turn-cost 读进 quality.mjs（每轮请求数分布，现在只有 trace 原始行）
                2) 子代理的请求要不要滚到父轮 —— 需要 DSH 暴露会话谱系，事件流里没有
 不要做         抽取输入上限 —— 用户明确否决（751 次里只有 1 次超 6 万字符）
@@ -42,6 +43,7 @@
 
 **19:30 成本可见（0026，宿主侧）**：插件每轮写一条 `turn-cost`（`trace.jsonl`：请求/步骤/失败尝试/插件调用/四类 token/耗时/结束原因），≥30 次请求时另在 `plugin.log` 打一行；账单脚本读平台导出 zip，按天给金额、请求、三类 token 与"钱花在命中/未命中/输出"的构成，并用 `price×amount` 重算对账（实测差 0.00%）。
 **19:43 归属修正**：这两样都不属于记忆层——`packages/core` 里没有一行价格逻辑，账单只是宿主的运维数据。脚本与说明已搬到插件仓库 `dsh-plugin-soulbridge`（`scripts/billing.mjs` + `docs/cost-visibility.md`）；本仓库只留数字，不实现计量。review 见 [audit/2026-11-04-review-cost.md](audit/2026-11-04-review-cost.md)。
+**20:40 0027 时间轴落地（core 0.0.113 / schema v15）**：`at`/`at_text`/`at_end`/`at_precision`/`valid_until` 五个名字退场，换成 `valid_from`/`valid_to`/`valid_from_text`/`valid_from_precision`；两端都由模型判定，`putFact` 不再从一端推另一端。抽取模板的「日期」改成「有效从」，新增 `有效到=`（只有状态结束才写），断言的成立时间 = 说出口那天。迁移实测：874 条事实，247 条"有日期就当天失效"的猜测被清掉（active 带 `valid_to` 的现在 0 条），`valid_from` 全部有值。brief [0027](briefs/0027-time-axis.md)。
 
 
 **18:40 整条线索抽取接通（core + 插件）**：`Soul.extract` 接受 `turns`（整条线索一次调用），新增 `threadTurns()` / `turnThreadId()`；插件 drain 现在把「某轮的触发」解析成「它所属的线索」，一次抽取整条线索、事实按轮号落 `source_turn_id`，成功后清掉同线索的排队轮次。日志新增 `unit=Nturns threadId=…`。测试 core 302 / 插件 87。

@@ -21,13 +21,13 @@ test('putFact: slots of every kind round-trip', () => {
   const store = openSqlite(':memory:');
   const person = store.putEntity({ ...S, type: 'person', name: '小林' });
   const company = store.putEntity({ ...S, type: 'thing', name: '某公司' });
-  const question = store.putFact({ ...S, statement: '问她怎么了', atText: '上周' });
+  const question = store.putFact({ ...S, statement: '问她怎么了', validFromText: '上周' });
   const fact = store.putFact({
     ...S,
     statement: '小林上周被裁员了',
     typeName: '裁员',
-    at: 1000,
-    atText: '上周',
+    validFrom: 1000,
+    validFromText: '上周',
     status: 'active',
     source: 'told',
     slots: [
@@ -40,7 +40,7 @@ test('putFact: slots of every kind round-trip', () => {
   });
   assert.equal(fact.slots.length, 5);
   assert.equal(fact.source, 'told');
-  assert.equal(fact.atText, '上周');
+  assert.equal(fact.validFromText, '上周');
   const num = fact.slots.find((s) => s.slot === '裁员人数');
   assert.deepEqual(num?.value, { kind: 'number', value: 300 });
   const ref = fact.slots.find((s) => s.slot === '回应');
@@ -52,9 +52,9 @@ test('facts: entity filter answers "about her" without any ranking', () => {
   const store = openSqlite(':memory:');
   const her = store.putEntity({ ...S, type: 'person', name: '小林' });
   const other = store.putEntity({ ...S, type: 'person', name: '老王' });
-  store.putFact({ ...S, statement: '小林被裁员', at: 1000, slots: [{ slot: '被裁员者', value: { kind: 'entity', entityId: her.id } }] });
-  store.putFact({ ...S, statement: '小林搬了家', at: 3000, slots: [{ slot: '搬家者', value: { kind: 'entity', entityId: her.id } }] });
-  store.putFact({ ...S, statement: '老王退休了', at: 2000, slots: [{ slot: '退休者', value: { kind: 'entity', entityId: other.id } }] });
+  store.putFact({ ...S, statement: '小林被裁员', validFrom: 1000, slots: [{ slot: '被裁员者', value: { kind: 'entity', entityId: her.id } }] });
+  store.putFact({ ...S, statement: '小林搬了家', validFrom: 3000, slots: [{ slot: '搬家者', value: { kind: 'entity', entityId: her.id } }] });
+  store.putFact({ ...S, statement: '老王退休了', validFrom: 2000, slots: [{ slot: '退休者', value: { kind: 'entity', entityId: other.id } }] });
 
   const hers = store.facts({ ...S, entityId: her.id });
   assert.equal(hers.length, 2);
@@ -78,7 +78,7 @@ test('gaps: ordered by tension, closable, and tied to a person', () => {
   assert.equal(open.length, 2);
   assert.equal(open[0].id, urgent.id, 'highest tension first');
 
-  const answer = store.putFact({ ...S, statement: '她找到工作了', at: 3000 });
+  const answer = store.putFact({ ...S, statement: '她找到工作了', validFrom: 3000 });
   store.closeGap(urgent.id, answer.id, 3000);
   const after = store.openGaps(S.soulId, S.userId);
   assert.equal(after.length, 1);
@@ -90,8 +90,8 @@ test('factsAbout: asc order returns the earliest fact about a person', () => {
   const store = openSqlite(':memory:');
   const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
   const her = store.putEntity({ ...S, type: 'person', name: 'A' });
-  store.putFact({ ...S, statement: '2026-10-31 又见了一面', at: 3000, slots: [{ slot: '参与者', value: { kind: 'entity', entityId: her.id } }] });
-  store.putFact({ ...S, statement: '2025-03-14 第一次见面吃火锅', at: 1000, slots: [{ slot: '参与者', value: { kind: 'entity', entityId: her.id } }] });
+  store.putFact({ ...S, statement: '2026-10-31 又见了一面', validFrom: 3000, slots: [{ slot: '参与者', value: { kind: 'entity', entityId: her.id } }] });
+  store.putFact({ ...S, statement: '2025-03-14 第一次见面吃火锅', validFrom: 1000, slots: [{ slot: '参与者', value: { kind: 'entity', entityId: her.id } }] });
 
   const earliest = soul.factsAbout(her.id, { order: 'asc', limit: 1 });
   assert.equal(earliest[0].statement, '2025-03-14 第一次见面吃火锅');
@@ -113,7 +113,7 @@ test('factDetail: a hook expands back to the conversation it came from', () => {
     userText: '我们第一次见面吃了火锅',
     steps: [{ idx: 0, kind: 'text', text: '记下了，是那家火锅店', at: 1100 }],
   });
-  const fact = store.putFact({ ...S, statement: '第一次见面吃火锅', at: 1000, sourceTurnId: 'tn_s1_7' });
+  const fact = store.putFact({ ...S, statement: '第一次见面吃火锅', validFrom: 1000, sourceTurnId: 'tn_s1_7' });
 
   const detail = soul.factDetail(fact.id);
   assert.equal(detail?.fact.statement, '第一次见面吃火锅');
@@ -138,7 +138,7 @@ test('recordTurnPair returns the id that factDetail can follow', () => {
   const turn = soul.turn(turnId);
   assert.equal(turn?.userText, '我们第一次见面吃了火锅');
 
-  const fact = store.putFact({ ...S, statement: '第一次见面吃火锅', at: 1000, sourceTurnId: turnId });
+  const fact = store.putFact({ ...S, statement: '第一次见面吃火锅', validFrom: 1000, sourceTurnId: turnId });
   const detail = soul.factDetail(fact.id);
   assert.equal(detail?.turn?.id, turnId);
   assert.match(detail?.turn?.assistantText ?? '', /火锅店/);

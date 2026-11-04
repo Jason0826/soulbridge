@@ -124,7 +124,7 @@ test('gate: an unreadable statement and an exact duplicate are still refused', (
     by: 'rules' as const,
   };
   assert.equal(s.commitDrafts(once).facts.length, 1);
-  const again = s.commitDrafts(once, { at: Date.now() + 1000 });
+  const again = s.commitDrafts(once, { now: Date.now() + 1000 });
   assert.equal(again.facts.length, 0);
   assert.equal(again.skipped[0].reason, 'duplicate');
   store.close();

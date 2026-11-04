@@ -126,14 +126,19 @@
       "date": "2026-11-04",
       "delta": 174,
       "reason": "0026 成本可见：插件新增每轮 turn-cost 计数（createTurnCostTracker，含注释与上限淘汰）、collectText 增加 usage 回调、apply/makeLlm 接线（插件 +174 行）。观测设施允许涨一次，旧机制没有退场。"
+    },
+    {
+      "date": "2026-11-04",
+      "delta": 54,
+      "reason": "0027 时间轴：五个旧名字（at/at_text/at_end/at_precision/valid_until）换成一轴两端（valid_from/valid_to + 原文/精度），旧字段全部退场；净增来自迁移函数 upgradeToV15、解析器多读两个键、写入不再猜（core +54）。这是一次改名 + 补一个端，不是新增能力。"
     }
   ],
-  "coreLines": 8662,
+  "coreLines": 8716,
   "pluginLines": 2638,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 1584,
+    "index.ts": 1585,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 194,
@@ -145,17 +150,17 @@
     "consolidate.ts": 373,
     "context.ts": 164,
     "dimension-text.ts": 31,
-    "extract.ts": 697,
+    "extract.ts": 707,
     "inject-text.ts": 27,
     "portable.ts": 115,
     "profile-prompt.ts": 119,
     "prompts.generated.ts": 15,
-    "prompts.ts": 419,
+    "prompts.ts": 421,
     "reflect.ts": 417,
     "retrieval.ts": 116,
     "roles.ts": 28,
     "scoring.ts": 170,
-    "sqlite.ts": 1899,
+    "sqlite.ts": 1937,
     "config.ts": 96,
     "merge.ts": 41,
     "steering.ts": 103,
@@ -163,6 +168,6 @@
     "store.ts": 181,
     "measure.ts": 45,
     "time.ts": 130,
-    "types.ts": 782
+    "types.ts": 785
   }
 }
