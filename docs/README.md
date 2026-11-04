@@ -23,6 +23,7 @@
 | 外部证据与阅读笔记 | [references.md](references.md) |
 | DSH 运行时已验证的事实 | [dsh-runtime.md](dsh-runtime.md) |
 | 为什么模型环节要这么验收 | [eval-boundary-0027.md](eval-boundary-0027.md) |
+| 未来哪些决策可以考虑本地小模型 | [decision-points.md](decision-points.md)（参考，当前不做） |
 | [protocol.md](protocol.md) | 占位文件，只为不让旧链接 404；协议内容在 [spec/protocol.v0.md](spec/protocol.v0.md) |
 | 新会话从哪开始 | [state.md](state.md)（唯一现状态文档） |
 | 全系统审计与 review 方法 | [audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md) |
