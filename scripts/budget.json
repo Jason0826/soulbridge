@@ -166,10 +166,15 @@
       "date": "2026-11-05",
       "delta": 24,
       "reason": "0028 实施① 两件小修（插件 0.0.119）：handoff 空读不再消费会话的一次性——bug 修复，消费逻辑抽成导出工厂 createHandoffTaker（抽出是契约测试的前提；+3 条测试在 test/ 不计预算）；extract 日志前缀 ok→done，rules:model-failed 时不再谎报成功。bug 修复与可测性重构按首条先例允许涨；功能新增仍不允许。"
+    },
+    {
+      "date": "2026-11-05",
+      "delta": 236,
+      "reason": "0028 实施② 触发检查表 + 段 sealing（插件 0.0.120）：planSegment 纯函数承载四触发（压缩标记 / 会话切换·归档 / 容量 40轮·6万字 / 年龄 24h），compaction/end 只置标记不调模型，drain 无触发不抽（会话中抽取=0），段一次抽完写 seal（≤100 条可查）、入队拒已封存轮（origin=backfill 重放例外），失败整段 bump、3 次封存丢弃。同期删掉按线索解析的旧 drain 路径与 pickExtractionItem（约 -70 行）。功能实施按 0026/0027 读取方先例记一次；brief 0028 §九 ②，测试 107→120、三个变异各红。"
     }
   ],
   "coreLines": 8900,
-  "pluginLines": 2815,
+  "pluginLines": 3051,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,

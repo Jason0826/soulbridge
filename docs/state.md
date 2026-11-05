@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-05 21:20**（core 0.0.116 / plugin 0.0.119）
+最后核对：**2026-11-05 22:35**（core 0.0.116 / plugin 0.0.120）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -16,9 +16,13 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   0028 实施①完成并部署（插件 0.0.119：21:01 运行层验证，21:15 handoff 真实发出，
-               见 21:20 条目）——下一步 = §九② 触发检查表 + 段 sealing
-已验证         core 314 / 插件 107 测试全过；变异：还原 handoff 无条件消费 → 恰好 1 红 → 恢复绿
+现在在做什么   0028 实施②完成并部署到 profile（插件 0.0.120：verify-installed 6 PASS；重启走
+               DshWebRestartOnce 90s 延迟——重启后首条消息先验 apply() called (v0.0.120)，
+               见 22:35 条目）——下一步 = §九③ 归属输出扩多条线索
+已验证         ② 检查表 planSegment（压缩标记/会话切换·归档/容量40轮·6万字/年龄24h，纯函数表驱动）
+               + 段 sealing：插件 120 测试全过；变异：去标记→恰1红 / 绕过无触发闸门→6红 / 去封存→恰1红
+               会话中抽取 = 0 by construction（无触发只留 segment-wait；入队日志改 extract buffered）
+               ① 仍有效：core 314 / 插件原 107；handoff 还原变异恰好 1 红 → 恢复绿
                提醒换会话：插件按会话累计 turn-cost，每请求上下文 ≥300k 或 ≥100 轮 → 注入
                <switch-session turns=… context-per-request=…>（由模型转告），每跨一级一次
                首次真实触发：10:06:51 turn=17，turns=1 · 469,028/req（账本从 09:53 重启起算）
@@ -30,15 +34,16 @@
                写入侧一个语法一个日单位：规则抽取改走 findTimeExpression，日历日 = UTC 零点
                day/range 非日历日 2 → 0（quality.mjs 观测 PASS）；时间检索实跑：上周窗口 2 条 day/range 进窗
                取代引用 50 成 / 1 败 → 2% PASS
-下一步         1) 0028 实施（§九 顺序；① 已完成并部署——0.0.119 于 21:01 运行验证、21:15 handoff 真实发出）：
-               ② 触发检查表 + 段 sealing → ③ 归属输出扩多条线索 → ④ §八 四行真实重放 → ⑤ retirements 登记
-               ①的整体 review：audit/2026-11-05-review-floor-cost-handoff.md（覆盖 4 个待 review 业务提交）
+下一步         1) 0028 实施（§九 顺序；① ② 已完成——② 于 22:15 发版、profile 装 0.0.120、restart 排队）：
+               ③ 归属输出扩多条线索 → ④ §八 四行真实重放（手动 /compact 当天验）→ ⑤ retirements 登记
+               ②的整体 review：audit/2026-11-05-review-departure-checklist.md（① 的在 floor-cost-handoff）
                2) 子代理的请求要不要滚到父轮 —— 需要 DSH 暴露会话谱系，事件流里没有
                3) 0027 §八 剩余三个读者：注入措辞 / 排序比较 / soulbridge why 打印 precision
                收口余债（见 0027 §十）：TIME_CUE 与语法词表两份、calendarDate/parseIsoDay 两份、
                facts(since/until) 还能不带 precisions 调用
 不要做         抽取输入上限 —— 用户明确否决（751 次里只有 1 次超 6 万字符）
-不能忘         抽取单位 = 线索；自包含闸门只对 holder 生效；事实必须写轮次
+不能忘         抽取单位 = 离开点切出的段（线索归属是抽取的产物，0028；队列在等=正常，segment-wait 可查）
+               自包含闸门只对 holder 生效；事实必须写轮次
                **时间：created_at 代码写 / valid_from·valid_to 模型判定**（断言=说出口那天成立；
                valid_to 绝不从 valid_from 推导）。字段名不要用 at/at_end/valid_until
                **日历日只有一种存法：UTC 零点**（该表达式所在本地日历日）——窗口、规则抽取、显示同一单位；
@@ -54,9 +59,11 @@
                packages/core/src/{time,retrieval,extract,prompts,sqlite,index}.ts
                D:\git-workspace\repos\dsh-plugin-soulbridge\index.js
                账单与判读：dsh-plugin-soulbridge\scripts\billing.mjs · docs\cost-visibility.md
-环境           固定端口 3080；重启 scripts/restart-web.ps1（不自动开 tab）
+环境           固定端口 3080；重启 = `Start-ScheduledTask DshWebRestartOnce`（90s 延迟、脱离
+               agent 的 job 对象跑 restart-web.ps1）——**直接在会话里跑脚本会被宿主连坐杀掉**
+               （22:33 实测：Job runner 报错、重启根本没发生，宿主毫发无损）
                运行中的 profile = ~/.dsh/profiles/web（→ C:\DSH\home\profiles\web）
-               发版 = 推 tag → GitHub Actions → npm（当前 core 0.0.116 / plugin 0.0.119）
+               发版 = 推 tag → GitHub Actions → npm（当前 core 0.0.116 / plugin 0.0.120）
                注意：npm 读侧复制延迟实测 3–15 分钟，`npm view` 马上查会 404，别判成发布失败
 成本导出       D:\Download\usage_data_*.zip（平台导出，含 amount/cost 两个 CSV）
 ```
@@ -67,17 +74,20 @@
 > 新会话只读状态会像换班工人；这 6 行是**叙事**，不是状态——换会话时整体替换，不累积。
 
 ```
-上一段   2026-11-05 10:13–21:20（session-a1cca035，接 ac4cb717），core 0.0.116 / plugin 0.0.119
-做了     查清 unit=1turn 根因（时序倒置，46 条日志实测）→ 写 brief 0028 → 四项拍板转 Ready →
-         实施①：handoff 空不消费（createHandoffTaker 工厂）、`extract done:` 前缀，发版部署
-验证     health-check 0 FAIL；变异还原无条件消费必红；npm 20:53 发 0.0.119 → verify-installed 6 PASS；
-         21:01 apply() (v0.0.119)；21:15 handoff 真实发出（SeeCode 段 summary=yes, inject handoff=yes）；
-         压缩事件 12 次实测可订阅；handoff 查明插件自产（DSH 无自带交接）
-没做完   0028 实施 ② 触发检查表 + 段 sealing ③ 多归属输出 ④ §八 重放验收 ⑤ retirements 登记；
-         子代理滚父轮；0027 §八 剩余三个读者
-在热什么 语义边界别拿时间近似（quiet-time 只配关灯）；结构是抽取的产物不是前提；
-         本会话已长，换新会话接着做 0028 ②（第一句照旧：读接手须知和会话交接）
+上一段   2026-11-05 21:25–（session-1d060599，接 a1cca035），core 0.0.116 / plugin 0.0.120
+做了     0028 实施②：planSegment 四触发检查表 + 段 sealing + 失败段语义，旧按线索解析
+         drain 与 pickExtractionItem 同批退场；发版部署到 profile（22:35 条目全链路）
+验证     插件 107→120 测试；变异三组（去标记 1 红 / 绕闸门 6 红 / 去封存 1 红）；
+         前提实证 payload 与事件 session id 同键（sessionLedger 对账）；npm 0.0.120 →
+         pnpm 11 装 profile → verify-installed 6 PASS；restart 排队，apply() 待验
+没做完   重启后验 apply() v0.0.120 + segment 首个真实样本（下一条消息先做）；
+         0028 ③ 多归属 ④ §八 重放（手动 /compact 当天验）⑤ retirements；
+         quality 三条 FAIL 待查（密度段级复测 / 结论证据链 / 情绪非零率）
+在热什么 队列在等不是坏了（无触发=正常，segment-wait 可查）——会话中抽取=0 是闸门不是自觉；
+         seed-backfill 仍绕写入器、reset 不清 seals（⑤ 一并）；换会话前先看 switch-session
 ```
+
+**22:35 0028 实施②完成并部署到 profile（插件 0.0.120，重启排队待验）**：触发检查表 + 段 sealing 全链路——`planSegment` 纯函数承载四触发（**压缩标记 / 会话切换·归档 / 容量 ≥40 轮或 ≥6 万字 / 年龄 >24h**；前两个是语义离开、后两个只当工程兜底，quiet-time 结论写进代码结构），`compaction/end` 无 error 才置标记（error=窗口没变，留标记会把还在上下文里的内容写成持久记忆），drain 无触发只留 `segment-wait` 观测（**会话中抽取 = 0 by construction**，入队日志改 `extract buffered`），触发后整段一次抽（unit=Nturns，提示词轮次 1..n 经 turnIds 映射回真实 source_turn_id）→ 成功写 seal（`segment-state.json` ≤100 条可查、超限有日志、损坏挪走不判空）→ `enqueueExtraction` 拒已封存轮（`origin=backfill` 是记录在案的重放例外）；失败整段同 bump（一次调用覆盖它们），第 3 次 `given-up:` 封存丢弃（带段大小）。按线索解析的旧 drain 路径与 `pickExtractionItem` 同批退场（时序倒置根因本体，见 18:05 条目；live-first 防的饥饿被段语义化解——20 条回填等一次调用不是二十步）。**前提实证（不是假设）**：drain 拿的 `payload.agent.id` 与事件 `session.id` 同键——`switch_session`（payload 侧）与 `turn-cost`（事件侧）记的是同一个 sessionLedger，10:06:51 的换会话提醒能触发即证明两键相同（若不同键，due() 永远新建空账本、提醒永不触发；trace.jsonl 两边格式均 `session-<uuid>`）。测试 107→120；变异三组：去标记→接线恰红 1、绕过无触发闸门→6 红、去封存→恰红 1；promote.test 窗口 3000→4500（检查表插在签名与接线之间，被断言的字面全文件仅一处）。棘轮 +236 按 0026/0027 功能先例记 history（同期删旧路径 -70 余行）→ `--update-budget` 3051 → health-check 0 FAIL / 18 WARN / 25 PASS。发版链路：core typecheck+test 0 红 → `v0.0.120` → release #109 success（22:15:18Z）→ npm 0.0.120 实测可见 → pnpm 11 装进 web profile（**坑：corepack 拉的 pnpm 12 会把 9.0 lockfile 重写、store v11/v10 不匹配要 ERR_PNPM_UNEXPECTED_STORE——用 `corepack prepare pnpm@11 --activate`**）→ manifest/node_modules 双确认 0.0.120 → **verify-installed 6 PASS**（core 0.0.116 / plugin 0.0.120）→ DshWebRestartOnce 排队（90 秒延迟）→ apply() 与 segment 首个真实样本**下一轮补记**。质量比率（runbook 0.6，三条 FAIL 原因写明）：事实密度 2.2/轮 FAIL——段级一次多条+回填所致，②后会话内抽取=0 应下降（待复测）；结论支持率 65.1% FAIL——归纳证据链已知债；情绪非零率 2.2% FAIL——affect 层待查；抽取走模型 99.2% PASS。②的整体 review：[audit/2026-11-05-review-departure-checklist.md](audit/2026-11-05-review-departure-checklist.md)（判通过，四条发现：rules floor 对段只看末轮 / seed-backfill 仍绕写入器 / reset 不清 seals / 重试窗口段尾同计数）。
 
 **21:20 0028 实施①部署完成（插件 0.0.119）**：两件小修上线——① handoff 消费抽成导出工厂 `createHandoffTaker`：**空读与抛错都不再消费**会话的一次性（旧写法第一注入读空就永久跳过，0028 决定 4 的前提），3 条契约测试，变异还原无条件消费恰好 1 红；② 日志前缀 `extract ok:` → `extract done:`（`rules:model-failed` 不再谎报成功，10:01 重启是新旧前缀分界）。全链路（全部实测）：插件 107 测试 → 棘轮 +24 按先例记 budget history、`--update-budget` 重写 2815 → `v0.0.119` 发版，npm 20:53:35Z 实测已发布 → profile 装 0.0.119 → `verify-installed` 6 PASS/exit 0 → `DshWebRestartOnce` 21:01 重启 → **`apply() called (v0.0.119) @ 21:01:05`，21:15:57 handoff 真实发出**（"SeeCode 落地留存…" summary=yes，inject handoff=yes turn=15——你回来时看到的那段交接块就是新代码发的）。A9 整体 review 补齐：[audit/2026-11-05-review-floor-cost-handoff.md](audit/2026-11-05-review-floor-cost-handoff.md) 覆盖 4 个待 review 业务提交（时间语法 / 取舍可见 / turn-cost / handoff）。重启前 19:52–20:41 四条抽取再次全 `unit=1turn join=continue`——0028 ② 要修的现象稳定复现中。
 
@@ -373,7 +383,7 @@ node scripts/billing.mjs --days 4    # 每天花了多少：金额/请求/三类
 | 插件日志 / 轨迹 | `~/.soulbridge/plugin.log`、`trace.jsonl` |
 | 真实数据 | `~/.soulbridge/soul.db` |
 | 线索验收 | `scripts/abba-check.mjs --topic <词>` |
-| 队列文件 | `pending-extract / pending-classify / pending-profile / pending-threads.json` |
+| 队列文件 | `pending-extract / pending-classify / pending-profile / pending-threads.json`；段状态 `segment-state.json`（压缩标记 + seal ≤100，超限有日志） |
 
 ## 八之三、踩过的坑（每一条都真踩过）
 
