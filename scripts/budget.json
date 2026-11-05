@@ -156,10 +156,15 @@
       "date": "2026-11-05",
       "delta": 52,
       "reason": "抽取的取舍可见（core 0.0.116 / 插件 0.0.117）：ExtractDraft 增 skipped 列表，规则路径（no-structure）与模型路径（bad-entity-type / unreadable / unknown-op / empty-topic）的丢弃都带 reason；toStatement 去掉 80 字截断，陈述为整句（core +45：extract.ts +38、types.ts +7）；插件日志与 trace 增 draftSkipped（+7）。同时删掉 validateDraft 里从未被读的 knownFactIds。"
+    },
+    {
+      "date": "2026-11-05",
+      "delta": 76,
+      "reason": "提醒换会话（插件 0.0.118）：createSessionLedger 按会话累计 turn-cost（有界 16 个会话），每请求上下文 ≥300k 或 ≥100 轮时在 pre-step 注入 <switch-session>，每跨一级一次（翻倍才再说）；renderSwitchSession 导出供 6 条测试用。观测设施允许涨一次，按 0026 先例。"
     }
   ],
   "coreLines": 8900,
-  "pluginLines": 2715,
+  "pluginLines": 2791,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,

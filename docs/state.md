@@ -16,15 +16,17 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   每轮成本可观测（quality.mjs 读 turn-cost）；抽取取舍可见（core 0.0.116 / plugin 0.0.117）已上线
-已验证         core 314 / 插件 98 测试全过；变异 = 改动前状态（4 红 → 改后全绿）
+现在在做什么   提醒换会话（plugin 0.0.118）；每轮成本可观测（quality.mjs）；抽取取舍可见 0.0.116/0.0.117 已上线
+已验证         core 314 / 插件 104 测试全过；变异 = 改动前状态（4 红 → 改后全绿）
+               提醒换会话：插件按会话累计 turn-cost，每请求上下文 ≥300k 或 ≥100 轮 → 注入
+               <switch-session turns=… context-per-request=…>（由模型转告），每跨一级一次
+               （600k/200 轮为第 2 级）；6 条测试（不喊 / 一级一次 / 翻倍再喊 / 轮数轴 / 上限 / 渲染）
                每轮成本（七日内 39 轮）：平均 21.9 次请求 · p50 6 · p90 49 · 最重 271；
                分布 1-5:19 / 6-15:11 / 16-30:2 / 31+:7；每请求上下文 355,311 token（纯输入仅 4,516）
                抽取取舍可见：规则丢弃的无结构句子、模型丢弃的坏条目都进 ExtractDraft.skipped（what+reason），
                插件日志 draftSkipped=N + 前 3 条；规则路径 statement 不再切 80 字，整句保存（规则 17）
                写入侧一个语法一个日单位：规则抽取改走 findTimeExpression，日历日 = UTC 零点
                day/range 非日历日 2 → 0（quality.mjs 观测 PASS）；时间检索实跑：上周窗口 2 条 day/range 进窗
-               v15 迁移实测：valid_from 空值 0；precision day 246 / range 6 / relative 13 / unknown 609
                取代引用 50 成 / 1 败 → 2% PASS
 下一步         1) 查 unit=1turn 分布：最近 200 条抽取 35×1turn / 2×46turns——
                整条线索抽取在实时轮次上基本没生效，先查是设计如此还是漏接线
@@ -49,10 +51,12 @@
                账单与判读：dsh-plugin-soulbridge\scripts\billing.mjs · docs\cost-visibility.md
 环境           固定端口 3080；重启 scripts/restart-web.ps1（不自动开 tab）
                运行中的 profile = ~/.dsh/profiles/web（→ C:\DSH\home\profiles\web）
-               发版 = 推 tag → GitHub Actions → npm（当前 core 0.0.116 / plugin 0.0.117）
+               发版 = 推 tag → GitHub Actions → npm（当前 core 0.0.116 / plugin 0.0.118）
                注意：npm 读侧复制延迟实测 3–15 分钟，`npm view` 马上查会 404，别判成发布失败
 成本导出       D:\Download\usage_data_*.zip（平台导出，含 amount/cost 两个 CSV）
 ```
+
+**09:50 提醒换会话（插件 0.0.118）**：`turn-cost` 同一条记录现在也回答"这个会话还能不能继续开"。插件按会话累计（轮数/请求/三类 token），当**每请求上下文 ≥300k**（历史会话 420k 时出过整轮空回复）**或 ≥100 轮**时，在 pre-step 注入 `<switch-session turns=… context-per-request=…>`——一句给模型的指令（"请提醒用户新开会话，先把进度写进 state.md 接手须知"），因为插件没有用户可见的消息通道。**每跨一级只说一次**（600k/200 轮是第 2 级），翻倍才再说；每轮都说会变墙纸。日志 `switch-session: remind turn=N`、trace `{"event":"switch_session"}`。插件 104 测试（+6：不喊 / 一级一次 / 翻倍再喊 / 轮数轴 / 上限 / 渲染）。口径与阈值记在插件仓库 `dsh-plugin-soulbridge/docs/cost-visibility.md`。
 
 **09:35 每轮成本可观测（quality.mjs）**：`turn-cost` 事件（插件 0.0.113 起每轮一条）现在被质量报告读进去：每轮请求数（共/合计/平均/p50/p90/最重）、请求数分布（1-5 / 6-15 / 16-30 / 31+）、**每请求上下文 token**（input+cacheHit+cacheWrite；纯输入单独给）、最重三轮（session 前缀 + 轮号）。未完成轮次（`open`，被驱逐/中断）不计入分布、单独计数——半轮不是数据点。七日内实测：39 轮 / 853 次 / 平均 21.9 / p50 6 / p90 49 / 最重 271（4973730c/turn15）；**每请求上下文 355,311 token，其中纯输入只有 4,516**——98.7% 是重买的历史，这就是"该换会话"的客观信号，现在在仪表盘上了。脚本改动，不发版。
 
