@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-05 22:35**（core 0.0.116 / plugin 0.0.120）
+最后核对：**2026-11-05 22:36**（core 0.0.116 / plugin 0.0.120）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -16,9 +16,9 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   0028 实施②完成并部署到 profile（插件 0.0.120：verify-installed 6 PASS；重启走
-               DshWebRestartOnce 90s 延迟——重启后首条消息先验 apply() called (v0.0.120)，
-               见 22:35 条目）——下一步 = §九③ 归属输出扩多条线索
+现在在做什么   0028 实施②完成并部署（插件 0.0.120：verify-installed 6 PASS，
+               apply() called (v0.0.120) @ 22:33:06 运行层实测，见 22:35 条目）
+               ——下一步 = §九③ 归属输出扩多条线索
 已验证         ② 检查表 planSegment（压缩标记/会话切换·归档/容量40轮·6万字/年龄24h，纯函数表驱动）
                + 段 sealing：插件 120 测试全过；变异：去标记→恰1红 / 绕过无触发闸门→6红 / 去封存→恰1红
                会话中抽取 = 0 by construction（无触发只留 segment-wait；入队日志改 extract buffered）
@@ -34,7 +34,7 @@
                写入侧一个语法一个日单位：规则抽取改走 findTimeExpression，日历日 = UTC 零点
                day/range 非日历日 2 → 0（quality.mjs 观测 PASS）；时间检索实跑：上周窗口 2 条 day/range 进窗
                取代引用 50 成 / 1 败 → 2% PASS
-下一步         1) 0028 实施（§九 顺序；① ② 已完成——② 于 22:15 发版、profile 装 0.0.120、restart 排队）：
+下一步         1) 0028 实施（§九 顺序；① ② 已完成并上线——② 22:33 运行层验证 apply() 0.0.120）：
                ③ 归属输出扩多条线索 → ④ §八 四行真实重放（手动 /compact 当天验）→ ⑤ retirements 登记
                ②的整体 review：audit/2026-11-05-review-departure-checklist.md（① 的在 floor-cost-handoff）
                2) 子代理的请求要不要滚到父轮 —— 需要 DSH 暴露会话谱系，事件流里没有
@@ -79,15 +79,15 @@
          drain 与 pickExtractionItem 同批退场；发版部署到 profile（22:35 条目全链路）
 验证     插件 107→120 测试；变异三组（去标记 1 红 / 绕闸门 6 红 / 去封存 1 红）；
          前提实证 payload 与事件 session id 同键（sessionLedger 对账）；npm 0.0.120 →
-         pnpm 11 装 profile → verify-installed 6 PASS；restart 排队，apply() 待验
-没做完   重启后验 apply() v0.0.120 + segment 首个真实样本（下一条消息先做）；
+         pnpm 11 装 profile → verify-installed 6 PASS → apply() (v0.0.120) @ 22:33:06 实测
+没做完   segment 首批真实样本（extract buffered/segment-wait 随重启后首轮出现、flush 等离开点）；
          0028 ③ 多归属 ④ §八 重放（手动 /compact 当天验）⑤ retirements；
-         quality 三条 FAIL 待查（密度段级复测 / 结论证据链 / 情绪非零率）
+         quality 三条 FAIL 待查（密度段级复测 / 结论证据链 / 情绪非零率）；handoff 重启重发待定夺
 在热什么 队列在等不是坏了（无触发=正常，segment-wait 可查）——会话中抽取=0 是闸门不是自觉；
          seed-backfill 仍绕写入器、reset 不清 seals（⑤ 一并）；换会话前先看 switch-session
 ```
 
-**22:35 0028 实施②完成并部署到 profile（插件 0.0.120，重启排队待验）**：触发检查表 + 段 sealing 全链路——`planSegment` 纯函数承载四触发（**压缩标记 / 会话切换·归档 / 容量 ≥40 轮或 ≥6 万字 / 年龄 >24h**；前两个是语义离开、后两个只当工程兜底，quiet-time 结论写进代码结构），`compaction/end` 无 error 才置标记（error=窗口没变，留标记会把还在上下文里的内容写成持久记忆），drain 无触发只留 `segment-wait` 观测（**会话中抽取 = 0 by construction**，入队日志改 `extract buffered`），触发后整段一次抽（unit=Nturns，提示词轮次 1..n 经 turnIds 映射回真实 source_turn_id）→ 成功写 seal（`segment-state.json` ≤100 条可查、超限有日志、损坏挪走不判空）→ `enqueueExtraction` 拒已封存轮（`origin=backfill` 是记录在案的重放例外）；失败整段同 bump（一次调用覆盖它们），第 3 次 `given-up:` 封存丢弃（带段大小）。按线索解析的旧 drain 路径与 `pickExtractionItem` 同批退场（时序倒置根因本体，见 18:05 条目；live-first 防的饥饿被段语义化解——20 条回填等一次调用不是二十步）。**前提实证（不是假设）**：drain 拿的 `payload.agent.id` 与事件 `session.id` 同键——`switch_session`（payload 侧）与 `turn-cost`（事件侧）记的是同一个 sessionLedger，10:06:51 的换会话提醒能触发即证明两键相同（若不同键，due() 永远新建空账本、提醒永不触发；trace.jsonl 两边格式均 `session-<uuid>`）。测试 107→120；变异三组：去标记→接线恰红 1、绕过无触发闸门→6 红、去封存→恰红 1；promote.test 窗口 3000→4500（检查表插在签名与接线之间，被断言的字面全文件仅一处）。棘轮 +236 按 0026/0027 功能先例记 history（同期删旧路径 -70 余行）→ `--update-budget` 3051 → health-check 0 FAIL / 18 WARN / 25 PASS。发版链路：core typecheck+test 0 红 → `v0.0.120` → release #109 success（22:15:18Z）→ npm 0.0.120 实测可见 → pnpm 11 装进 web profile（**坑：corepack 拉的 pnpm 12 会把 9.0 lockfile 重写、store v11/v10 不匹配要 ERR_PNPM_UNEXPECTED_STORE——用 `corepack prepare pnpm@11 --activate`**）→ manifest/node_modules 双确认 0.0.120 → **verify-installed 6 PASS**（core 0.0.116 / plugin 0.0.120）→ DshWebRestartOnce 排队（90 秒延迟）→ apply() 与 segment 首个真实样本**下一轮补记**。质量比率（runbook 0.6，三条 FAIL 原因写明）：事实密度 2.2/轮 FAIL——段级一次多条+回填所致，②后会话内抽取=0 应下降（待复测）；结论支持率 65.1% FAIL——归纳证据链已知债；情绪非零率 2.2% FAIL——affect 层待查；抽取走模型 99.2% PASS。②的整体 review：[audit/2026-11-05-review-departure-checklist.md](audit/2026-11-05-review-departure-checklist.md)（判通过，四条发现：rules floor 对段只看末轮 / seed-backfill 仍绕写入器 / reset 不清 seals / 重试窗口段尾同计数）。
+**22:35 0028 实施②完成并部署（插件 0.0.120，运行层已验）**：触发检查表 + 段 sealing 全链路——`planSegment` 纯函数承载四触发（**压缩标记 / 会话切换·归档 / 容量 ≥40 轮或 ≥6 万字 / 年龄 >24h**；前两个是语义离开、后两个只当工程兜底，quiet-time 结论写进代码结构），`compaction/end` 无 error 才置标记（error=窗口没变，留标记会把还在上下文里的内容写成持久记忆），drain 无触发只留 `segment-wait` 观测（**会话中抽取 = 0 by construction**，入队日志改 `extract buffered`），触发后整段一次抽（unit=Nturns，提示词轮次 1..n 经 turnIds 映射回真实 source_turn_id）→ 成功写 seal（`segment-state.json` ≤100 条可查、超限有日志、损坏挪走不判空）→ `enqueueExtraction` 拒已封存轮（`origin=backfill` 是记录在案的重放例外）；失败整段同 bump（一次调用覆盖它们），第 3 次 `given-up:` 封存丢弃（带段大小）。按线索解析的旧 drain 路径与 `pickExtractionItem` 同批退场（时序倒置根因本体，见 18:05 条目；live-first 防的饥饿被段语义化解——20 条回填等一次调用不是二十步）。**前提实证（不是假设）**：drain 拿的 `payload.agent.id` 与事件 `session.id` 同键——`switch_session`（payload 侧）与 `turn-cost`（事件侧）记的是同一个 sessionLedger，10:06:51 的换会话提醒能触发即证明两键相同（若不同键，due() 永远新建空账本、提醒永不触发；trace.jsonl 两边格式均 `session-<uuid>`）。测试 107→120；变异三组：去标记→接线恰红 1、绕过无触发闸门→6 红、去封存→恰红 1；promote.test 窗口 3000→4500（检查表插在签名与接线之间，被断言的字面全文件仅一处）。棘轮 +236 按 0026/0027 功能先例记 history（同期删旧路径 -70 余行）→ `--update-budget` 3051 → health-check 0 FAIL / 18 WARN / 25 PASS。发版链路：core typecheck+test 0 红 → `v0.0.120` → release #109 success（22:15:18Z）→ npm 0.0.120 实测可见 → pnpm 11 装进 web profile（**坑：corepack 拉的 pnpm 12 会把 9.0 lockfile 重写、store v11/v10 不匹配要 ERR_PNPM_UNEXPECTED_STORE——用 `corepack prepare pnpm@11 --activate`**）→ manifest/node_modules 双确认 0.0.120 → **verify-installed 6 PASS**（core 0.0.116 / plugin 0.0.120）→ DshWebRestartOnce 22:31:13 触发（90 秒延迟，直接跑 restart 脚本会被宿主连坐——22:33 前实测）→ 22:32:56 停 / 22:33:01 起 → **`apply() called (v0.0.120) @ 22:33:06`**。segment 首批样本：重启后首轮 turn/end 才入缓冲（`extract buffered`），首个 flush 要等离开点——归 ④ 重放验收。**重启附带发现**：`handedOff` 是进程内 Set，重启即清空，同一会话会再收到一次相同 handoff（本会话 21:25、22:33 各一次）——决定 4 的「每会话至多一条」在重启边界实际按「每进程」计；重发无害但要说清，归 ④ 或 ⑤ 决定持久化与否。质量比率（runbook 0.6，三条 FAIL 原因写明）：事实密度 2.2/轮 FAIL——段级一次多条+回填所致，②后会话内抽取=0 应下降（待复测）；结论支持率 65.1% FAIL——归纳证据链已知债；情绪非零率 2.2% FAIL——affect 层待查；抽取走模型 99.2% PASS。②的整体 review：[audit/2026-11-05-review-departure-checklist.md](audit/2026-11-05-review-departure-checklist.md)（判通过，四条发现：rules floor 对段只看末轮 / seed-backfill 仍绕写入器 / reset 不清 seals / 重试窗口段尾同计数）。
 
 **21:20 0028 实施①部署完成（插件 0.0.119）**：两件小修上线——① handoff 消费抽成导出工厂 `createHandoffTaker`：**空读与抛错都不再消费**会话的一次性（旧写法第一注入读空就永久跳过，0028 决定 4 的前提），3 条契约测试，变异还原无条件消费恰好 1 红；② 日志前缀 `extract ok:` → `extract done:`（`rules:model-failed` 不再谎报成功，10:01 重启是新旧前缀分界）。全链路（全部实测）：插件 107 测试 → 棘轮 +24 按先例记 budget history、`--update-budget` 重写 2815 → `v0.0.119` 发版，npm 20:53:35Z 实测已发布 → profile 装 0.0.119 → `verify-installed` 6 PASS/exit 0 → `DshWebRestartOnce` 21:01 重启 → **`apply() called (v0.0.119) @ 21:01:05`，21:15:57 handoff 真实发出**（"SeeCode 落地留存…" summary=yes，inject handoff=yes turn=15——你回来时看到的那段交接块就是新代码发的）。A9 整体 review 补齐：[audit/2026-11-05-review-floor-cost-handoff.md](audit/2026-11-05-review-floor-cost-handoff.md) 覆盖 4 个待 review 业务提交（时间语法 / 取舍可见 / turn-cost / handoff）。重启前 19:52–20:41 四条抽取再次全 `unit=1turn join=continue`——0028 ② 要修的现象稳定复现中。
 
