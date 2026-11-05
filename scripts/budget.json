@@ -1,5 +1,5 @@
 {
-  "date": "2026-11-04",
+  "date": "2026-11-05",
   "note": "棘轮预算：数字是实测值，只能往下调，不能往上调。要加功能导致超限时，先删掉同等规模的东西，再跑 --update-budget。",
   "history": [
     {
@@ -146,10 +146,15 @@
       "date": "2026-11-04",
       "delta": 65,
       "reason": "0027 读取方 1 的宿主侧（插件 0.0.115）：planBlocks 增加 window 开关；renderTimeWindow 注入 <time-window cue from to>（range 用原话、空窗明说、截断明说、推断事实带标记）；buildRelatedContext 接线并写 trace time_window（+65 行，含注释）。与 core 0.0.114 同一批。"
+    },
+    {
+      "date": "2026-11-05",
+      "delta": 60,
+      "reason": "0027 写入侧收口（core 0.0.115 / 插件 0.0.116）：规则抽取改走 time.ts.findTimeExpression——与窗口同一词表，删掉 TIME_WORDS/TIME_OFFSET_DAYS 粗略偏移（core +57：time.ts 扫描器与文档 +52、extract.ts 注释与 range 分支 +5）；日历日统一 UTC 零点，插件 isoDay 改 UTC 日期（+3 含注释）。同期 quality.mjs 增一行 day/range 边界观测（脚本不计预算）。写入侧收口，按读取方 1 先例记一次。"
     }
   ],
-  "coreLines": 8798,
-  "pluginLines": 2705,
+  "coreLines": 8855,
+  "pluginLines": 2708,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
@@ -165,7 +170,7 @@
     "consolidate.ts": 373,
     "context.ts": 164,
     "dimension-text.ts": 31,
-    "extract.ts": 707,
+    "extract.ts": 712,
     "inject-text.ts": 27,
     "portable.ts": 115,
     "profile-prompt.ts": 119,
@@ -182,7 +187,7 @@
     "transcript.ts": 96,
     "store.ts": 181,
     "measure.ts": 45,
-    "time.ts": 161,
+    "time.ts": 213,
     "types.ts": 792
   }
 }

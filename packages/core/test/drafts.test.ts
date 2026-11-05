@@ -27,6 +27,22 @@ test('rules: an event with no person still becomes a fact', () => {
   assert.equal(draft.facts[0].validFromText, '今天');
 });
 
+test('rules: a week word is a range with the week start, not a fake day at writing time', () => {
+  // NOW is Saturday 2026-10-31; 上周 is the week of Monday 2026-10-19. The old rule
+  // wrote now-7d (a Saturday instant) and called it precision=day — a located claim
+  // that was neither located nor a day (0027 §三: a span is a span).
+  const fact = extractByRules('我同事小林上周被裁员了', NOW).facts[0];
+  assert.equal(fact.validFromPrecision, 'range');
+  assert.equal(fact.validFrom, Date.UTC(2026, 9, 19));
+  assert.equal((fact.validFrom ?? 0) % 86_400_000, 0, 'a located date is a calendar-day instant');
+});
+
+test('rules: a day word lands on that calendar day, not on the writing instant', () => {
+  const fact = extractByRules('今天下雨了', NOW).facts[0];
+  assert.equal(fact.validFromPrecision, 'day');
+  assert.equal(fact.validFrom, Date.UTC(2026, 9, 31), 'NOW is 2026-10-31; the day is stored, not the hour');
+});
+
 test('rules: un uncertainty gap inside one turn binds the pronoun to the last person', () => {
   const draft = extractByRules('我同事小林上周被裁员了。不知道她后来怎么样了', NOW);
   assert.equal(draft.gaps.length, 1);

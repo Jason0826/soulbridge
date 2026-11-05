@@ -154,3 +154,32 @@ sqlite: SELECT COUNT(*) FROM facts WHERE valid_from IS NULL
 2. **「10月24日」暂不解析**：没有年份的日期要猜年份（今年？去年？），猜年份就是这条 brief 反对的假精确。这类问句照旧路由到 time、不带窗口、退回相关式，日志可查（`time cue, no window`）。要接它，得先定「年份从哪来」，那是一次独立改动。
 
 仍未接线（0027 §八 另外三个读者）：`<time-window>` 之外的注入措辞、排序与比较、追溯（`soulbridge why` 打印 precision）。
+
+## 十、实施进度：写入侧收口，2026-11-05
+
+读取方 1 上线后暴露：**窗口薄是写入侧造成的**——实测「上周」窗口 87 条里只有 2 条可定位（85 条 unknown）。根因是写入侧两套时间语义，这次收成两个"一个"：
+
+| 收口前（两套） | 收口后（一个） |
+|---|---|
+| 规则抽取 `TIME_WORDS` + 粗略天数偏移（上周 = now-7d，标 `day`） | 规则抽取走 `time.ts.findTimeExpression`——与窗口**同一个词表、同一套解析**；`TIME_WORDS`/`TIME_OFFSET_DAYS` 删除。"上周" → `range` + 周一 UTC 零点；"2026年10月" → `range`（月是一段，不再冒充 1 号那天） |
+| 日的三种存法：本地零点（窗口）/ 任意瞬间（规则）/ UTC 零点（模型） | 日历日 = **UTC 零点**（该表达式所在的本地日历日）：`startOfDay/Week/Month/Year`、窗口边界、插件 `isoDay` 同一单位（钩子本来就 `toISOString`） |
+
+实测（真实库 + 测试）：
+
+```
+day/range 落在日历日边界外：2 条 → 0，quality.mjs 新增观测行 PASS
+core 310（+2：range+周一零点 / day+当天零点）· 插件 98 · typecheck 干净
+变异 = 改动前状态本身：5 条红（4 core + 1 插件）→ 改后全绿
+```
+
+**过程教训（写在这里，因为它差点变成假绿）**：修复那 2 条存量行的脚本用了 `date(<epoch秒>)`——这个 SQLite 把 `date()` 的数字参数当**儒略日**（`julianday(int)` → null，`date(int,'localtime')` → `2000-01-01`），两行被写成 2000-01-01；而观测只查"是不是零点"、不查"是哪一天"，显示 PASS。靠**读实际值**才发现，用 JS 算好的字面量改回（备份 `soul.db.bak-daymidnight-*`）。教训：**验证值，不只验证不变量的形状。**
+
+仍未收口（别当已解决）：
+
+```
+TIME_CUE（路由的宽词表）与语法词表仍是两份：这周/明天 能解析却不路由；10月24日 路由了却不解析
+calendarDate（extract）与 parseIsoDay（time）两份日历校验
+facts({since,until}) 仍可不带 precisions 调用——窗口入口没有收成唯一
+unknown 行的 valid_from 仍是录入瞬间——按设计：它们不是 located 日期，窗口靠精度闸门排除
+规则抽取只是无模型时的兜底（index.ts:444），但历史库里的规则行真实存在
+```

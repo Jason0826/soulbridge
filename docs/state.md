@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-04 23:50**（core 0.0.114 / plugin 0.0.115）
+最后核对：**2026-11-05 08:30**（core 0.0.115 / plugin 0.0.116）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -16,37 +16,43 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   0027 读取方 1：时间检索接 precision（core 0.0.114 / plugin 0.0.115，已装 web profile）
-已验证         core 308 测试 / 插件 98 测试全过；installed web profile 0.0.114 / 0.0.115，verify-installed 全过
-               时间检索：findWindow 把「上周/昨天」解析成半开窗口；factsInWindow 只让 day/range 进窗，
-               unknown/relative/retracted 0 条（7 条测试 + 变异检查：去掉过滤就变红）
-               实跑「上周都发生了什么」→ 注入 <time-window cue="上周" from="2026-10-26" to="2026-11-01">，
-               2 条 day 精度事实（其余 unknown 一条没进）
-               v15 迁移实测：891 条事实，valid_from 空值 0；precision day 246 / range 6 / relative 13 / unknown 609
-               取代引用 成功 50 / 失败 1（supersede-target-retracted）→ 失败率 2% PASS
-               19:36 首个 turn-cost 落库：turn 2 → requests=5（steps=4 plugin=1）
+现在在做什么   0027 写入侧收口（core 0.0.115 / plugin 0.0.116）；读取方 1 时间检索已上线（上一版在 profile 实跑过）
+已验证         core 310 / 插件 98 测试全过；变异 = 改动前状态（5 红 → 改后全绿）
+               写入侧一个语法一个日单位：规则抽取改走 findTimeExpression（TIME_WORDS/TIME_OFFSET_DAYS 已删），
+               "上周" → range+周一 UTC 零点；日历日 = UTC 零点（窗口/规则/显示同一单位）
+               day/range 非日历日 2 → 0（quality.mjs 新增观测 PASS；修复脚本曾把两行写成 2000-01-01，
+               靠读实际值发现——**验证值，不只验证形状**，备份 soul.db.bak-daymidnight-*）
+               时间检索实跑：上周窗口 87 条里 2 条 day/range 进窗，unknown 0 条
+               v15 迁移实测：valid_from 空值 0；precision day 246 / range 6 / relative 13 / unknown 609
+               取代引用 50 成 / 1 败 → 2% PASS；首个 turn-cost：turn 2 → requests=5
 下一步         1) 把 turn-cost 读进 quality.mjs（每轮请求数分布 + 每请求上下文）
                2) 子代理的请求要不要滚到父轮 —— 需要 DSH 暴露会话谱系，事件流里没有
                3) 0027 §八 剩余三个读者：注入措辞 / 排序比较 / soulbridge why 打印 precision
+               收口余债（见 0027 §十）：TIME_CUE 与语法词表两份、calendarDate/parseIsoDay 两份、
+               facts(since/until) 还能不带 precisions 调用
 不要做         抽取输入上限 —— 用户明确否决（751 次里只有 1 次超 6 万字符）
 不能忘         抽取单位 = 线索；自包含闸门只对 holder 生效；事实必须写轮次
                **时间：created_at 代码写 / valid_from·valid_to 模型判定**（断言=说出口那天成立；
                valid_to 绝不从 valid_from 推导）。字段名不要用 at/at_end/valid_until
+               **日历日只有一种存法：UTC 零点**（该表达式所在本地日历日）——窗口、规则抽取、显示同一单位；
+               别用 date(<epoch秒>) 转日期：这个 SQLite 把数字当儒略日
                **时间窗口只信 day/range**：unknown 的 valid_from 常是「记下那天」，进范围查询就是 v14 同类错误
                成本不是记忆层的事：core 里没有一行价格逻辑，账单脚本在插件仓库
 最近成本       11/01–11/04 = ¥100.22；6,028 次请求，¥0.0166/请求（数字来源见下）
                金额构成：输入命中 56.3% / 输入未命中 23.3% / 输出 20.1%
                最重单轮 108 次请求（trace turn 406）；平均 18 次/轮
-关键文件       docs/briefs/0025-thread-extraction.md · docs/briefs/0027-time-axis.md（§八 读取方 / §九 实施）
+关键文件       docs/briefs/0025-thread-extraction.md · docs/briefs/0027-time-axis.md（§八 读取方 / §九 实施 / §十 写入侧收口）
                packages/core/src/{time,retrieval,extract,prompts,sqlite,index}.ts
                D:\git-workspace\repos\dsh-plugin-soulbridge\index.js
                账单与判读：dsh-plugin-soulbridge\scripts\billing.mjs · docs\cost-visibility.md
 环境           固定端口 3080；重启 scripts/restart-web.ps1（不自动开 tab）
                运行中的 profile = ~/.dsh/profiles/web（→ C:\DSH\home\profiles\web）
-               发版 = 推 tag → GitHub Actions → npm（当前 core 0.0.114 / plugin 0.0.115）
+               发版 = 推 tag → GitHub Actions → npm（当前 core 0.0.115 / plugin 0.0.116）
                注意：npm 读侧复制延迟实测 3–15 分钟，`npm view` 马上查会 404，别判成发布失败
 成本导出       D:\Download\usage_data_*.zip（平台导出，含 amount/cost 两个 CSV）
 ```
+
+**08:30 写入侧收口（core 0.0.115 / 插件 0.0.116）**：读取方 1 上线后暴露"窗口薄是写入侧造成的"（实测上周窗口 87 条里只有 2 条可定位）。两套时间语义收成一个：规则抽取的 `findTime` 改走 `time.ts.findTimeExpression`（与窗口同一词表），删掉 `TIME_WORDS`/`TIME_OFFSET_DAYS` 粗略偏移——"上周"从 now-7d 的假 day 变成 range+周一零点，"2026年10月"标 range 不再冒充 1 号那天；日历日统一为 **UTC 零点**（该表达式所在本地日历日）：`startOfDay/Week/Month/Year`、窗口边界、插件 `isoDay` 三处同一单位（钩子本就 `toISOString`）。真实库 day/range 非日历日 2 → 0，quality.mjs 新增观测行。过程教训：修复脚本用 `date(<epoch秒>)` 被这个 SQLite 当儒略日、把两行写成 2000-01-01，而观测只查"是不是零点"没查"是哪一天"、显示 PASS——**验证值，不只验证不变量的形状**（备份 `soul.db.bak-daymidnight-*`）。brief [0027](briefs/0027-time-axis.md) §十。
 
 **23:50 时间检索接 precision（core 0.0.114 / 插件 0.0.115）**：`time.ts` 的 `resolveRelativeTime` 第一次有了调用方——`findWindow` 把「上周/昨天」解析成半开区间 `[from,to)`，`planRetrieval` 的 time 分支带上 `window`（解析不了「那天/月初」就不带，`reason` 里写明）。查询走新原语 `Soul.factsInWindow`：`valid_from ∈ [from,to)` **且** `precision ∈ {day,range}` **且** active——`WINDOW_PRECISIONS` 在 `config/status.ts` 一处声明。这是 0027 §八 的第一个真读者：以前"上周发生了什么"走相关式兜底，`since/until` 过滤不看精度，会把 unknown 的「记下那天」当成「事情发生那天」。`facts()` 的 `until` 同时改成半开：窗口的结束就是下一个窗口的开始。实测 7 条新测试 + 变异检查（去掉精度过滤必红）。brief [0027](briefs/0027-time-axis.md) §九。
 

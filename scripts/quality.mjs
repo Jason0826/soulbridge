@@ -76,6 +76,12 @@ const precisionAfterV15 = all(
   'unknown',
   V15_AT,
 );
+// A located date must sit on a calendar-day instant (UTC midnight): windows compare in
+// that unit and the display reads it back as a date. A row stamped with `now` and called
+// `day` would still match a window while claiming an hour as a day (0027 写入侧收口).
+const dayOffBoundary = one(
+  `SELECT COUNT(*) AS n FROM facts WHERE valid_from IS NOT NULL AND valid_from % 86400000 != 0 AND valid_from_precision IN ('day','range')`,
+).n;
 // A successful supersede is visible as a retracted row whose successor was written
 // in-window; a failed one never reaches the database at all — the gate skips it and
 // the trace records the reason.
@@ -240,6 +246,10 @@ console.log(
 console.log(
   `0027 后新事实      ${afterV15} 条 · valid_from 空 ${afterV15Null} · ` +
     (precisionAfterV15.length === 0 ? '尚无' : precisionAfterV15.map((row) => `${row.p} ${row.n}`).join(' · ')),
+);
+console.log(
+  `day/range 非日历日 ${dayOffBoundary}         ` +
+    `${dayOffBoundary === 0 ? 'PASS' : 'FAIL'}（必须为 0：located日期要落在 UTC 零点，窗口和显示都按这个单位比）`,
 );
 console.log(
   `取代引用           成功 ${supersedeSuccess} · 失败 ${supersedeFailures}` +

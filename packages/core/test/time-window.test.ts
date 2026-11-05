@@ -22,9 +22,14 @@ test('findWindow: "上周" becomes one week that starts on a Monday', () => {
   assert.ok(window, 'a resolvable cue yields a window');
   assert.equal(window.cue, '上周');
   assert.equal(window.to - window.from, 7 * DAY, 'one calendar week');
+  // The unit of a day is a calendar-day instant (UTC midnight of that day), not a
+  // local midnight: the two only agree in whole-day-offset timezones, and the stored
+  // dates are UTC instants — a window in another unit compares against them wrong.
+  assert.equal(window.from % DAY, 0, 'a window boundary is a calendar-day instant');
+  assert.equal(window.to % DAY, 0, 'a window boundary is a calendar-day instant');
   const start = new Date(window.from);
-  assert.equal(start.getDay(), 1, 'weeks start on Monday');
-  assert.equal(start.getHours(), 0, 'a window starts at a day boundary');
+  assert.equal(start.getUTCDay(), 1, 'weeks start on Monday');
+  assert.equal(start.getUTCHours(), 0, 'a window starts at day start');
 });
 
 test('findWindow: a day cue is one day, a mixed question still resolves one window', () => {
@@ -32,6 +37,7 @@ test('findWindow: a day cue is one day, a mixed question still resolves one wind
   assert.ok(window);
   assert.equal(window.cue, '昨天');
   assert.equal(window.to - window.from, DAY);
+  assert.equal(window.from % DAY, 0, 'a day window is a whole calendar day');
 });
 
 test('findWindow: a cue that cannot be located yields nothing, not a guess', () => {

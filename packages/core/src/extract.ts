@@ -16,9 +16,10 @@
  * Pure functions, no I/O, no dependencies.
  */
 import type {
-  ThreadAttribution, EntityDraft, ExtractDraft, FactDraft, FactOperation, GapDraft, SlotValue } from './types.ts';
+  ThreadAttribution, EntityDraft, ExtractDraft, FactDraft, FactOperation, GapDraft, SlotValue, AtPrecision } from './types.ts';
 import { renderExtractionPrompt } from './prompts.ts';
 import { SLOT_ENTITY_MARKER, FACT_ROLES } from './config/domains.ts';
+import { findTimeExpression } from './time.ts';
 
 /**
  * What a fact's confidence is when the model did not give one.
@@ -49,19 +50,6 @@ const VERBS: Array<{ word: string; passiveSlot: string; activeSlot: string }> = 
   { word: '搬家', passiveSlot: '搬家者', activeSlot: '原住地' },
   { word: '吵架', passiveSlot: '当事人', activeSlot: '吵架对象' },
 ];
-
-const TIME_WORDS = [
-  '昨天', '前天', '今天', '明天', '大前天', '后天',
-  '上周', '本周', '这周', '下周', '上个月', '这个月', '下个月',
-  '去年', '今年', '去年年底', '上周末', '这周末',
-];
-
-/** Rough offsets in days; good enough to sort, and `validFromText` keeps the original. */
-const TIME_OFFSET_DAYS: Record<string, number> = {
-  昨天: -1, 前天: -2, 大前天: -3, 今天: 0,
-  明天: 1, 后天: 2, 上周: -7, 上周末: -5, 本周: 0, 这周: 0, 这周末: 2,
-  下周: 7, 上个月: -30, 这个月: 0, 下个月: 30, 去年: -365, 今年: 0,
-};
 
 const UNCERTAIN = /(不知道|不清楚|没消息|不知道她|不知道他|后来|怎么样了|是否|还在不在)/;
 
@@ -95,14 +83,25 @@ export function parseIsoDate(text: string): number | undefined {
   return calendarDate(Number(match[1]), Number(match[2]), Number(match[3]));
 }
 
-/** First time expression in the sentence, with a rough timestamp for `validFrom`. */
-function findTime(sentence: string, now: number): { validFrom?: number; validFromText?: string } {
-  for (const word of TIME_WORDS) {
-    if (sentence.includes(word)) {
-      const days = TIME_OFFSET_DAYS[word];
-      return days === undefined ? { validFromText: word } : { validFromText: word, validFrom: now + days * 86400000 };
-    }
+/**
+ * The first time expression in the sentence, with its canonical instant and precision.
+ *
+ * Placement comes from time.ts — the same grammar the windows use, so writer and reader
+ * share one vocabulary (a week word is a week everywhere, not a rough point here and a
+ * span there). The two explicit-date branches stay here because they are about *written*
+ * dates ("10月24日", "2026年10月"), not relative expressions; both store calendar-day
+ * instants, and a month is a span — claiming `day` for "2026年10月" would pretend the
+ * fact happened on the 1st.
+ */
+function findTime(
+  sentence: string,
+  now: number,
+): { validFrom?: number; validFromText?: string; validFromPrecision?: AtPrecision } {
+  const placed = findTimeExpression(sentence, now);
+  if (placed?.at !== undefined) {
+    return { validFrom: placed.at, validFromText: placed.matched, validFromPrecision: placed.precision };
   }
+
   const explicit = sentence.match(/(\d{1,2})月(\d{1,2})[日号]/);
   if (explicit) {
     const month = Number(explicit[1]);
@@ -110,12 +109,17 @@ function findTime(sentence: string, now: number): { validFrom?: number; validFro
     const year = new Date(now).getUTCFullYear();
     // "2月31日" is not a date; keep the words and let the precision stay unknown.
     const validFrom = calendarDate(year, month, day);
-    return validFrom === undefined ? { validFromText: explicit[0] } : { validFromText: explicit[0], validFrom };
+    return validFrom === undefined
+      ? { validFromText: explicit[0] }
+      : { validFrom, validFromText: explicit[0], validFromPrecision: 'day' };
   }
+
   const yearMonth = sentence.match(/(\d{4})年(\d{1,2})月/);
   if (yearMonth) {
     const validFrom = calendarDate(Number(yearMonth[1]), Number(yearMonth[2]), 1);
-    return validFrom === undefined ? { validFromText: yearMonth[0] } : { validFromText: yearMonth[0], validFrom };
+    return validFrom === undefined
+      ? { validFromText: yearMonth[0] }
+      : { validFrom, validFromText: yearMonth[0], validFromPrecision: 'range' };
   }
   return {};
 }
@@ -215,11 +219,12 @@ export function extractByRules(text: string, now = Date.now()): ExtractDraft {
       typeName: verb?.word,
       validFrom: time.validFrom,
       validFromText: time.validFromText,
-      // Precision follows what the rules actually resolved: a parsed date is `day`, a
-      // bare expression ("上次") is `relative`. Without this every rules fact claimed
-      // unknown and could not join time retrieval even when it had a date.
-      validFromPrecision:
-        time.validFrom !== undefined ? 'day' : time.validFromText !== undefined ? 'relative' : 'unknown',
+      // Precision is the resolver's answer, not a guess: a located day is `day`, a span
+      // ("上周", "2026年10月") is `range`, a bare expression with no date is `relative`,
+      // and nothing at all is `unknown`. The old rule — any resolved word became `day` —
+      // labelled rough spans as exact days, which is v14's mistake in miniature: the
+      // window would then treat a guess as a located date.
+      validFromPrecision: time.validFromPrecision ?? (time.validFromText !== undefined ? 'relative' : 'unknown'),
       source: boundByPronoun ? 'inferred' : 'told',
       confidence: people.length > 0 ? (boundByPronoun ? 0.5 : 0.7) : 0.5,
       slots,

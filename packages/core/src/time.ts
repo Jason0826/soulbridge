@@ -4,7 +4,10 @@
  * This is calendar arithmetic, not interpretation — the semantic part (did it happen? was the
  * expression vague?) stays with the model and with `valid_from_precision`. Rules that shape this file:
  *
- *   - the result is always a *day start* in local time; "下午" does not become 14:00;
+ *   - the result is always the canonical instant of a calendar day — UTC midnight of the
+ *     day it names in the asker's local calendar; "下午" does not become 14:00. One unit:
+ *     the store writes dates as UTC midnights, so rule extraction, windows and display
+ *     compare in the same unit (a local midnight would agree only by timezone luck);
  *   - ranges keep both ends (`at` / `atEnd`) and say `range`;
  *   - an impossible date ("2026-02-31") resolves to nothing instead of rolling over;
  *   - an expression we do not know stays `unknown` — the caller keeps `atText`, no invention.
@@ -27,26 +30,32 @@ const UNKNOWN: ResolvedTime = { precision: 'unknown' };
 
 const DAY = 86_400_000;
 
+/**
+ * The canonical instant of a calendar day: UTC midnight of that day.
+ *
+ * Derived from the *local* calendar date of `now` (which day it is where the speaker is),
+ * then expressed in the one unit the facts table stores. `Date.UTC` normalises out-of-range
+ * day/month values, so "+3 days" and "+2 months" are plain date arithmetic.
+ */
 function startOfDay(now: number, offsetDays = 0): number {
   const date = new Date(now);
-  date.setHours(0, 0, 0, 0);
-  return date.getTime() + offsetDays * DAY;
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate() + offsetDays);
 }
 
 function startOfWeek(now: number, offsetWeeks = 0): number {
-  const date = new Date(startOfDay(now));
+  const date = new Date(now);
   const weekday = (date.getDay() + 6) % 7; // Monday = 0 … Sunday = 6
-  return startOfDay(date.getTime() - weekday * DAY + offsetWeeks * 7 * DAY);
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate() - weekday + offsetWeeks * 7);
 }
 
 function startOfMonth(now: number, offsetMonths = 0): number {
   const date = new Date(now);
-  return new Date(date.getFullYear(), date.getMonth() + offsetMonths, 1).getTime();
+  return Date.UTC(date.getFullYear(), date.getMonth() + offsetMonths, 1);
 }
 
 function startOfYear(now: number, offsetYears = 0): number {
   const date = new Date(now);
-  return new Date(date.getFullYear() + offsetYears, 0, 1).getTime();
+  return Date.UTC(date.getFullYear() + offsetYears, 0, 1);
 }
 
 /** A real day on the calendar, or undefined — 2026-02-31 is not a day. */
@@ -61,7 +70,7 @@ export function parseIsoDay(text: string): number | undefined {
   return date.getTime();
 }
 
-const DAY_WORDS: Record<string, number> = { 今天: 0, 昨天: -1, 前天: -2, 明天: 1, 后天: 2 };
+const DAY_WORDS: Record<string, number> = { 今天: 0, 昨天: -1, 前天: -2, 大前天: -3, 明天: 1, 后天: 2 };
 const WEEKDAY_WORDS: Record<string, number> = { 一: 0, 二: 1, 三: 2, 四: 3, 五: 4, 六: 5, 日: 6, 天: 6 };
 const WEEK_WORDS: Record<string, number> = { 上周: -1, 上星期: -1, 这周: 0, 本周: 0, 这个星期: 0, 这星期: 0, 下周: 1, 下星期: 1 };
 const MONTH_WORDS: Record<string, number> = { 上个月: -1, 上月: -1, 这个月: 0, 本月: 0, 下个月: 1, 下月: 1 };
@@ -130,7 +139,52 @@ export function resolveRelativeTime(input: string, now = Date.now()): ResolvedTi
   return UNKNOWN;
 }
 
-/** The cue vocabulary of a question: what makes "上周发生了什么" a time question. */
+/**
+ * The first time expression in a sentence the calendar can place, with how it resolved.
+ *
+ * This is the writer's scanner (the rule extractor): it reads from *this file's own*
+ * tables and patterns, so a word the grammar understands is recognised on both sides of
+ * the store — one vocabulary, one reader, one writer. The earliest expression wins: one
+ * sentence, one placed time. Expressions that resolve to nothing are skipped, so an
+ * unplaceable cue never blocks a placeable one later in the sentence.
+ */
+export function findTimeExpression(text: string, now = Date.now()): ResolvedTime | undefined {
+  const sentence = String(text ?? '');
+  if (!sentence) return undefined;
+  const candidates: Array<{ at: number; len: number; word: string }> = [];
+  const add = (word: string, at: number) => candidates.push({ at, len: word.length, word });
+
+  // Patterns first — they are not table keys. The weekday pattern deliberately stops
+  // short of 天: scanning is prefix-based, so "上周天" would steal the 天 out of
+  // "上周天气" and answer Sunday for a question about the week's weather. Sunday
+  // queries fall back to the whole week — a wider window over-fetches, a wrong narrow
+  // one misses (the asymmetry noted in findWindow).
+  for (const pattern of [/\d{4}-\d{2}-\d{2}/, /(?:上|下|这|本)(?:周|星期)[一二三四五六日]/, /(?:上|下|这|本)(?:周|星期)末/]) {
+    const hit = pattern.exec(sentence);
+    if (hit) add(hit[0], hit.index);
+  }
+  for (const table of [DAY_WORDS, WEEK_WORDS, MONTH_WORDS, YEAR_WORDS]) {
+    for (const word of Object.keys(table)) {
+      const at = sentence.indexOf(word);
+      if (at >= 0) add(word, at);
+    }
+  }
+  // Earliest first; at the same place the longer expression wins ("上周三" over "上周").
+  candidates.sort((a, b) => a.at - b.at || b.len - a.len);
+  for (const candidate of candidates) {
+    const resolved = resolveRelativeTime(candidate.word, now);
+    if (resolved.at !== undefined) return { ...resolved, matched: candidate.word };
+  }
+  return undefined;
+}
+
+/**
+ * What makes a question a *time* question — the router's detector, deliberately broad.
+ *
+ * A cue routes even when no calendar can place it ("那天", "月初"), so the caller can
+ * tell "nothing happened then" from "I could not work out when". The placing itself is
+ * findWindow's job; this list only answers "is this about time".
+ */
 export const TIME_CUE = /上周|上星期|昨天|前天|今天|那天|当时|上个月|月初|去年|\d{1,2}月\d{1,2}[日号]/;
 
 /** A half-open span `[from, to)` a question asked about. */
@@ -142,19 +196,17 @@ export interface TimeWindow {
 }
 
 /**
- * Resolve the first time cue in a question into a window (brief 0027 §八, reader 1).
+ * Resolve the first placeable time expression in a question into a window (0027 §八, reader 1).
  *
  * One expression per question: "昨天和上周" asks two things, and one window is this
- * primitive's unit. The cue is used as written — "上周三" resolves as the whole week
- * rather than risking a wrong day, because a wider window over-fetches while a
- * narrower one misses the answer. Cues no calendar can place ("那天", "月初") return
- * undefined: the caller keeps its fallback and the log says why.
+ * primitive's unit. The scanner does not require the router's cue list — any expression
+ * the grammar can place counts; the router separately decides "is this about time".
+ * "上周三" resolves to that day; "上周天气" stays the whole week (the scanner's weekday
+ * pattern stops short of 天, see findTimeExpression). Cues no calendar can place
+ * ("那天", "月初") return undefined: the caller keeps its fallback and the log says why.
  */
 export function findWindow(text: string, now = Date.now()): TimeWindow | undefined {
-  const match = TIME_CUE.exec(String(text ?? ''));
-  if (!match) return undefined;
-  const cue = match[0];
-  const resolved = resolveRelativeTime(cue, now);
-  if (resolved.at === undefined) return undefined;
-  return { from: resolved.at, to: resolved.atEnd ?? resolved.at + DAY, cue };
+  const resolved = findTimeExpression(text, now);
+  if (resolved?.at === undefined) return undefined;
+  return { from: resolved.at, to: resolved.atEnd ?? resolved.at + DAY, cue: resolved.matched ?? '' };
 }
