@@ -90,6 +90,14 @@ const supersedeSuccess = one(
    WHERE f.status = 'retracted' AND COALESCE(s.created_at, 0) >= ?`,
   since,
 ).n;
+// 0028: extraction runs only at a departure, and the verdict judges calls after
+// the gate went live (apply() v0.0.120) — pre-gate calls are history, not
+// violations. Pairing against trace events happens below, after the file parse.
+const GATE_AT = Date.parse('2026-11-05T14:33:06.000Z');
+const turnsPostGate = one(
+  'SELECT COUNT(*) AS n FROM turns WHERE started_at >= ?',
+  Math.max(since, GATE_AT),
+).n;
 
 db.close();
 
@@ -111,6 +119,24 @@ const pct = (part, whole) => (whole === 0 ? '—' : `${((part / whole) * 100).to
 const per = (part, whole) => (whole === 0 ? '—' : (part / whole).toFixed(2));
 
 const extracts = trace.filter((row) => row.event === 'extract');
+// 0028: an extract event with no triggered drain behind it is an in-session
+// call — the exact work the gate exists to stop. The verdict counts CALLS
+// after GATE_AT (one bypass = one too many); older calls are history: shown,
+// not judged (取舍要可见). The pairing window is generous — the queue event is
+// written in the same tick as the extract event (98ms measured) — and an
+// unpaired post-gate extract counts as in-session, so a broken gate fails
+// loudly instead of passing. GATE_AT and turnsPostGate are declared above,
+// next to the other database reads (the connection closes at db.close()).
+const triggeredDrains = trace.filter((row) => row.event === 'extract-queue' && row.trigger);
+const ranAtDeparture = (row) => {
+  const at = Date.parse(row.ts);
+  return triggeredDrains.some((drain) => {
+    const dt = Date.parse(drain.ts) - at;
+    return dt >= 0 && dt <= 2000;
+  });
+};
+const inSession = extracts.filter((row) => Date.parse(row.ts) < GATE_AT || !ranAtDeparture(row));
+const inSessionPostGate = inSession.filter((row) => Date.parse(row.ts) >= GATE_AT).length;
 // Why the rules path ran. "model-failed" and a deliberate rules mode are very
 // different problems, and a single ratio hides which one is happening.
 //
@@ -204,6 +230,15 @@ const report = {
     unmeasured: measured.length - measuredLlm - knownFallback,
     modelRate: modelDenominator === 0 ? null : Number((measuredLlm / modelDenominator).toFixed(3)),
     pass: modelDenominator === 0 ? null : measuredLlm / modelDenominator >= 0.8,
+  },
+  // 0028: the verdict judges post-gate calls only — pre-gate calls were the old
+  // per-turn path, not a gate violation; they stay visible as windowCalls.
+  inSessionExtraction: {
+    windowCalls: inSession.length,
+    postGateCalls: inSessionPostGate,
+    postGateTurns: turnsPostGate,
+    ratio: turnsPostGate === 0 ? null : Number((inSessionPostGate / turnsPostGate).toFixed(2)),
+    pass: turnsPostGate === 0 ? null : inSessionPostGate === 0,
   },
   attribution: {
     attached: attributions.length,
@@ -309,6 +344,12 @@ console.log(
   `取代引用           成功 ${supersedeSuccess} · 失败 ${supersedeFailures}` +
     (supersedeFailureReasons.size > 0 ? `（${[...supersedeFailureReasons].map(([reason, n]) => `${reason} ${n}`).join(' · ')}）` : '') +
     `   ${supersedeAttempts >= 5 ? (supersedeFailures / supersedeAttempts <= 0.2 ? 'PASS' : 'FAIL') + '（失败率 ≤20%）' : '样本不足，不判决（<5 次）'}`,
+);
+console.log('');
+console.log('--- 离开点（0028：抽取只在离开点发生） ---');
+console.log(
+  `会话中抽取/轮   ${report.inSessionExtraction.ratio ?? '—'} 次/轮   ${verdict(report.inSessionExtraction.pass)}   ` +
+    `(闸门后 ${inSessionPostGate} 次 / ${turnsPostGate} 轮，通过线 =0；窗口内另有 ${inSession.length - inSessionPostGate} 次全在 0028② 闸门 11-05 14:33Z 之前，不计入)`,
 );
 console.log('');
 console.log('--- 每轮成本（0026：turn-cost 事件） ---');
