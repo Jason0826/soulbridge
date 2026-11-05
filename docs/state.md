@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-05 18:05**（core 0.0.116 / plugin 0.0.118）
+最后核对：**2026-11-05 20:02**（core 0.0.116 / plugin 0.0.118）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -16,8 +16,8 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   unit=1turn 的条件已查清（18:05 条目）：查线索在抽取前、写线索在抽取后，
-               直播轮首次抽取必 1turn——0025 §三 的触发条件没实现；修法 A/B 待拍板（见下一步）
+现在在做什么   「离开点抽取」设计定稿：brief 0028（五决定 + 四个待拍板），0025/0017/0034 已打修订注；
+               根因见 18:05 条目（时序倒置，46 条日志实测）——下一步 = 拍板 0028 §十 → 按 §九 实施
 已验证         core 314 / 插件 104 测试全过；变异 = 改动前状态（4 红 → 改后全绿）
                提醒换会话：插件按会话累计 turn-cost，每请求上下文 ≥300k 或 ≥100 轮 → 注入
                <switch-session turns=… context-per-request=…>（由模型转告），每跨一级一次
@@ -30,11 +30,10 @@
                写入侧一个语法一个日单位：规则抽取改走 findTimeExpression，日历日 = UTC 零点
                day/range 非日历日 2 → 0（quality.mjs 观测 PASS）；时间检索实跑：上周窗口 2 条 day/range 进窗
                取代引用 50 成 / 1 败 → 2% PASS
-下一步         1) unit=1turn 已查清（18:05 条目）→ 修法待拍板：
-               A = 按 0025 §三 原案，队列项改 threadId、触发改"线索关闭 / ≥6 轮增量"（brief 原案；归属与抽取要拆开，改动大）
-               B = 保按轮触发，drain 时该轮无线索就用"上一轮所属线索 + 当前轮"当单位（改动小、即时；
-                   多数线索只有 1 轮，重复抽的成本低；模型判"新"时单位会错，靠闸门与 known-facts 兜）
-               不改代码只修日志前缀（`extract ok:` 在 model-failed 时也打 ok）不算修法，与 0025 决定冲突
+下一步         1) 0028 已写（设计权威）→ 实施前先拍板 §十 四项：规则层每轮保否 / 手动 /compact 是否同一套
+               事件 / handoff 自动发还是按需取 / 新会话第一轮晚几轮认不认
+               实施顺序（0028 §九）：小修两件（handoff 空不消费、`extract ok:` → `done:`）
+               → 触发检查表 + 段 sealing → 归属输出扩多条线索 → §八 四行真实重放 → retirements 登记
                2) 子代理的请求要不要滚到父轮 —— 需要 DSH 暴露会话谱系，事件流里没有
                3) 0027 §八 剩余三个读者：注入措辞 / 排序比较 / soulbridge why 打印 precision
                收口余债（见 0027 §十）：TIME_CUE 与语法词表两份、calendarDate/parseIsoDay 两份、
@@ -50,7 +49,9 @@
 最近成本       11/01–11/04 = ¥100.22；6,028 次请求，¥0.0166/请求（数字来源见下）
                金额构成：输入命中 56.3% / 输入未命中 23.3% / 输出 20.1%
                最重单轮 271 次请求（4973730c/turn15）；平均 21.9 次/轮（七日内 39 轮，quality.mjs --days 7）
-关键文件       docs/briefs/0025-thread-extraction.md · docs/briefs/0027-time-axis.md（§八 读取方 / §九 实施 / §十 写入侧收口）
+关键文件       docs/briefs/0028-departure-flush.md（写入时机设计，当前权威；§十 四个待拍板）
+               docs/briefs/0025-thread-extraction.md（§二/§三 已被 0028 取代；§四·一/五/九 仍有效）
+               docs/briefs/0027-time-axis.md（§八 读取方 / §九 实施 / §十 写入侧收口）
                packages/core/src/{time,retrieval,extract,prompts,sqlite,index}.ts
                D:\git-workspace\repos\dsh-plugin-soulbridge\index.js
                账单与判读：dsh-plugin-soulbridge\scripts\billing.mjs · docs\cost-visibility.md
@@ -67,17 +68,21 @@
 > 新会话只读状态会像换班工人；这 6 行是**叙事**，不是状态——换会话时整体替换，不累积。
 
 ```
-上一段   2026-11-05 09:53–10:10（session-ac4cb717），core 0.0.116 / plugin 0.0.118
-做了     把 turn-cost 读进 quality.mjs（每轮请求分布 + 每请求上下文 355k）；
-         加"提醒换会话"（阈值每请求 300k 或 100 轮，每跨一级一次，由模型转告）
-验证     提醒真实触发两次：469k（turn 17）→ 619k（翻倍，第 2 级）；
-         draftSkipped 在 model-failed 时可见——丢掉的是「加一个提醒换新会话的功能」等请求句
-没做完   unit=1turn 的条件没查（日志里 1turn 与 26turns 并存，重试后才拿到线索）；
-         子代理请求滚父轮；0027 §八 剩余三个读者；规则路径不认"请求句"（模型失败时请求会丢）
-在热什么 功能别过度设计、先让可观测跑通；这段会话每请求 619k，建议换新会话继续
+上一段   2026-11-05 10:13–20:02（session-a1cca035，接 ac4cb717），core 0.0.116 / plugin 0.0.118
+做了     查清 unit=1turn 根因（时序倒置：查线索在抽取前、写在抽取后；46 条日志 42 首抽全 1turn、
+         整线索成功样本仅 1 个）→ 收敛出「离开点抽取」五决定 → 写 brief 0028；
+         0025 §二§三 / 0017 归属时机 / 0034 指标口径打修订注，README 权威表加行
+验证     health-check 改前改后均 0 FAIL；压缩事件 12 次实测可订阅（session/event）；
+         handoff 查明是插件自产（takeHandoff/renderHandoff），DSH 没有自带交接
+没做完   0028 §十 四个待拍板（规则层每轮？手动 compact 同套事件？handoff 自动还是按需？第一轮延迟？）；
+         小修两件（handoff 空不消费、extract ok: 前缀）；子代理滚父轮；0027 §八 剩余三个读者
+在热什么 语义边界别拿时间近似（quiet-time 只配关灯）；结构是抽取的产物不是前提；
+         本会话已长，换新会话接着做 0028（第一句照旧：读接手须知和会话交接）
 ```
 
-**18:05 unit=1turn 的条件查清（观测，未改代码）**：判据是 `turns.thread_id`，唯一写者是 `attachTurn`（`sqlite.ts:1345`），生产路径只由 `applyThread` 在**该轮抽取结束时**写入（插件 `index.js:1486`）；而队列 drain 在抽取**开始前**读 `turnThreadId`（`index.js:1611`）——**查在线索写入之前，时序相反**。于是：① 直播轮首次抽取必 `1turn`（归属还没发生）；② 首轮 outcome 非 ok（`rules:model-failed`，规则 floor 已把归属写掉、轮次留队）时，**重试才拿到线索**。`unit=` 上线（11-04 18:40）以来 46 条日志实测：`1turn` 42（全 live；join=continue 36 / explicit-new 4 / fallback-previous 2——**38 条接进了已存在的线索，却按单轮抽**）；Nturns 仅 4（26turns×2、46turns×2，**全部是 model-failed 重试**：46turns 三次全败被丢弃，26turns 第 3 次才拿到 llm 15 条事实）。结论：0025 §三 的触发条件（按 threadId 入队、线索关闭或 ≥6 轮增量才抽、同线索合并）**没实现**，实际是"按轮入队 + drain 时解析线索"，而解析依赖的字段要等这次抽取结束才存在——**整线索抽取在直播里首次从不生效，目前全库只有 1 个整线索成功样本**（26turns/15 facts）；backfill 轮次先归属再入队应为 Nturns，日志 0 样本、待验证。附带发现：`extract ok:` 前缀误导——`rules:model-failed` 也打 `ok`（日志的 ok ≠ 队列完成）。修法 A/B 见下一步 1。
+**20:02 brief 0028 离开点抽取（设计定稿，未动代码）**：把 18:05 的根因收敛成一页设计。第一原理——**抽取是为「离开上下文之后」做的备份，在上下文里宿主原生就记得，抽了是重复**——所以触发点 = 离开点：压缩（`compaction/end`，plugin.log 实测 12 次，插件已订阅）/ 切会话·归档（`archivedSessionIds` 在用）/ 容量超限 / 年龄 24h，**全部在下次开口的 drain 里做确定性检查**（模型只能在 step 内调用，无后台定时器）。五决定：① `turns` 不可变是唯一真相，facts/线索/归属/结论全是可重放的派生投影；② 写入只在离开点，会话中 LLM 抽取 = 0；③ **归属是段抽取的产物**（段内多话题由模型一次切开，时间信号永远不产生归属）；④ handoff 是渲染不是触发（空不消费、拿到即止）；⑤ 注入分常驻（画像）与按需（hook + `soul_detail`）。0025 §二§三、0017 归属时机、ADR 0034 指标口径已打修订注（原文保留），README 权威表加行；health-check 改前改后 0 FAIL。四个开放问题见 0028 §十，实施顺序见 §九。
+
+**18:05 unit=1turn 的条件查清（观测，未改代码）**：判据是 `turns.thread_id`，唯一写者是 `attachTurn`（`sqlite.ts:1345`），生产路径只由 `applyThread` 在**该轮抽取结束时**写入（插件 `index.js:1486`）；而队列 drain 在抽取**开始前**读 `turnThreadId`（`index.js:1611`）——**查在线索写入之前，时序相反**。于是：① 直播轮首次抽取必 `1turn`（归属还没发生）；② 首轮 outcome 非 ok（`rules:model-failed`，规则 floor 已把归属写掉、轮次留队）时，**重试才拿到线索**。`unit=` 上线（11-04 18:40）以来 46 条日志实测：`1turn` 42（全 live；join=continue 36 / explicit-new 4 / fallback-previous 2——**38 条接进了已存在的线索，却按单轮抽**）；Nturns 仅 4（26turns×2、46turns×2，**全部是 model-failed 重试**：46turns 三次全败被丢弃，26turns 第 3 次才拿到 llm 15 条事实）。结论：0025 §三 的触发条件（按 threadId 入队、线索关闭或 ≥6 轮增量才抽、同线索合并）**没实现**，实际是"按轮入队 + drain 时解析线索"，而解析依赖的字段要等这次抽取结束才存在——**整线索抽取在直播里首次从不生效，目前全库只有 1 个整线索成功样本**（26turns/15 facts）；backfill 轮次先归属再入队应为 Nturns，日志 0 样本、待验证。附带发现：`extract ok:` 前缀误导——`rules:model-failed` 也打 `ok`（日志的 ok ≠ 队列完成）。修法已收敛为 brief 0028（见上 20:02 条目）。
 
 **10:07 提醒首次触发 + 取舍可见的首个真实样本（插件 0.0.118）**：`switch-session: remind turn=17`（10:06:51），注入 `<switch-session turns="1" context-per-request="469028">`——账本从 09:53 重启起算，一轮就过了 300k。更早的同一天（01:45–01:47），模型连续两次 `model-failed`，规则兜底把「加一个提醒换新会话的功能」和「需要换session吗」判为 `no-structure` 丢弃：**用户自己的请求句，在模型失败时不会变成事实**——以前无声消失，现在有 `draftSkipped=1` 和丢弃原因。这正好画出"地板"的边界：规则只认人/动词/时间，请求类句子只能靠模型。
 
