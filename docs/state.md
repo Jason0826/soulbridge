@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-05 09:00**（core 0.0.116 / plugin 0.0.117）
+最后核对：**2026-11-05 09:40**（core 0.0.116 / plugin 0.0.117）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -16,18 +16,18 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   抽取的取舍可见（core 0.0.116 / plugin 0.0.117）；0027 写入侧收口与读取方 1 已上线（上一版在 profile 实跑过）
+现在在做什么   每轮成本可观测（quality.mjs 读 turn-cost）；抽取取舍可见（core 0.0.116 / plugin 0.0.117）已上线
 已验证         core 314 / 插件 98 测试全过；变异 = 改动前状态（4 红 → 改后全绿）
+               每轮成本（七日内 39 轮）：平均 21.9 次请求 · p50 6 · p90 49 · 最重 271；
+               分布 1-5:19 / 6-15:11 / 16-30:2 / 31+:7；每请求上下文 355,311 token（纯输入仅 4,516）
                抽取取舍可见：规则丢弃的无结构句子、模型丢弃的坏条目都进 ExtractDraft.skipped（what+reason），
                插件日志 draftSkipped=N + 前 3 条；规则路径 statement 不再切 80 字，整句保存（规则 17）
-               写入侧一个语法一个日单位：规则抽取改走 findTimeExpression（TIME_WORDS/TIME_OFFSET_DAYS 已删），
-               "上周" → range+周一 UTC 零点；日历日 = UTC 零点（窗口/规则/显示同一单位）
-               day/range 非日历日 2 → 0（quality.mjs 新增观测 PASS；修复脚本曾把两行写成 2000-01-01，
-               靠读实际值发现——**验证值，不只验证形状**，备份 soul.db.bak-daymidnight-*）
-               时间检索实跑：上周窗口 87 条里 2 条 day/range 进窗，unknown 0 条
+               写入侧一个语法一个日单位：规则抽取改走 findTimeExpression，日历日 = UTC 零点
+               day/range 非日历日 2 → 0（quality.mjs 观测 PASS）；时间检索实跑：上周窗口 2 条 day/range 进窗
                v15 迁移实测：valid_from 空值 0；precision day 246 / range 6 / relative 13 / unknown 609
-               取代引用 50 成 / 1 败 → 2% PASS；首个 turn-cost：turn 2 → requests=5
-下一步         1) 把 turn-cost 读进 quality.mjs（每轮请求数分布 + 每请求上下文）
+               取代引用 50 成 / 1 败 → 2% PASS
+下一步         1) 查 unit=1turn 分布：最近 200 条抽取 35×1turn / 2×46turns——
+               整条线索抽取在实时轮次上基本没生效，先查是设计如此还是漏接线
                2) 子代理的请求要不要滚到父轮 —— 需要 DSH 暴露会话谱系，事件流里没有
                3) 0027 §八 剩余三个读者：注入措辞 / 排序比较 / soulbridge why 打印 precision
                收口余债（见 0027 §十）：TIME_CUE 与语法词表两份、calendarDate/parseIsoDay 两份、
@@ -42,7 +42,7 @@
                成本不是记忆层的事：core 里没有一行价格逻辑，账单脚本在插件仓库
 最近成本       11/01–11/04 = ¥100.22；6,028 次请求，¥0.0166/请求（数字来源见下）
                金额构成：输入命中 56.3% / 输入未命中 23.3% / 输出 20.1%
-               最重单轮 108 次请求（trace turn 406）；平均 18 次/轮
+               最重单轮 271 次请求（4973730c/turn15）；平均 21.9 次/轮（七日内 39 轮，quality.mjs --days 7）
 关键文件       docs/briefs/0025-thread-extraction.md · docs/briefs/0027-time-axis.md（§八 读取方 / §九 实施 / §十 写入侧收口）
                packages/core/src/{time,retrieval,extract,prompts,sqlite,index}.ts
                D:\git-workspace\repos\dsh-plugin-soulbridge\index.js
@@ -53,6 +53,8 @@
                注意：npm 读侧复制延迟实测 3–15 分钟，`npm view` 马上查会 404，别判成发布失败
 成本导出       D:\Download\usage_data_*.zip（平台导出，含 amount/cost 两个 CSV）
 ```
+
+**09:35 每轮成本可观测（quality.mjs）**：`turn-cost` 事件（插件 0.0.113 起每轮一条）现在被质量报告读进去：每轮请求数（共/合计/平均/p50/p90/最重）、请求数分布（1-5 / 6-15 / 16-30 / 31+）、**每请求上下文 token**（input+cacheHit+cacheWrite；纯输入单独给）、最重三轮（session 前缀 + 轮号）。未完成轮次（`open`，被驱逐/中断）不计入分布、单独计数——半轮不是数据点。七日内实测：39 轮 / 853 次 / 平均 21.9 / p50 6 / p90 49 / 最重 271（4973730c/turn15）；**每请求上下文 355,311 token，其中纯输入只有 4,516**——98.7% 是重买的历史，这就是"该换会话"的客观信号，现在在仪表盘上了。脚本改动，不发版。
 
 **09:00 抽取的取舍可见（core 0.0.116 / 插件 0.0.117）**：两处违反"取舍要可见/不截断"的欠账修掉。① `extractByRules` 丢弃的无结构句子、`validateDraft` 丢掉的坏条目（实体类型错/空陈述/未知操作/空缺口）都进 `ExtractDraft.skipped`（`what` + `reason`），插件日志多 `draftSkipped=N` 与前 3 条明细、trace 多 `draftSkipped`（前 5 条）——以前"句子没被记住"和"抽取器没看它"在所有日志里长得一模一样。② `toStatement` 去掉 `slice(0, 80)`：陈述就是整句，长度由注入侧按"整行取舍"处理——切半句会把用户没说过的话写进记忆（规则 17）。测试 core 314（+4）/ 插件 98；变异 = 改动前状态（4 红 → 绿）。
 

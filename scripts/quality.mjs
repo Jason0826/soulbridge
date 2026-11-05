@@ -157,6 +157,43 @@ const supersedeAttempts = supersedeSuccess + supersedeFailures;
 const consolidations = trace.filter((row) => row.event === 'consolidate' && (row.verdict === 'supported' || row.dropped));
 const supported = consolidations.filter((row) => row.verdict === 'supported').length;
 
+// 0026: what one turn cost. The platform export is one line per day, so the turn that
+// burned the money is invisible until the day is over; the plugin writes one record per
+// finished turn. Requests per turn is the heaviness signal, and prompt tokens per
+// request is the "context is being re-bought" signal that decides whether a session is
+// too expensive to keep going. Incomplete turns (evicted / interrupted, `open`) are
+// excluded from the distribution and counted separately — half a turn is not a data point.
+const turnCosts = trace.filter((row) => row.event === 'turn-cost');
+const completeTurns = turnCosts.filter((row) => !row.open);
+const openTurns = turnCosts.length - completeTurns.length;
+const requestCounts = completeTurns
+  .map((row) => Number(row.requests) || 0)
+  .filter((n) => n > 0)
+  .sort((a, b) => a - b);
+const requestTotal = requestCounts.reduce((sum, n) => sum + n, 0);
+const promptTokens = completeTurns.reduce(
+  (sum, row) => sum + (Number(row.input) || 0) + (Number(row.cacheHit) || 0) + (Number(row.cacheWrite) || 0),
+  0,
+);
+const freshTokens = completeTurns.reduce((sum, row) => sum + (Number(row.input) || 0), 0);
+const quantile = (sorted, q) => (sorted.length === 0 ? null : sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]);
+const requestBuckets = [
+  { label: '1-5', lo: 1, hi: 5 },
+  { label: '6-15', lo: 6, hi: 15 },
+  { label: '16-30', lo: 16, hi: 30 },
+  { label: '31+', lo: 31, hi: Number.POSITIVE_INFINITY },
+].map((bucket) => ({ label: bucket.label, n: requestCounts.filter((n) => n >= bucket.lo && n <= bucket.hi).length }));
+const heaviestTurns = [...completeTurns]
+  .sort((a, b) => (Number(b.requests) || 0) - (Number(a.requests) || 0))
+  .slice(0, 3)
+  .map((row) => ({
+    requests: Number(row.requests) || 0,
+    // Session ids look like "session-ac4cb717-…": the uuid prefix is what a human
+    // recognises in the log, the word "session" is not.
+    session: String(row.session ?? '').replace(/^session-/, '').slice(0, 8),
+    turn: row.turn,
+  }));
+
 const report = {
   window: { days, since: new Date(since).toISOString() },
   factsPerTurn: { facts, turns, ratio: turns === 0 ? null : Number((facts / turns).toFixed(2)), pass: turns > 0 && facts / turns <= 1.5 },
@@ -210,6 +247,23 @@ const report = {
     // Fewer than five attempts says nothing about a rate: 空样本不是判决.
     judged: supersedeAttempts >= 5,
   },
+  turnCost: {
+    turns: requestCounts.length,
+    openTurns,
+    requests: {
+      total: requestTotal,
+      mean: requestCounts.length === 0 ? null : Number((requestTotal / requestCounts.length).toFixed(1)),
+      p50: quantile(requestCounts, 0.5),
+      p90: quantile(requestCounts, 0.9),
+      max: requestCounts.length === 0 ? null : requestCounts[requestCounts.length - 1],
+    },
+    distribution: Object.fromEntries(requestBuckets.map((bucket) => [bucket.label, bucket.n])),
+    perRequest: {
+      prompt: requestTotal === 0 ? null : Math.round(promptTokens / requestTotal),
+      fresh: requestTotal === 0 ? null : Math.round(freshTokens / requestTotal),
+    },
+    heaviest: heaviestTurns,
+  },
 };
 
 if (asJson) {
@@ -256,6 +310,25 @@ console.log(
     (supersedeFailureReasons.size > 0 ? `（${[...supersedeFailureReasons].map(([reason, n]) => `${reason} ${n}`).join(' · ')}）` : '') +
     `   ${supersedeAttempts >= 5 ? (supersedeFailures / supersedeAttempts <= 0.2 ? 'PASS' : 'FAIL') + '（失败率 ≤20%）' : '样本不足，不判决（<5 次）'}`,
 );
+console.log('');
+console.log('--- 每轮成本（0026：turn-cost 事件） ---');
+if (requestCounts.length === 0) {
+  console.log('窗口内无完成的 turn-cost 事件（插件 ≥0.0.113 才有）');
+} else {
+  console.log(
+    `每轮请求数        共 ${requestCounts.length} 轮 · 合计 ${requestTotal} 次 · 平均 ${report.turnCost.requests.mean} · ` +
+      `p50 ${report.turnCost.requests.p50} · p90 ${report.turnCost.requests.p90} · 最重 ${report.turnCost.requests.max}` +
+      (openTurns > 0 ? `（另有 ${openTurns} 条未完成轮次不计入）` : ''),
+  );
+  console.log(`请求数分布        ${requestBuckets.map((bucket) => `${bucket.label}: ${bucket.n}`).join(' · ')}`);
+  console.log(
+    `每请求上下文      平均 ${report.turnCost.perRequest.prompt} token（纯输入 ${report.turnCost.perRequest.fresh}；含缓存读写）` +
+      '    ← 这个数涨，就该换会话了',
+  );
+  console.log(
+    `最重三轮          ${heaviestTurns.map((t) => `${t.requests}次(${t.session}/${t.turn})`).join(' · ')}`,
+  );
+}
 console.log('');
 if (fallbackReasons.size > 0) {
   console.log('');
