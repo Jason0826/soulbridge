@@ -346,8 +346,14 @@ export interface ExtractDraft {
    * extractor ignored it" look identical in every log and every metric (rule 18).
    */
   skipped?: Array<{ what: string; reason: string }>;
-  /** Which topic thread this turn belongs to, when the model said. */
-  thread?: ThreadAttribution;
+  /**
+   * Which thread each span of this unit belongs to, when the model said (0028 ③).
+   *
+   * One segment can hold two topics, so the answer is a list of runs, not a single
+   * thread. An absent list is not "no opinion": the caller falls back per turn
+   * (ADR 0034), which is the same chain a single-turn extraction has always used.
+   */
+  spans?: ThreadSpan[];
   /**
    * What the model's thread line was: a usable answer, absent, or present but
    * unparseable. Without this the fallback rate is inferred from behaviour instead of
@@ -368,6 +374,20 @@ export interface ExtractDraft {
 export type ThreadAttribution =
   | { kind: 'continue'; id: string; topic?: string }
   | { kind: 'new'; topic?: string };
+
+/**
+ * A run of consecutive turns of one extracted unit that belongs to one thread.
+ *
+ * `from`/`to` are the prompt's numbering inside the unit (1..n), not host turn
+ * numbers — the model only ever sees the prompt's numbering. `to` omitted means
+ * "through the last turn", which is exactly what a single line without a range
+ * produces: the shape a single-topic segment has always had.
+ */
+export interface ThreadSpan {
+  from: number;
+  to?: number;
+  attribution: ThreadAttribution;
+}
 
 /** What a commit actually created or merged. */
 export interface CommitResult {

@@ -115,7 +115,8 @@ test('extraction prompt: stays within a sane size', () => {
   // field became part of the required line template; raised to 5200 when 0025 added the
   // 轮次 key and the self-containment sentence (+226 chars, measured 5026); raised to 5450
   // when 0027 split the time into 有效从/有效到 with an example for each kind (+240 chars,
-  // measured 5266). The terms block is still the bulk; candidate text and whole threads are
-  // added on top at runtime.
-  assert.ok(prompt.length < 5450, `prompt grew to ${prompt.length} chars`);
+  // measured 5266); raised to 5600 when 0028 ③ taught the span range syntax (线索:
+  // 1-5 …) in schema and rules (+269 chars, measured 5529). The terms block is still the
+  // bulk; candidate text and whole threads are added on top at runtime.
+  assert.ok(prompt.length < 5600, `prompt grew to ${prompt.length} chars`);
 });

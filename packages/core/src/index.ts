@@ -94,6 +94,7 @@ import type {
   ConclusionDraft,
   Fact,
   ThreadAttribution,
+  ThreadSpan,
   TurnThread,
   FactDetail,
   FactSpec,
@@ -601,6 +602,68 @@ export class Soul {
     });
     this.store.attachTurn(spec.turnId, thread.id);
     return { threadId: thread.id, created: true, topic: thread.topic, joinReason, topicUpdated: false };
+  }
+
+  /**
+   * Put every turn of an extracted segment into its thread (0028 ③).
+   *
+   * The model answers with spans in the prompt's numbering; each turn is applied
+   * through `applyThread` in turn order, so the existing chain — continue → new →
+   * fallback to the previous turn's thread (ADR 0034) — does the work per turn. A
+   * turn no span covers lands where the previous turn did, and the first turn of a
+   * segment falls back to `previousThreadId`, which is the thread the segment
+   * started inside.
+   *
+   * This only fans the single-turn primitive over the unit; it re-decides nothing.
+   * That is also why the head-only gap closes: before, one attribution attached one
+   * turn and the rest of the segment carried no thread.
+   *
+   * `turnNo` is the host's real turn number (threads count turns, and host numbers
+   * jump by 10–30); `promptNo` is the numbering the model saw and the only thing
+   * spans match against.
+   */
+  applyThreadSpans(
+    spans: ThreadSpan[] | undefined,
+    spec: {
+      sessionId: string;
+      turns: Array<{ promptNo: number; turnNo: number; turnId: string; at: number; fallbackTopic?: string }>;
+      previousThreadId?: string;
+    },
+  ): Array<{ turnId: string; threadId: string; created: boolean; topic: string; joinReason: string; topicUpdated: boolean }> {
+    let previous = spec.previousThreadId;
+    const applied: Array<{ turnId: string; threadId: string; created: boolean; topic: string; joinReason: string; topicUpdated: boolean }> = [];
+    // A `new` span opens ONE thread, not one per turn: the model named a topic for a
+    // run of turns, and applying its answer per turn would fragment that run into
+    // same-topic clones — the exact failure 0028 exists to remove. The first turn
+    // opens it; the rest of the span continues what was just opened.
+    const openedBySpan = new Map<ThreadSpan, string>();
+    for (const turn of spec.turns) {
+      const span = spans?.find((candidate) => candidate.from <= turn.promptNo && (candidate.to === undefined || turn.promptNo <= candidate.to));
+      let attribution = span?.attribution;
+      if (span && attribution?.kind === 'new') {
+        const opened = openedBySpan.get(span);
+        if (opened) attribution = { kind: 'continue', id: opened };
+      }
+      const result = this.applyThread(attribution, {
+        sessionId: spec.sessionId,
+        turnNo: turn.turnNo,
+        turnId: turn.turnId,
+        at: turn.at,
+        fallbackTopic: turn.fallbackTopic,
+        previousThreadId: previous,
+      });
+      if (span && !openedBySpan.has(span)) openedBySpan.set(span, result.threadId);
+      applied.push({
+        turnId: turn.turnId,
+        threadId: result.threadId,
+        created: result.created,
+        topic: result.topic,
+        joinReason: result.joinReason,
+        topicUpdated: result.topicUpdated,
+      });
+      previous = result.threadId;
+    }
+    return applied;
   }
 
   /**

@@ -171,14 +171,24 @@
       "date": "2026-11-05",
       "delta": 236,
       "reason": "0028 实施② 触发检查表 + 段 sealing（插件 0.0.120）：planSegment 纯函数承载四触发（压缩标记 / 会话切换·归档 / 容量 40轮·6万字 / 年龄 24h），compaction/end 只置标记不调模型，drain 无触发不抽（会话中抽取=0），段一次抽完写 seal（≤100 条可查）、入队拒已封存轮（origin=backfill 重放例外），失败整段 bump、3 次封存丢弃。同期删掉按线索解析的旧 drain 路径与 pickExtractionItem（约 -70 行）。功能实施按 0026/0027 读取方先例记一次；brief 0028 §九 ②，测试 107→120、三个变异各红。"
+    },
+    {
+      "date": "2026-11-06",
+      "delta": 121,
+      "reason": "0028 实施③ 归属输出扩多条线索（core 0.0.117）：ExtractDraft.thread 单条退场 → spans 列表——types +20（ThreadSpan），extract.ts +38（readThreadSpans 多行/范围解析、开放端收口到下一条线索之前、三态观测保留），index.ts +63（applyThreadSpans 逐轮 fan-out：复用 applyThread 兜底链、段内 new 只开一条、未覆盖轮走 ADR 0034），提示词 schema/rules 教范围语法（prompts.generated 同步 +4；+7 条测试在 test/ 不计）。功能实施按 0026/0027 先例记一次；变异：去范围解析恰 1 红、fan-out 只挂头轮 5 红。"
+    },
+    {
+      "date": "2026-11-06",
+      "delta": 32,
+      "reason": "0028 实施③ 的宿主侧（插件 0.0.121）：drain 给 unit turns 带 hostTurnNo（提示词编号管范围匹配、真实轮号管线索计数，两个编号都显式传递不猜）；runExtraction 改调 applyThreadSpans，日志单线索保持旧格式（thread=th_xxx(new)）、拆段列全（thread=a,b(N new)、join=各轮原因并集），trace 拆段时带 threadSpans 逐轮明细。与 core 0.0.117 同一批；+2 条集成测试（真模型路径两行线索 → 两线索全挂上）在 test/ 不计。"
     }
   ],
-  "coreLines": 8900,
-  "pluginLines": 3051,
+  "coreLines": 9021,
+  "pluginLines": 3083,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 1607,
+    "index.ts": 1670,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 194,
@@ -190,7 +200,7 @@
     "consolidate.ts": 373,
     "context.ts": 164,
     "dimension-text.ts": 31,
-    "extract.ts": 750,
+    "extract.ts": 788,
     "inject-text.ts": 27,
     "portable.ts": 115,
     "profile-prompt.ts": 119,
@@ -208,6 +218,6 @@
     "store.ts": 181,
     "measure.ts": 45,
     "time.ts": 213,
-    "types.ts": 799
+    "types.ts": 819
   }
 }

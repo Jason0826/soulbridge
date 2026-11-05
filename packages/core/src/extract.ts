@@ -16,7 +16,7 @@
  * Pure functions, no I/O, no dependencies.
  */
 import type {
-  ThreadAttribution, EntityDraft, ExtractDraft, FactDraft, FactOperation, GapDraft, SlotValue, AtPrecision } from './types.ts';
+  ThreadAttribution, ThreadSpan, EntityDraft, ExtractDraft, FactDraft, FactOperation, GapDraft, SlotValue, AtPrecision } from './types.ts';
 import { renderExtractionPrompt } from './prompts.ts';
 import { SLOT_ENTITY_MARKER, FACT_ROLES } from './config/domains.ts';
 import { findTimeExpression } from './time.ts';
@@ -332,15 +332,14 @@ export async function extractThreadWithModel(
   }
   // Lines first: one bad record is one bad record. JSON is the fallback for a
   // model that ignores the template and answers in JSON anyway.
-  const threadRead = readThreadLine(raw);
-  const thread = threadRead.kind === 'continue' || threadRead.kind === 'new' ? threadRead : null;
-  const threadLine = threadRead.kind === 'continue' || threadRead.kind === 'new' ? 'present' : threadRead.kind;
+  const threadRead = readThreadSpans(raw);
+  const spans = threadRead.spans.length > 0 ? threadRead.spans : undefined;
   const fromLines = parseLineDraft(raw);
   if (fromLines) {
     const result = validateDraft(fromLines, now, context);
     if (result.draft) {
-      if (thread) result.draft.thread = thread;
-      result.draft.threadLine = threadLine;
+      if (spans) result.draft.spans = spans;
+      result.draft.threadLine = threadRead.line;
     }
     return result;
   }
@@ -348,62 +347,101 @@ export async function extractThreadWithModel(
   if (!json) return { draft: null, error: `unparseable output: ${String(raw).slice(0, 60)}` };
   const result = validateDraft(json, now, context);
   if (result.draft) {
-    if (thread) result.draft.thread = thread;
-    result.draft.threadLine = threadLine;
+    if (spans) result.draft.spans = spans;
+    result.draft.threadLine = threadRead.line;
   }
   return result;
 }
 
 /**
- * Parse the attribution line.
+ * Parse the attribution lines of a unit — one per topic span (0028 ③).
  *
- *  线索: 继续 th_ab12
- *  线索: 新 | 在聊 cookie 与认证
- */
-export function parseThreadLine(raw: string): ThreadAttribution | null {
-  const read = readThreadLine(raw);
-  // `topic` is omitted rather than set to undefined: callers compare the attribution
-  // object, and an explicit undefined key makes two equivalent answers unequal.
-  if (read.kind === 'continue') return read.topic ? { kind: 'continue', id: read.id, topic: read.topic } : { kind: 'continue', id: read.id };
-  if (read.kind === 'new') return read.topic ? { kind: 'new', topic: read.topic } : { kind: 'new' };
-  return null;
-}
-
-/**
- * What the model's thread line said, including whether it said anything.
+ *  线索: 1-5 继续 th_ab12
+ *  线索: 6-8 新 | 在聊 cookie 与认证
+ *  线索: 继续 th_ab12              ← no range: the whole unit (single-topic shape)
  *
- * `parseThreadLine` collapses "no line" and "a line I cannot read" into null, which made
- * the fallback rate unmeasurable — 75% of attributions arrived as `fallback-previous`
- * with no way to tell whether the model was silent or unparseable. The kinds are kept
- * apart here; only `continue` and `new` are usable attributions.
+ * Ranges are the prompt's numbering inside the unit; whether they fit the unit's
+ * length belongs to the caller that owns the turns — only the shape is parsed here.
+ * The three observation states are kept apart (a silent model and an unreadable one
+ * are different failures), and a usable line anywhere makes the answer `present`.
  */
-export function readThreadLine(
-  raw: string,
-):
-  | { kind: 'continue'; id: string; topic?: string }
-  | { kind: 'new'; topic?: string }
-  | { kind: 'absent' }
-  | { kind: 'invalid'; line: string } {
+export function readThreadSpans(raw: string): {
+  spans: ThreadSpan[];
+  line: 'present' | 'absent' | 'invalid';
+  /** The first unparseable line, so a bad answer can be logged, not just counted. */
+  bad?: string;
+} {
+  const spans: ThreadSpan[] = [];
   let sawLine = false;
-  let unreadable = '';
+  let bad = '';
   for (const line of String(raw ?? '').split(/\r?\n/)) {
     const match = /^线索\s*[:：]\s*(.+)$/.exec(line.trim());
     if (!match) continue;
     sawLine = true;
-    const body = match[1].trim();
-    if (/^(无|none|nothing)[。.]?$/i.test(body)) return { kind: 'absent' };
+    let body = match[1].trim();
+    // Range needs the dash, a bare turn number does not; without either the line
+    // carries no span and the whole unit's single answer applies (from: 1).
+    let from: number | undefined;
+    let to: number | undefined;
+    const open = /^(\d+)\s*[-–—~]\s*(\d+)?\s+(.+)$/.exec(body);
+    const single = open ? null : /^(\d+)\s+(.+)$/.exec(body);
+    if (open) {
+      from = Number(open[1]);
+      to = open[2] === undefined ? undefined : Number(open[2]);
+      body = open[3].trim();
+    } else if (single) {
+      from = Number(single[1]);
+      to = from;
+      body = single[2].trim();
+    }
+    // `topic` is omitted rather than set to undefined: callers compare the attribution
+    // object, and an explicit undefined key makes two equivalent answers unequal.
+    const span = (attribution: ThreadAttribution): ThreadSpan => ({
+      from: from ?? 1,
+      ...(to !== undefined ? { to } : {}),
+      attribution,
+    });
+    if (/^(无|none|nothing)[。.]?$/i.test(body)) continue;
     // `继续 <id>` with an optional new topic, for when the subject moved inside the
     // same thread: the stored topic would otherwise stay at the first turn forever.
     const continued = /^继续\s*[:：]?\s*([A-Za-z0-9_-]+)\s*(?:[|｜]\s*主题\s*[=:：]\s*(.*))?$/.exec(body);
     if (continued) {
       const topic = (continued[2] ?? '').trim();
-      return { kind: 'continue', id: continued[1], topic: topic || undefined };
+      spans.push(span(topic ? { kind: 'continue', id: continued[1], topic } : { kind: 'continue', id: continued[1] }));
+      continue;
     }
     const fresh = /^新\s*(?:[|｜:：]\s*(.*))?$/.exec(body);
-    if (fresh) return { kind: 'new', topic: (fresh[1] ?? '').trim() || undefined };
-    unreadable = `线索: ${body}`;
+    if (fresh) {
+      const topic = (fresh[1] ?? '').trim();
+      spans.push(span(topic ? { kind: 'new', topic } : { kind: 'new' }));
+      continue;
+    }
+    if (!bad) bad = `线索: ${match[1].trim()}`;
   }
-  return sawLine && unreadable ? { kind: 'invalid', line: unreadable } : { kind: 'absent' };
+  // An open end means "through the end of the unit" only for the last answer: with
+  // several lines, a bare `线索: 继续 …` would otherwise swallow every line after it
+  // (find-first matching never reaches them). Fit each open end to the next line
+  // that starts later — single-line output keeps its whole-unit meaning, multi-line
+  // output stays disjoint. Overlapping explicit ranges are the model's to avoid.
+  for (let i = 0; i < spans.length; i += 1) {
+    const span = spans[i];
+    if (span.to !== undefined) continue;
+    const nextFrom = spans
+      .filter((other, j) => j !== i && other.from > span.from)
+      .reduce<number | null>((min, other) => (min === null || other.from < min ? other.from : min), null);
+    if (nextFrom !== null) span.to = nextFrom - 1;
+  }
+  if (spans.length > 0) return { spans, line: 'present', ...(bad ? { bad } : {}) };
+  if (sawLine && bad) return { spans: [], line: 'invalid', bad };
+  return { spans: [], line: 'absent' };
+}
+
+/**
+ * The first usable attribution of a unit, or null — the single-answer view of
+ * `readThreadSpans`, for callers that need one thread rather than the runs.
+ */
+export function parseThreadLine(raw: string): ThreadAttribution | null {
+  return readThreadSpans(raw).spans[0]?.attribution ?? null;
 }
 
 /** Models wrap JSON in prose or fences; take the outermost object. */
