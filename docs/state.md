@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-06 05:20**（core 0.0.117 / plugin 0.0.120）
+最后核对：**2026-11-06 05:40**（core 0.0.117 / plugin 0.0.121）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -16,8 +16,8 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   0028 实施③ 完成、发版部署中（core 0.0.117 已升版；插件 0.0.121 排队）：
-               归属输出扩多条线索（spans），段内每轮挂线。之后 = §九④ §八 四行真实重放
+现在在做什么   0028 实施③ 完成并上线（core 0.0.117 / 插件 0.0.121：apply() @ 05:34:51
+               实测，见 05:20 条目）——下一步 = §九④ §八 四行真实重放
 已验证         ③ spans：core 321 / 插件 122 测试全过；变异：去范围解析→恰 1 红、
                fan-out 只挂头轮→core 5 红 + 插件集成 1 红（真模型路径：两行线索 → 两条线索、
                每轮挂上、线索记真实轮号）；两个真 bug 是测试先抓的（首行吞段、new 逐轮开克隆）
@@ -36,8 +36,10 @@
                写入侧一个语法一个日单位：规则抽取改走 findTimeExpression，日历日 = UTC 零点
                day/range 非日历日 2 → 0（quality.mjs 观测 PASS）；时间检索实跑：上周窗口 2 条 day/range 进窗
                取代引用 50 成 / 1 败 → 2% PASS
-下一步         1) 0028 实施（§九 顺序；① ② 已上线，③ 完成待部署验证——core 321/插件 122、双变异红）：
-               ④ §八 四行真实重放（手动 /compact 当天验，③④ 一起补 A9 review）→ ⑤ retirements 登记
+下一步         1) 0028 实施（§九 顺序；① ② ③ 已完成并上线——③ core 321/插件 122、双变异红、
+               apply() 0.0.121 @ 05:34:51 实测；生产 segment-wait 已 4 条）：
+               ④ §八 四行真实重放（手动 /compact 当天验 + 首个 segment flush，③④ 一起补 A9 review）
+               → ⑤ retirements 登记
                ②的整体 review：audit/2026-11-05-review-departure-checklist.md（① 的在 floor-cost-handoff）
                2) 子代理的请求要不要滚到父轮 —— 需要 DSH 暴露会话谱系，事件流里没有
                3) 0027 §八 剩余三个读者：注入措辞 / 排序比较 / soulbridge why 打印 precision
@@ -65,7 +67,7 @@
                agent 的 job 对象跑 restart-web.ps1）——**直接在会话里跑脚本会被宿主连坐杀掉**
                （22:33 实测：Job runner 报错、重启根本没发生，宿主毫发无损）
                运行中的 profile = ~/.dsh/profiles/web（→ C:\DSH\home\profiles\web）
-               发版 = 推 tag → GitHub Actions → npm（当前 core 0.0.117 / plugin 0.0.120）
+               发版 = 推 tag → GitHub Actions → npm（当前 core 0.0.117 / plugin 0.0.121）
                注意：npm 读侧复制延迟实测 3–15 分钟，`npm view` 马上查会 404，别判成发布失败
 成本导出       D:\Download\usage_data_*.zip（平台导出，含 amount/cost 两个 CSV）
 ```
@@ -76,20 +78,21 @@
 > 新会话只读状态会像换班工人；这 6 行是**叙事**，不是状态——换会话时整体替换，不累积。
 
 ```
-上一段   2026-11-05 21:25–（session-1d060599，接 a1cca035），core 0.0.116 / plugin 0.0.120
-做了     0028 实施②：planSegment 四触发检查表 + 段 sealing + 失败段语义，旧按线索解析
-         drain 与 pickExtractionItem 同批退场；发版部署到 profile（22:35 条目全链路）
-验证     插件 107→120 测试；变异三组（去标记 1 红 / 绕闸门 6 红 / 去封存 1 红）；
-         前提实证 payload 与事件 session id 同键（sessionLedger 对账）；npm 0.0.120 →
-         pnpm 11 装 profile → verify-installed 6 PASS → apply() (v0.0.120) @ 22:33:06 实测
-没做完   segment 首批真实样本（extract buffered/segment-wait 随重启后首轮出现、flush 等离开点）；
-         0028 ③ 多归属 ④ §八 重放（手动 /compact 当天验）⑤ retirements；
-         quality 三条 FAIL 待查（密度段级复测 / 结论证据链 / 情绪非零率）；handoff 重启重发待定夺
-在热什么 队列在等不是坏了（无触发=正常，segment-wait 可查）——会话中抽取=0 是闸门不是自觉；
-         seed-backfill 仍绕写入器、reset 不清 seals（⑤ 一并）；换会话前先看 switch-session
+上一段   2026-11-05 21:25–11-06 05:40（session-1d060599，接 a1cca035），core 0.0.117 / plugin 0.0.121
+做了     0028 ②触发检查表+段 sealing（0.0.120）→ ③ 归属扩多条线索 spans（core 0.0.117 /
+         插件 0.0.121）：planSegment 四触发、drain 无触发不抽、段 fan-out 每轮挂线；
+         旧按线索解析 drain 与 pickExtractionItem 退场；两批都发版部署到 profile
+验证     core 321 / 插件 122；变异 ②三组 + ③两组全红；前提实证 payload/事件 session id 同键；
+         verify-installed 6 PASS ×2；apply() 0.0.120 @22:33:06、0.0.121 @05:34:51 实测；
+         生产 segment-wait 4 条（buffered 1→2→2→3，会话中不抽已是事实），首 flush 等离开点
+没做完   ④ §八 重放（手动 /compact 当天验 + 首个 segment flush，③④ 一起补 A9 review）；
+         ⑤ retirements（extract-per-turn 翻 done、seed-backfill 绕写入器、reset 不清 seals）；
+         quality 三条 FAIL 待查；handoff 重启重发（handedOff 进程内）待定夺
+在热什么 队列在等=正常（segment-wait 可查），会话中抽取=0 是闸门不是自觉；
+         join= 改逐轮原因并集（口径变更）；core 未发版前插件测试要叠层（见 05:20 条目）
 ```
 
-**05:20 0028 实施③完成，发版部署中（core 0.0.117 升版）**：归属输出扩多条线索——格式 `线索: <起>-<止> 继续 <id>` / `新 | 主题`（**无范围 = 整段**，单话题行逐字兼容；裸数字 = 单轮；`5-` = 到段尾）；`ExtractDraft.thread` 单条退场 → `spans?: ThreadSpan[]`（types +20 / extract +38 / index +63，棘轮 core +121、插件 +32 两条 history 已记）。`readThreadSpans` 多行解析，三态观测（present/absent/invalid）保留、坏行仍可查；**开放端收口**——多行时没写止的段停在下一条线索之前，否则 find-first 永远走不到后面的行（设计 bug，测试先抓）。`applyThreadSpans` 逐轮复用 `applyThread`（继续-新 / fallback-previous / 无候选兜底链一字不动，ADR 0034）：**段内 new 只开一条**（第 1 轮开、其余接上——逐轮开同话题克隆正是 0028 要消灭的碎片化，测试先抓）、**未覆盖轮链到前一轮**、**每一轮都挂线**（修掉旧实现只挂头轮的缺口——handoff / 候选原文 / 归纳看到的段不再有洞）。双编号显式传递：提示词 1..n 管范围匹配、真实轮号（宿主跳 10–30）管线索计数，drain 带 `hostTurnNo` 不猜。插件日志：单线索保持旧格式 `thread=th_xxx(new)`；拆段列全 `thread=a,b(2 new)`、`join=` 改为逐轮原因并集（一致时仍单值——**口径变更**：头轮不再代表全段）；trace 拆段时带 `threadSpans` 逐轮明细（错切可诊断）。提示词 schema/rules 教范围语法（+269 字符，提示词上限 5450→5600 按惯例记账）。测试 core 314→321 / 插件 120→122；变异：去范围解析恰 1 红、fan-out 只挂头轮 core 5 红 + 插件集成 1 红。**流程记录（下次照做）**：core 未发版前插件测试要本地叠层——在 core 仓 `npm run build` → 拷 dist 进插件 `node_modules/soulbridge`（runbook §八 同法；发版后 `npm install` 按 lock 回退，需装已发布版重同步）；期间一次 `npm run build` 跑在插件目录（无 build 脚本）造成叠层假阴性——**确认 build 在 core 仓跑**。
+**05:40 0028 实施③完成并上线（core 0.0.117 / 插件 0.0.121，运行层已验）**：归属输出扩多条线索——格式 `线索: <起>-<止> 继续 <id>` / `新 | 主题`（**无范围 = 整段**，单话题行逐字兼容；裸数字 = 单轮；`5-` = 到段尾）；`ExtractDraft.thread` 单条退场 → `spans?: ThreadSpan[]`（types +20 / extract +38 / index +63，棘轮 core +121、插件 +32 两条 history 已记）。`readThreadSpans` 多行解析，三态观测（present/absent/invalid）保留、坏行仍可查；**开放端收口**——多行时没写止的段停在下一条线索之前，否则 find-first 永远走不到后面的行（设计 bug，测试先抓）。`applyThreadSpans` 逐轮复用 `applyThread`（继续-新 / fallback-previous / 无候选兜底链一字不动，ADR 0034）：**段内 new 只开一条**（第 1 轮开、其余接上——逐轮开同话题克隆正是 0028 要消灭的碎片化，测试先抓）、**未覆盖轮链到前一轮**、**每一轮都挂线**（修掉旧实现只挂头轮的缺口——handoff / 候选原文 / 归纳看到的段不再有洞）。双编号显式传递：提示词 1..n 管范围匹配、真实轮号（宿主跳 10–30）管线索计数，drain 带 `hostTurnNo` 不猜。插件日志：单线索保持旧格式 `thread=th_xxx(new)`；拆段列全 `thread=a,b(2 new)`、`join=` 改为逐轮原因并集（一致时仍单值——**口径变更**：头轮不再代表全段）；trace 拆段时带 `threadSpans` 逐轮明细（错切可诊断）。提示词 schema/rules 教范围语法（+269 字符，提示词上限 5450→5600 按惯例记账）。测试 core 314→321 / 插件 120→122；变异：去范围解析恰 1 红、fan-out 只挂头轮 core 5 红 + 插件集成 1 红。**流程记录（下次照做）**：core 未发版前插件测试要本地叠层——在 core 仓 `npm run build` → 拷 dist 进插件 `node_modules/soulbridge`（runbook §八 同法；发版后 `npm install` 按 lock 回退，需装已发布版重同步）；期间一次 `npm run build` 跑在插件目录（无 build 脚本）造成叠层假阴性——**确认 build 在 core 仓跑**。发版部署（全实测）：core `v0.0.117` → release #44 → npm 0.0.117 可见 → 插件依赖下限改 `>=0.0.117`（**新 API 是运行时硬依赖**：0.0.116 下 `applyThreadSpans` 是 undefined，每次抽取都会挂——依赖范围随能力收口）→ `npm install` 用已发布版重同步叠层 → 对**发布版**复跑 122/122 → `v0.0.121` → npm 可见 → pnpm 11 装 profile（manifest + node_modules 双确认 0.0.117/0.0.121，yaml 排除项两个版本都补）→ **verify-installed 6 PASS**（装上的提示词 5331 字符含范围语法）→ DshWebRestartOnce 05:32:56 触发 → 05:34:39 停 / 05:34:45 起 → **`apply() called (v0.0.121) @ 05:34:51`**。**生产首批样本**：`extract buffered` 三条（pending 1→2→3）、`segment-wait` 四条 trace（buffered 1→2→2→3，最后一条 05:36:18 就是本条消息的 pre-step、0.0.121 无触发正确等待）——**会话中不抽已是生产事实**；首个 `segment flush` 等离开点，归 ④。注：00:00 还有一次非我触发的 DshWebHost 重启（重载 0.0.120，无害）。
 
 **22:35 0028 实施②完成并部署（插件 0.0.120，运行层已验）**：触发检查表 + 段 sealing 全链路——`planSegment` 纯函数承载四触发（**压缩标记 / 会话切换·归档 / 容量 ≥40 轮或 ≥6 万字 / 年龄 >24h**；前两个是语义离开、后两个只当工程兜底，quiet-time 结论写进代码结构），`compaction/end` 无 error 才置标记（error=窗口没变，留标记会把还在上下文里的内容写成持久记忆），drain 无触发只留 `segment-wait` 观测（**会话中抽取 = 0 by construction**，入队日志改 `extract buffered`），触发后整段一次抽（unit=Nturns，提示词轮次 1..n 经 turnIds 映射回真实 source_turn_id）→ 成功写 seal（`segment-state.json` ≤100 条可查、超限有日志、损坏挪走不判空）→ `enqueueExtraction` 拒已封存轮（`origin=backfill` 是记录在案的重放例外）；失败整段同 bump（一次调用覆盖它们），第 3 次 `given-up:` 封存丢弃（带段大小）。按线索解析的旧 drain 路径与 `pickExtractionItem` 同批退场（时序倒置根因本体，见 18:05 条目；live-first 防的饥饿被段语义化解——20 条回填等一次调用不是二十步）。**前提实证（不是假设）**：drain 拿的 `payload.agent.id` 与事件 `session.id` 同键——`switch_session`（payload 侧）与 `turn-cost`（事件侧）记的是同一个 sessionLedger，10:06:51 的换会话提醒能触发即证明两键相同（若不同键，due() 永远新建空账本、提醒永不触发；trace.jsonl 两边格式均 `session-<uuid>`）。测试 107→120；变异三组：去标记→接线恰红 1、绕过无触发闸门→6 红、去封存→恰红 1；promote.test 窗口 3000→4500（检查表插在签名与接线之间，被断言的字面全文件仅一处）。棘轮 +236 按 0026/0027 功能先例记 history（同期删旧路径 -70 余行）→ `--update-budget` 3051 → health-check 0 FAIL / 18 WARN / 25 PASS。发版链路：core typecheck+test 0 红 → `v0.0.120` → release #109 success（22:15:18Z）→ npm 0.0.120 实测可见 → pnpm 11 装进 web profile（**坑：corepack 拉的 pnpm 12 会把 9.0 lockfile 重写、store v11/v10 不匹配要 ERR_PNPM_UNEXPECTED_STORE——用 `corepack prepare pnpm@11 --activate`**）→ manifest/node_modules 双确认 0.0.120 → **verify-installed 6 PASS**（core 0.0.116 / plugin 0.0.120）→ DshWebRestartOnce 22:31:13 触发（90 秒延迟，直接跑 restart 脚本会被宿主连坐——22:33 前实测）→ 22:32:56 停 / 22:33:01 起 → **`apply() called (v0.0.120) @ 22:33:06`**。segment 首批样本：重启后首轮 turn/end 才入缓冲（`extract buffered`），首个 flush 要等离开点——归 ④ 重放验收。**重启附带发现**：`handedOff` 是进程内 Set，重启即清空，同一会话会再收到一次相同 handoff（本会话 21:25、22:33 各一次）——决定 4 的「每会话至多一条」在重启边界实际按「每进程」计；重发无害但要说清，归 ④ 或 ⑤ 决定持久化与否。质量比率（runbook 0.6，三条 FAIL 原因写明）：事实密度 2.2/轮 FAIL——段级一次多条+回填所致，②后会话内抽取=0 应下降（待复测）；结论支持率 65.1% FAIL——归纳证据链已知债；情绪非零率 2.2% FAIL——affect 层待查；抽取走模型 99.2% PASS。②的整体 review：[audit/2026-11-05-review-departure-checklist.md](audit/2026-11-05-review-departure-checklist.md)（判通过，四条发现：rules floor 对段只看末轮 / seed-backfill 仍绕写入器 / reset 不清 seals / 重试窗口段尾同计数）。
 
