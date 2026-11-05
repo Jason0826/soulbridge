@@ -151,10 +151,15 @@
       "date": "2026-11-05",
       "delta": 60,
       "reason": "0027 写入侧收口（core 0.0.115 / 插件 0.0.116）：规则抽取改走 time.ts.findTimeExpression——与窗口同一词表，删掉 TIME_WORDS/TIME_OFFSET_DAYS 粗略偏移（core +57：time.ts 扫描器与文档 +52、extract.ts 注释与 range 分支 +5）；日历日统一 UTC 零点，插件 isoDay 改 UTC 日期（+3 含注释）。同期 quality.mjs 增一行 day/range 边界观测（脚本不计预算）。写入侧收口，按读取方 1 先例记一次。"
+    },
+    {
+      "date": "2026-11-05",
+      "delta": 52,
+      "reason": "抽取的取舍可见（core 0.0.116 / 插件 0.0.117）：ExtractDraft 增 skipped 列表，规则路径（no-structure）与模型路径（bad-entity-type / unreadable / unknown-op / empty-topic）的丢弃都带 reason；toStatement 去掉 80 字截断，陈述为整句（core +45：extract.ts +38、types.ts +7）；插件日志与 trace 增 draftSkipped（+7）。同时删掉 validateDraft 里从未被读的 knownFactIds。"
     }
   ],
-  "coreLines": 8855,
-  "pluginLines": 2708,
+  "coreLines": 8900,
+  "pluginLines": 2715,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
@@ -170,7 +175,7 @@
     "consolidate.ts": 373,
     "context.ts": 164,
     "dimension-text.ts": 31,
-    "extract.ts": 712,
+    "extract.ts": 750,
     "inject-text.ts": 27,
     "portable.ts": 115,
     "profile-prompt.ts": 119,
@@ -188,6 +193,6 @@
     "store.ts": 181,
     "measure.ts": 45,
     "time.ts": 213,
-    "types.ts": 792
+    "types.ts": 799
   }
 }

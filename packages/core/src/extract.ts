@@ -164,9 +164,16 @@ function findVerb(sentence: string): { word: string; passive: boolean; slot: str
   return null;
 }
 
-/** Trim a sentence into a statement: the memory's own line, not the whole paragraph. */
+/**
+ * The sentence itself: a memory line is a whole unit, never a prefix of one.
+ *
+ * This used to cut at 80 characters, which produced statements that were neither
+ * readable on their own nor anything the user said (rule 17: cut only whole units).
+ * Length is decided where lines are chosen for injection — a whole line is dropped
+ * there, never a half-line kept here.
+ */
 function toStatement(sentence: string): string {
-  return sentence.replace(/\s+/g, ' ').trim().slice(0, 80);
+  return sentence.replace(/\s+/g, ' ').trim();
 }
 
 /**
@@ -177,11 +184,15 @@ function toStatement(sentence: string): string {
  * explicit person: "我同事小林被裁了。不知道她后来怎么样" can bind 她→小林 because
  * the turn itself said who she is. Across turns we do not guess — an unresolved
  * "她" stays unresolved instead of being attached to the wrong person.
+ *
+ * Sentences the rules cannot structure are reported in `skipped` with a reason: the
+ * floor must not throw work away invisibly (rule 18).
  */
 export function extractByRules(text: string, now = Date.now()): ExtractDraft {
   const entities: EntityDraft[] = [];
   const facts: FactDraft[] = [];
   const gaps: GapDraft[] = [];
+  const skipped: Array<{ what: string; reason: string }> = [];
   let recentPerson: EntityDraft | null = null;
 
   for (const sentence of splitSentences(text)) {
@@ -209,7 +220,10 @@ export function extractByRules(text: string, now = Date.now()): ExtractDraft {
 
     const hasStructure =
       people.length > 0 || verb !== null || time.validFrom !== undefined || time.validFromText !== undefined;
-    if (!hasStructure) continue;
+    if (!hasStructure) {
+      skipped.push({ what: sentence, reason: 'no-structure' });
+      continue;
+    }
 
     facts.push({
       statement: toStatement(sentence),
@@ -243,7 +257,7 @@ export function extractByRules(text: string, now = Date.now()): ExtractDraft {
   // The same person appears once per sentence; the draft keeps one of them.
   const unique = new Map<string, EntityDraft>();
   for (const entity of entities) unique.set(`${entity.type}:${entity.name}`, entity);
-  return { entities: [...unique.values()], facts, gaps, by: 'rules' };
+  return { entities: [...unique.values()], facts, gaps, skipped, by: 'rules' };
 }
 
 interface ModelParseResult {
@@ -483,15 +497,29 @@ export function validateDraft(
   context?: ExtractionContext,
 ): ModelParseResult {
   void now;
+  // Context is no longer read here: supersede targets are validated by the writer, which
+  // can see every row and record a reason (see the operation loop below). The parameter
+  // stays because the parsing call sites already hold it and the shape is one gate.
+  void context;
   if (!json || typeof json !== 'object') return { draft: null, error: 'not an object' };
   const input = json as Record<string, unknown>;
-  const knownFactIds = new Set((context?.facts ?? []).map((f) => f.id));
+  // Every drop gets an entry: an item the model wrote and the gate refused is a fact
+  // about the extractor, and silence makes "unreadable answer" and "empty answer"
+  // identical (rule 18).
+  const skipped: Array<{ what: string; reason: string }> = [];
 
   const entities: EntityDraft[] = [];
   for (const item of asArray(input.entities)) {
     const name = String((item as Record<string, unknown>)?.name ?? '').trim();
     const type = String((item as Record<string, unknown>)?.type ?? 'person');
-    if (!name || !ENTITY_TYPES.has(type)) continue;
+    if (!name) {
+      skipped.push({ what: 'entity', reason: 'missing-name' });
+      continue;
+    }
+    if (!ENTITY_TYPES.has(type)) {
+      skipped.push({ what: name, reason: 'bad-entity-type' });
+      continue;
+    }
     const attrs = (item as Record<string, unknown>)?.attrs;
     entities.push({
       name,
@@ -505,13 +533,17 @@ export function validateDraft(
   for (const item of asArray(input.facts)) {
     const parsed = parseFactDraft(item as Record<string, unknown>);
     if (parsed) facts.push(parsed);
+    else skipped.push({ what: 'fact', reason: 'unreadable' });
   }
 
   const operations: FactOperation[] = [];
   for (const item of asArray(input.operations)) {
     const obj = item as Record<string, unknown>;
     const op = String(obj?.op ?? '').trim();
-    if (!OPS.has(op)) continue;
+    if (!OPS.has(op)) {
+      skipped.push({ what: `operation:${op || '-'}`, reason: 'unknown-op' });
+      continue;
+    }
     const parsed = parseFactDraft((obj.fact ?? {}) as Record<string, unknown>);
     const targetId = typeof obj.target === 'string' ? obj.target.trim() : undefined;
     if (op === 'noop') {
@@ -519,7 +551,10 @@ export function validateDraft(
       operations.push({ op: 'noop', targetId, fact: parsed ?? { statement: '', source: 'told', confidence: 0, slots: [] } });
       continue;
     }
-    if (!parsed) continue;
+    if (!parsed) {
+      skipped.push({ what: `operation:${op}`, reason: 'unreadable' });
+      continue;
+    }
     // Target validation belongs to the writer (commitDrafts), which can see every row and
     // record a reason. Demoting here as well would give two places that decide whether a
     // supersede is real — and would hide the model's intent from the skip report.
@@ -533,7 +568,10 @@ export function validateDraft(
   for (const item of asArray(input.gaps)) {
     const obj = item as Record<string, unknown>;
     const topic = String(obj?.topic ?? '').trim();
-    if (!topic) continue;
+    if (!topic) {
+      skipped.push({ what: 'gap', reason: 'empty-topic' });
+      continue;
+    }
     gaps.push({
       topic,
       aboutEntityName: typeof obj.about === 'string' ? obj.about.trim() : undefined,
@@ -549,7 +587,7 @@ export function validateDraft(
   if (!hasOps && !hasNoop && facts.length === 0 && entities.length === 0 && gaps.length === 0) {
     return { draft: null, error: 'model returned nothing usable' };
   }
-  return { draft: { entities, facts, gaps, operations, by: 'llm' }, error: undefined };
+  return { draft: { entities, facts, gaps, operations, skipped, by: 'llm' }, error: undefined };
 }
 
 /**

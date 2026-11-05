@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-05 08:30**（core 0.0.115 / plugin 0.0.116）
+最后核对：**2026-11-05 09:00**（core 0.0.116 / plugin 0.0.117）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -16,8 +16,10 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   0027 写入侧收口（core 0.0.115 / plugin 0.0.116）；读取方 1 时间检索已上线（上一版在 profile 实跑过）
-已验证         core 310 / 插件 98 测试全过；变异 = 改动前状态（5 红 → 改后全绿）
+现在在做什么   抽取的取舍可见（core 0.0.116 / plugin 0.0.117）；0027 写入侧收口与读取方 1 已上线（上一版在 profile 实跑过）
+已验证         core 314 / 插件 98 测试全过；变异 = 改动前状态（4 红 → 改后全绿）
+               抽取取舍可见：规则丢弃的无结构句子、模型丢弃的坏条目都进 ExtractDraft.skipped（what+reason），
+               插件日志 draftSkipped=N + 前 3 条；规则路径 statement 不再切 80 字，整句保存（规则 17）
                写入侧一个语法一个日单位：规则抽取改走 findTimeExpression（TIME_WORDS/TIME_OFFSET_DAYS 已删），
                "上周" → range+周一 UTC 零点；日历日 = UTC 零点（窗口/规则/显示同一单位）
                day/range 非日历日 2 → 0（quality.mjs 新增观测 PASS；修复脚本曾把两行写成 2000-01-01，
@@ -47,10 +49,12 @@
                账单与判读：dsh-plugin-soulbridge\scripts\billing.mjs · docs\cost-visibility.md
 环境           固定端口 3080；重启 scripts/restart-web.ps1（不自动开 tab）
                运行中的 profile = ~/.dsh/profiles/web（→ C:\DSH\home\profiles\web）
-               发版 = 推 tag → GitHub Actions → npm（当前 core 0.0.115 / plugin 0.0.116）
+               发版 = 推 tag → GitHub Actions → npm（当前 core 0.0.116 / plugin 0.0.117）
                注意：npm 读侧复制延迟实测 3–15 分钟，`npm view` 马上查会 404，别判成发布失败
 成本导出       D:\Download\usage_data_*.zip（平台导出，含 amount/cost 两个 CSV）
 ```
+
+**09:00 抽取的取舍可见（core 0.0.116 / 插件 0.0.117）**：两处违反"取舍要可见/不截断"的欠账修掉。① `extractByRules` 丢弃的无结构句子、`validateDraft` 丢掉的坏条目（实体类型错/空陈述/未知操作/空缺口）都进 `ExtractDraft.skipped`（`what` + `reason`），插件日志多 `draftSkipped=N` 与前 3 条明细、trace 多 `draftSkipped`（前 5 条）——以前"句子没被记住"和"抽取器没看它"在所有日志里长得一模一样。② `toStatement` 去掉 `slice(0, 80)`：陈述就是整句，长度由注入侧按"整行取舍"处理——切半句会把用户没说过的话写进记忆（规则 17）。测试 core 314（+4）/ 插件 98；变异 = 改动前状态（4 红 → 绿）。
 
 **08:30 写入侧收口（core 0.0.115 / 插件 0.0.116）**：读取方 1 上线后暴露"窗口薄是写入侧造成的"（实测上周窗口 87 条里只有 2 条可定位）。两套时间语义收成一个：规则抽取的 `findTime` 改走 `time.ts.findTimeExpression`（与窗口同一词表），删掉 `TIME_WORDS`/`TIME_OFFSET_DAYS` 粗略偏移——"上周"从 now-7d 的假 day 变成 range+周一零点，"2026年10月"标 range 不再冒充 1 号那天；日历日统一为 **UTC 零点**（该表达式所在本地日历日）：`startOfDay/Week/Month/Year`、窗口边界、插件 `isoDay` 三处同一单位（钩子本就 `toISOString`）。真实库 day/range 非日历日 2 → 0，quality.mjs 新增观测行。过程教训：修复脚本用 `date(<epoch秒>)` 被这个 SQLite 当儒略日、把两行写成 2000-01-01，而观测只查"是不是零点"没查"是哪一天"、显示 PASS——**验证值，不只验证不变量的形状**（备份 `soul.db.bak-daymidnight-*`）。brief [0027](briefs/0027-time-axis.md) §十。
 

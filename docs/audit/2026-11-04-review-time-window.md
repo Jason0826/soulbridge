@@ -71,3 +71,23 @@ core 310（+2：range+周一零点 / day+当天零点）· 插件 98 · typechec
 **新发现（过程层，差点假绿）**：修存量行的脚本用了 `date(<epoch秒>)`——这个 SQLite 把 `date()` 的数字参数当**儒略日**（`julianday(int)` → null；`date(int,'localtime')` → `2000-01-01`），两行被写成 2000-01-01；而观测只查"是不是零点"、不查"是哪一天"，显示 PASS。靠**读实际值**发现，用 JS 算好的字面量改回（备份 `soul.db.bak-daymidnight-*`）。教训：**验证值，不只验证不变量的形状**——watcher 守的是"以后的写入者"，守不住"修数据的脚本"。
 
 结论：0027 的两套时间语义病灶（② + 写入侧假精确）已除；余债清单见 0027 §十 末尾（词表两份、日历校验两份、窗口入口未唯一、unknown 行按设计不进窗）。
+
+---
+
+## 追加（2026-11-05）：抽取的取舍可见（同会话第三批，core 0.0.116 / 插件 0.0.117）
+
+上一批 review 里我自己点出的两个欠账——"规则路径丢弃不可见"（规则 18）和"statement 切 80 字"（规则 17）——这次修掉。
+
+| 欠账 | 修法 |
+|---|---|
+| 丢弃不可见 | `ExtractDraft.skipped: Array<{what, reason}>`：规则路径的无结构句子（`no-structure`）、模型路径的坏条目（`bad-entity-type` / `unreadable` / `unknown-op` / `empty-topic`）全部入列。插件在 `extract ok:` 行加 `draftSkipped=N` + 前 3 条明细，trace 加 `draftSkipped`（前 5 条） |
+| 切半句 | `toStatement` 去掉 `slice(0, 80)`——陈述是整句；长度由注入侧按整行取舍（那里本来就是丢整行，不丢半句） |
+
+```
+core 314（+4：规则丢弃可见 / 长句整句 / 模型坏事实 / 坏实体类型）· 插件 98 · typecheck 干净
+变异 = 改动前状态：4 红 → 绿
+```
+
+**顺带清掉一处死代码**：`validateDraft` 里的 `knownFactIds` 从未被读（supersede 目标早已交给 commitDrafts 校验），删除并在参数处写明。
+
+**仍未修（同批 review 的余债，不变）**：`PRECISIONS` 字面量副本、`TIME_CUE` 与语法词表两份、`calendarDate`/`parseIsoDay` 两份、`facts(since/until)` 未收成唯一入口。另：`parseLineDraft` 里"不是记录格式的行"仍然静默跳过——本次只覆盖了 `validateDraft` 层的丢弃，行级噪声按"不是候选"处理，未计数。

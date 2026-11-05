@@ -339,6 +339,13 @@ export interface ExtractDraft {
   by: 'rules' | 'llm';
   /** Why the rules path was used, so a silent fallback cannot hide. */
   reason?: string;
+  /**
+   * Candidates the extractor dropped, with the reason.
+   *
+   * A drop is a decision. Without this list "the sentence was forgettable" and "the
+   * extractor ignored it" look identical in every log and every metric (rule 18).
+   */
+  skipped?: Array<{ what: string; reason: string }>;
   /** Which topic thread this turn belongs to, when the model said. */
   thread?: ThreadAttribution;
   /**

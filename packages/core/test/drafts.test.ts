@@ -43,6 +43,38 @@ test('rules: a day word lands on that calendar day, not on the writing instant',
   assert.equal(fact.validFrom, Date.UTC(2026, 9, 31), 'NOW is 2026-10-31; the day is stored, not the hour');
 });
 
+test('rules: a dropped sentence is recorded, not silently forgotten', () => {
+  const draft = extractByRules('好的。我同事小林上周被裁员了', NOW);
+  assert.equal(draft.facts.length, 1, 'the structured sentence still becomes a fact');
+  assert.deepEqual(draft.skipped, [{ what: '好的', reason: 'no-structure' }]);
+});
+
+test('rules: a long sentence is stored whole, never cut mid-sentence', () => {
+  // 长句（>80 字）里有一句完整的事实：statement 必须是整句。旧实现按 80 字切，
+  // 切出来的半句既不能独立读，也不是用户说过的任何一句（规则 17）。
+  const sentence = `${'关于这个方案'.repeat(12)}，我同事小林上周被裁员了`;
+  const fact = extractByRules(sentence, NOW).facts[0];
+  assert.ok(fact.statement.length > 80, 'the sample must be long enough to have been sliced before');
+  assert.equal(fact.statement, sentence, 'the statement is the sentence, not a prefix of it');
+});
+
+test('model draft: an unreadable fact is dropped with a reason, not silently', () => {
+  const result = validateDraft({ facts: [{ statement: '' }, { statement: '小林被裁员' }] }, NOW);
+  assert.ok(result.draft);
+  assert.equal(result.draft.facts.length, 1);
+  assert.deepEqual(result.draft.skipped, [{ what: 'fact', reason: 'unreadable' }]);
+});
+
+test('model draft: an entity with an unknown type is dropped with a reason', () => {
+  const result = validateDraft(
+    { entities: [{ name: '小林', type: 'robot' }], facts: [{ statement: '小林被裁员' }] },
+    NOW,
+  );
+  assert.ok(result.draft);
+  assert.equal(result.draft.entities.length, 0);
+  assert.deepEqual(result.draft.skipped, [{ what: '小林', reason: 'bad-entity-type' }]);
+});
+
 test('rules: un uncertainty gap inside one turn binds the pronoun to the last person', () => {
   const draft = extractByRules('我同事小林上周被裁员了。不知道她后来怎么样了', NOW);
   assert.equal(draft.gaps.length, 1);
