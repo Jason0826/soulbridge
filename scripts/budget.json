@@ -161,10 +161,15 @@
       "date": "2026-11-05",
       "delta": 76,
       "reason": "提醒换会话（插件 0.0.118）：createSessionLedger 按会话累计 turn-cost（有界 16 个会话），每请求上下文 ≥300k 或 ≥100 轮时在 pre-step 注入 <switch-session>，每跨一级一次（翻倍才再说）；renderSwitchSession 导出供 6 条测试用。观测设施允许涨一次，按 0026 先例。"
+    },
+    {
+      "date": "2026-11-05",
+      "delta": 24,
+      "reason": "0028 实施① 两件小修（插件 0.0.119）：handoff 空读不再消费会话的一次性——bug 修复，消费逻辑抽成导出工厂 createHandoffTaker（抽出是契约测试的前提；+3 条测试在 test/ 不计预算）；extract 日志前缀 ok→done，rules:model-failed 时不再谎报成功。bug 修复与可测性重构按首条先例允许涨；功能新增仍不允许。"
     }
   ],
   "coreLines": 8900,
-  "pluginLines": 2791,
+  "pluginLines": 2815,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
