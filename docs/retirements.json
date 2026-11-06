@@ -90,15 +90,34 @@
     },
     {
       "id": "extract-per-turn",
-      "old": "抽取按轮次入队（pending-extract.json 每项一个 turnId，输入上一轮问答）",
-      "replacedBy": "按线索抽取（每项一个 threadId，输入整条线索的轮次）",
-      "status": "pending",
-      "why": "一个主题的对话要合起来看；单轮抽出的句子缺主语（实测 33 条带实体槽却不含实体名）。设计见 [0025](briefs/0025-thread-extraction.md)，代码尚未切换。",
+      "old": "抽取按轮次入队并逐轮抽取（pending-extract.json 每项一个 turnId，每次 drain 抽一项，输入上一轮问答）",
+      "replacedBy": "段抽取：离开点 flush 整段（unit=Nturns，输入=段内全部轮次原文，0028）",
+      "status": "done",
+      "why": "两级取代都已落地：0025 按线索、0028 按段——drain 只在离开点整段抽，runExtraction 的输入恒为 turns 数组；单轮立足点（unit 默认 null 与 `1turn` 日志回退）本批同退。按轮的 pending 缓冲仍在，那是队列的存储粒度，不是抽取单位。",
       "check": {
         "kind": "symbol",
         "path": "PLUGIN",
-        "pattern": "enqueueExtraction("
+        "pattern": "'1turn'"
       }
+    },
+    {
+      "id": "seed-backfill-write",
+      "old": "scripts/seed-backfill.mjs 直写 pending-extract.json（绕过 enqueueExtraction：上限 400、无 origin、无封存检查）",
+      "replacedBy": "enqueueExtraction（唯一写入器：origin=backfill、走封存拒绝与队列上限）",
+      "status": "pending",
+      "why": "规则 41 的现存违例：恢复工具越过单一写入器，seeded 项没有 origin 会被 drain 当 live 计入样本。requeue-history（插件仓）已走单一写入器，seed 是第二个入口——归单独清理，本批只登记。check 指向绕写行为本身：改成走写入器后 writeFileSync(queueFile 消失，即可翻 done。",
+      "check": {
+        "kind": "symbol",
+        "path": "scripts/seed-backfill.mjs",
+        "pattern": "writeFileSync(queueFile"
+      }
+    },
+    {
+      "id": "reset-seals",
+      "old": "reset-derived.mjs 不清 segment-state.json 的 seals/marker",
+      "replacedBy": "reset 时联动清 seals（方向已定：清——reset 的目的就是让这些轮次重新可抽）",
+      "status": "pending",
+      "why": "恢复路径目前靠 origin=backfill 例外与 seed 直写绕行，封存记录在 reset 后陈旧但无害。债务是一个缺失的行为，机器查不了（规则 26：查不了的标人工 review）——不配 check，它会一直列在债里直到修复时随带补上；翻 done 而不补 check 会立刻 FAIL，逼出检查。"
     }
   ]
 }
