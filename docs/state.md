@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-06 08:40**（core 0.0.117 / plugin 0.0.121）
+最后核对：**2026-11-06 13:40**（core 0.0.117 / plugin 0.0.121）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -46,15 +46,19 @@
                写入侧一个语法一个日单位：规则抽取改走 findTimeExpression，日历日 = UTC 零点
                day/range 非日历日 2 → 0（quality.mjs 观测 PASS）；时间检索实跑：上周窗口 2 条 day/range 进窗
                取代引用 50 成 / 1 败 → 2% PASS
-下一步         1) quality 三条 FAIL 待查：事实密度 2.21/轮（段级一次多条+回填所致，
+下一步         1) **0018 行为影响（11-06 复活 Ready，文献四篇 + 设计已进 brief）**：
+               第一刀 = 触发器注册表 + compact 两行（插件 pre-step，cost-gate v1 =
+               阈值穿越+每级一次）→ outcome 观测 → 第二刀教训→行为；
+               通用性验收线在 0018 §0（下个习惯"加一行"，需新代码 = 回炉）
+               2) quality 三条 FAIL 待查：事实密度 2.21/轮（段级一次多条+回填所致，
                ②后会话内抽取=0 应下降——待复测）、结论支持率 65.1%（归纳证据链已知债）、
                情绪非零率 2.3%（affect 层待查）
-               2) 0027 §八 剩余三个读者：注入措辞 / 排序比较 / soulbridge why 打印 precision
+               3) 0027 §八 剩余三个读者：注入措辞 / 排序比较 / soulbridge why 打印 precision
                收口余债（见 0027 §十）：TIME_CUE 与语法词表两份、calendarDate/parseIsoDay 两份、
                facts(since/until) 还能不带 precisions 调用
-               3) 0028 §八 行3（跨天/容量触发）等自然发生补证；handoff per-process 拍板
+               4) 0028 §八 行3（跨天/容量触发）等自然发生补证；handoff per-process 拍板
                （0028 §十 修订注）待认可——不同意改回一行的事
-               4) 子代理的请求要不要滚到父轮 —— 需要 DSH 暴露会话谱系，事件流里没有
+               5) 子代理的请求要不要滚到父轮 —— 需要 DSH 暴露会话谱系，事件流里没有
                0028 整体 review：① floor-cost-handoff、② departure-checklist、
                ③④ attribution-replay（⑤ 的插件提交 f9953dd 是 no-op，A9 记 1 待看
                ——阈值 3，随下一批 review 一起看）
@@ -91,17 +95,20 @@
 > 新会话只读状态会像换班工人；这 6 行是**叙事**，不是状态——换会话时整体替换，不累积。
 
 ```
-上一段   2026-11-06 05:40–08:40（session-7a109c5b，接 1d060599），core 0.0.117 / plugin 0.0.121
-做了     0028 ④ 真实重放（quality 指标 9a8c1a0 + /compact 与新会话两条链路实测 + A9 review）
-         → ⑤ retirements（extract-per-turn 先红后绿翻 done、seed-backfill/reset-seals
-         登记）+ 0017/0034 口径改段级 + handoff per-process 拍板——§九 五步全部收口
-验证     §八 四行三过一待验收（行3 跨天/容量等自然样本）；health-check 0/18/25；
-         attribution 段级口径 89.9% FAIL（143/159）；插件 122/122、棘轮净 0
-没做完   quality 三条 FAIL 待查；0027 收口余债（三读者+两份词表+precisions）；
-         handoff per-process 拍板待认可；插件 f9953dd 未发版（no-op，随下次带走）
-在热什么 行4 指标分子 = 闸门后未配对 extract（现为 0，配对咬合）；行3 等
-         trigger=capacity|age 自然发生；A9 记 1 待看（f9953dd）
+上一段   2026-11-06 05:40–13:40（session-7a109c5b，接 1d060599），core 0.0.117 / plugin 0.0.121
+做了     0028 ④⑤ 收口（重放验收 + A9 review + retirements 先红后绿 + 口径改段级 +
+         handoff per-process 拍板）→ 用户几次问"该 compact 吗"引出主动性问题 →
+         检索四篇文献 → 0018 行为影响复活定稿（Ready：触发器注册表 + cost-gate +
+         动作四选一 + 遵守率）
+验证     0028 §八 四行三过一待验收；health-check 0/18/25；插件 122/122、棘轮净 0；
+         attribution 段级 89.9% FAIL（143/159）
+没做完   0018 第一刀（插件触发器表 + compact 行）；quality 三条 FAIL；0027 收口余债；
+         handoff per-process 待认可；插件 f9953dd 未发版（no-op，随下次带走）
+在热什么 通用性验收线 = 下个习惯"加一行"落地（0018 §0，实例数 1，待投票）；
+         行3 等 trigger=capacity|age 自然发生；A9 记 1 待看（f9953dd）
 ```
+
+**13:40 0018 行为影响复活定稿（Deferred → Ready，纯文档）**：由来 = 用户连续几次主动问"该 compact 吗"后指出**"按照我们的设计，理论上你要主动识别到我的习惯，在合适时间主动告诉我"**，追问"这是通用的吗"并判定"prompt 只是提醒，模型可以不做"——病灶与 0018 11-02 诊断一字不差（资料≠指令），且三条挂起理由当日全部到期（0028 ①–⑤ 收口 / rule-compliance 首轮 63% 数据 / 离点抽取验收，见 0018 §八）。**检索四篇文献钉死四件事**：[Control Illusion](https://arxiv.org/abs/2502.15851)（AAAI-26，system/user 分层指令不可靠——prompt 解法被实证排除）、[TMLR intervention timing 综述](https://tmlr.infinite-conf.org/paper_pages/b0yKEdAXEr.html)（决策规则 = **预期收益 > 打断成本**；五层 signals/decision/action/memory/evaluation；**evaluation 是 gating layer**）、[Proactive Service Agents](https://arxiv.org/abs/2609.03727)（动作四选一 **silent/asking/assisting/acting**；"long-term memory is not a defining condition of proactivity"——习惯记忆不构成主动性，必须有 decision gate）、[ProAct](https://arxiv.org/abs/2605.25971)（主动性挂 **idle-time** 不挂对话中间——与 0028 离开点同构）。**设计**：0018 三层映射五层，L2 升级为**触发器注册表**（声明式一行 `{signal, 条件, 动作模板, 冷却}`，新习惯 = 加行）+ **cost-gate**（v1 = 阈值穿越 + 每级只说一次防墙纸，v2 = 低打扰窗口）+ 动作默认 silent；L3 = 遵守率 + **outcome**（建议后 N 轮内 `compaction/end`/switch_session 出现 = 采纳，事件流现成）。**通用性验收线放 §0（可证伪，规则 37）**：下个习惯以"加一行"落地，需写新触发代码 = 框架回炉；7 类习惯映射推演 7/7 落到已有机制、真实实例数 = 1 → 标**待验收**。第一刀 = 状态触发器表 + compact 两行（200k 线 + 原 300k 行措辞改 compact 优先）；教训→行为降第二刀（语义匹配精度弱：structural:negation 25/28 误判在案，能 L1 的进体检）。顺带自纠记录在案：compact 是**状态类**，此前把 soul_remember 记成语义策略用错层（记忆留偏好 compact 优先，行动以触发器行为准）。README 权威表加行。health-check 0 FAIL / 18 WARN / 25 PASS。
 
 **08:40 0028 实施⑤完成（retirements + 口径改段级，§九 五步全部收口）**：三件——① **extract-per-turn 翻 done（先红后绿）**：check 改指 `'1turn'` 时它还在代码里 → health-check `✗ 已退场的旧表示复活了` **红** → 同批退掉单轮最后的立足点（`runExtraction` 的 `unit = null` 默认、`unit?.turns` 链、`1turn` 日志回退、spanTurns 单轮兜底，插件 `f9953dd` +15/-15 **净 0 行**）→ health-check 绿、插件 **122/122**（spans.test 真跑该路径）；`replacedBy` 从过时的"按线索"改写为"段抽取（0028）"。**为什么能翻**：drain 唯一调用恒传 `{turns}`，单轮模式是不可达的死路径——留着它就是旧表示的活化石（规则 5）。② **两条新债登记（pending）**：`seed-backfill-write`（check 指 `writeFileSync(queueFile`——绕写行为消失即可翻 done，规则 41）、`reset-seals`（**缺失型债务，机器查不了**——不配 check，规则 26 标人工 review；方向已定：reset 联动清 seals，翻 done 不补 check 会立刻 FAIL 逼出检查）。③ **0017/0034 指标口径改段级**：ADR 0034「届时改为段级」落地——**每轮归属率分母 = 窗口轮次 − 缓冲轮次**（等离开点的 1 轮延迟不是"没归属"）、`join=` 按段并集读（去重；单原因行与旧算法逐字一致），原表保留作历史口径；0017 补 §6 场景的段级读法（通过线不变，机制从逐轮加入变段内切分）；`attribution-stats.mjs` 同批改，实测 **每轮归属率 89.9% FAIL（143/159，一位小数防"90% FAIL"自相矛盾）**、每 10 关闭 2.9 FAIL、线索级两行样本不足 14/20。**handoff 重发拍板**：`handedOff` 是进程内 Set、重启即清空（21:25/22:33 实测重发）——**认 per-process 语义、不持久化**（重发无害 ~1KB，持久化要动写入器+发版链），修订注写进 0028 §十 决定 3，不同意改回一行。棘轮：净 0 行（3083=预算）；health-check **0 FAIL / 18 WARN / 25 PASS**。注：插件仓领先已装 0.0.121 一个 no-op 提交（`f9953dd`，行为零变化），随下次发版带走；A9 记 1 待看（阈值 3）。
 
