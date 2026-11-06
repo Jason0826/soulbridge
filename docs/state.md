@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-06 05:40**（core 0.0.117 / plugin 0.0.121）
+最后核对：**2026-11-06 08:10**（core 0.0.117 / plugin 0.0.121）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -16,9 +16,15 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   0028 实施③ 完成并上线（core 0.0.117 / 插件 0.0.121：apply() @ 05:34:51
-               实测，见 05:20 条目）——下一步 = §九④ §八 四行真实重放
-已验证         ③ spans：core 321 / 插件 122 测试全过；变异：去范围解析→恰 1 红、
+现在在做什么   0028 实施④ 完成（§八 四行：行1 /compact、行2 新会话、行4 quality 指标
+               生产实测通过；行3 跨天/容量空样本记待验收）——下一步 = §九⑤ retirements 登记
+已验证         ④ 重放：/compact 23:58:43Z compaction/end → +4ms 只置标记 → 00:00:51Z
+               下一离开点 segment flush trigger=compaction → extract unit=2turns facts=9 → seal ok；
+               新会话 17 条旧段事实下一轮注入含 fc_mw45r3vw_e（与 <memories> 逐字同源）、
+               handoff:false；quality「会话中抽取/轮」0 次/轮 PASS（闸门后 0/4 轮，窗口内
+               506 次全在闸门前不计入；变异 GATE_AT 提前 → 1.39 FAIL，指标能红）
+               A9 review：audit/2026-11-06-review-attribution-replay.md（③④ 合批）
+③ 仍有效：spans：core 321 / 插件 122 测试全过；变异：去范围解析→恰 1 红、
                fan-out 只挂头轮→core 5 红 + 插件集成 1 红（真模型路径：两行线索 → 两条线索、
                每轮挂上、线索记真实轮号）；两个真 bug 是测试先抓的（首行吞段、new 逐轮开克隆）
 ② 仍有效：检查表 planSegment（压缩标记/会话切换·归档/容量40轮·6万字/年龄24h，纯函数表驱动）
@@ -36,11 +42,12 @@
                写入侧一个语法一个日单位：规则抽取改走 findTimeExpression，日历日 = UTC 零点
                day/range 非日历日 2 → 0（quality.mjs 观测 PASS）；时间检索实跑：上周窗口 2 条 day/range 进窗
                取代引用 50 成 / 1 败 → 2% PASS
-下一步         1) 0028 实施（§九 顺序；① ② ③ 已完成并上线——③ core 321/插件 122、双变异红、
-               apply() 0.0.121 @ 05:34:51 实测；生产 segment-wait 已 4 条）：
-               ④ §八 四行真实重放（手动 /compact 当天验 + 首个 segment flush，③④ 一起补 A9 review）
-               → ⑤ retirements 登记
-               ②的整体 review：audit/2026-11-05-review-departure-checklist.md（① 的在 floor-cost-handoff）
+下一步         1) 0028 实施（§九 顺序；① ② ③ ④ 已完成——④ 四行三过一待验收、
+               A9 review 已补、health-check 0 FAIL / 18 WARN / 25 PASS）：
+               ⑤ retirements 登记（extract-per-turn 翻 done、seed-backfill 绕写入器、
+               reset 不清 seals）→ 0017/0034 指标口径改段级
+               ②的整体 review：audit/2026-11-05-review-departure-checklist.md（① 的在 floor-cost-handoff；
+               ③④ 的在 2026-11-06-review-attribution-replay）
                2) 子代理的请求要不要滚到父轮 —— 需要 DSH 暴露会话谱系，事件流里没有
                3) 0027 §八 剩余三个读者：注入措辞 / 排序比较 / soulbridge why 打印 precision
                收口余债（见 0027 §十）：TIME_CUE 与语法词表两份、calendarDate/parseIsoDay 两份、
@@ -78,19 +85,19 @@
 > 新会话只读状态会像换班工人；这 6 行是**叙事**，不是状态——换会话时整体替换，不累积。
 
 ```
-上一段   2026-11-05 21:25–11-06 05:40（session-1d060599，接 a1cca035），core 0.0.117 / plugin 0.0.121
-做了     0028 ②触发检查表+段 sealing（0.0.120）→ ③ 归属扩多条线索 spans（core 0.0.117 /
-         插件 0.0.121）：planSegment 四触发、drain 无触发不抽、段 fan-out 每轮挂线；
-         旧按线索解析 drain 与 pickExtractionItem 退场；两批都发版部署到 profile
-验证     core 321 / 插件 122；变异 ②三组 + ③两组全红；前提实证 payload/事件 session id 同键；
-         verify-installed 6 PASS ×2；apply() 0.0.120 @22:33:06、0.0.121 @05:34:51 实测；
-         生产 segment-wait 4 条（buffered 1→2→2→3，会话中不抽已是事实），首 flush 等离开点
-没做完   ④ §八 重放（手动 /compact 当天验 + 首个 segment flush，③④ 一起补 A9 review）；
-         ⑤ retirements（extract-per-turn 翻 done、seed-backfill 绕写入器、reset 不清 seals）；
-         quality 三条 FAIL 待查；handoff 重启重发（handedOff 进程内）待定夺
-在热什么 队列在等=正常（segment-wait 可查），会话中抽取=0 是闸门不是自觉；
-         join= 改逐轮原因并集（口径变更）；core 未发版前插件测试要叠层（见 05:20 条目）
+上一段   2026-11-06 05:40–08:10（session-7a109c5b，接 1d060599），core 0.0.117 / plugin 0.0.121
+做了     0028 ④ 真实重放验收：quality.mjs 加「会话中抽取/轮」行（9a8c1a0，变异能红）；
+         手动 /compact 与新会话两条链路的生产日志逐条对上；③④ 合批 A9 review 补齐
+验证     §八 四行三过一待验收：行1 /compact（marker +4ms → 下一离开点 flush unit=2turns
+         facts=9 → seal ok）、行2 新会话（17 条旧段事实回注、handoff:false）、
+         行4 quality 0 次/轮 PASS；行3 跨天/容量空样本待验收；health-check 0/18/25
+没做完   ⑤ retirements（extract-per-turn 翻 done、seed-backfill 绕写入器、reset 不清 seals）
+         + 0017/0034 口径改段级；quality 三条 FAIL 待查；handoff 重启重发待定夺
+在热什么 闸门后两次段抽取（session/compaction trigger）都与 extract-queue 同 tick 配对——
+         行4 分子为 0 是配对咬合的结果；跨天/容量触发等自然发生补证
 ```
+
+**08:10 0028 实施④完成（§八 四行真实重放 + ③④ 合批 A9 review，health-check 0 FAIL）**：四行三过一待验收——**行 1 手动 /compact ✅**（日志原始 UTC：23:58:43.381 `compaction/end` → +4ms `segment marker: trigger=compaction` **只置位、当场不调模型** → 00:00:51.512 下一离开点（第 3 轮 prestep）`segment flush: trigger=compaction turns=2 chars=3543` → 00:01:47.382 `extract done: facts=9 unit=2turns ms=55869` → `segment-seal outcome=ok` → `extract-queue trigger=compaction` 与 extract 同 46ms 配对；抽取是异步的——flush 00:00:51 → inject 00:00:51.767 没等它 → done 00:01:47，第 3 轮注入拿不到这 9 条、第 4 轮才拿到，**开放问题 4 认的 1 轮延迟如实出现**）；**行 2 新开 session ✅**（旧 session 离开点 `segment flush trigger=session turns=3` → `extract done facts=17` → 本会话第 2 轮注入 ids 含 `fc_mw45r3vw_e`，库查 statement 与 `<memories>` 注入**逐字同源**——离开点抽取→落库→下轮注入端到端；同轮 `handoff:false` 每会话至多一条、`segment-wait buffered=1` 会话中不抽）；**行 3 跨天/容量 ⏳ 待验收**（今天无自然样本，按规则 20 不写「已通过」；同一 `planSegment` 检查表的 compaction/session 两触发已生产走通，容量/年龄有 ② 单元+变异兜着，等 `trigger=capacity|age` 真实日志补证）；**行 4 quality.mjs ✅**（`9a8c1a0`）：新增「离开点」区——`extract` 事件与带 `trigger` 的 `extract-queue` 事件配对（同 tick 实测 98/44ms、窗口 +2000ms），**闸门（GATE_AT 2026-11-05T14:33:06Z）后未配对 = 会话中调用**，输出 `会话中抽取/轮 0 次/轮 PASS（闸门后 0 次 / 4 轮；窗口内另有 506 次全在闸门前不计入——取舍写进输出行，不是悄悄换分母）`；**变异：GATE_AT 提前到 11-01 → `1.39 次/轮 FAIL（506 次 / 364 轮）` → 恢复绿**（通过线要能算出数，也要能红）。**A9 review**：[audit/2026-11-06-review-attribution-replay.md](audit/2026-11-06-review-attribution-replay.md) 覆盖 ③（`8bb2147`/`4c66d8c`）+ ④（`9a8c1a0`，`scripts/` 不计预算）→ health-check `✓ [review] 0 个提交待看` → **0 FAIL / 18 WARN / 25 PASS**。发现记录在 review §四：行 3 空样本、handoff 重启重发、配对窗口 2s 误判方向是 fail loudly、②批遗留（rules floor 末轮 / seed-backfill 绕写入器 / reset 不清 seals）——全部归 ⑤。
 
 **05:40 0028 实施③完成并上线（core 0.0.117 / 插件 0.0.121，运行层已验）**：归属输出扩多条线索——格式 `线索: <起>-<止> 继续 <id>` / `新 | 主题`（**无范围 = 整段**，单话题行逐字兼容；裸数字 = 单轮；`5-` = 到段尾）；`ExtractDraft.thread` 单条退场 → `spans?: ThreadSpan[]`（types +20 / extract +38 / index +63，棘轮 core +121、插件 +32 两条 history 已记）。`readThreadSpans` 多行解析，三态观测（present/absent/invalid）保留、坏行仍可查；**开放端收口**——多行时没写止的段停在下一条线索之前，否则 find-first 永远走不到后面的行（设计 bug，测试先抓）。`applyThreadSpans` 逐轮复用 `applyThread`（继续-新 / fallback-previous / 无候选兜底链一字不动，ADR 0034）：**段内 new 只开一条**（第 1 轮开、其余接上——逐轮开同话题克隆正是 0028 要消灭的碎片化，测试先抓）、**未覆盖轮链到前一轮**、**每一轮都挂线**（修掉旧实现只挂头轮的缺口——handoff / 候选原文 / 归纳看到的段不再有洞）。双编号显式传递：提示词 1..n 管范围匹配、真实轮号（宿主跳 10–30）管线索计数，drain 带 `hostTurnNo` 不猜。插件日志：单线索保持旧格式 `thread=th_xxx(new)`；拆段列全 `thread=a,b(2 new)`、`join=` 改为逐轮原因并集（一致时仍单值——**口径变更**：头轮不再代表全段）；trace 拆段时带 `threadSpans` 逐轮明细（错切可诊断）。提示词 schema/rules 教范围语法（+269 字符，提示词上限 5450→5600 按惯例记账）。测试 core 314→321 / 插件 120→122；变异：去范围解析恰 1 红、fan-out 只挂头轮 core 5 红 + 插件集成 1 红。**流程记录（下次照做）**：core 未发版前插件测试要本地叠层——在 core 仓 `npm run build` → 拷 dist 进插件 `node_modules/soulbridge`（runbook §八 同法；发版后 `npm install` 按 lock 回退，需装已发布版重同步）；期间一次 `npm run build` 跑在插件目录（无 build 脚本）造成叠层假阴性——**确认 build 在 core 仓跑**。发版部署（全实测）：core `v0.0.117` → release #44 → npm 0.0.117 可见 → 插件依赖下限改 `>=0.0.117`（**新 API 是运行时硬依赖**：0.0.116 下 `applyThreadSpans` 是 undefined，每次抽取都会挂——依赖范围随能力收口）→ `npm install` 用已发布版重同步叠层 → 对**发布版**复跑 122/122 → `v0.0.121` → npm 可见 → pnpm 11 装 profile（manifest + node_modules 双确认 0.0.117/0.0.121，yaml 排除项两个版本都补）→ **verify-installed 6 PASS**（装上的提示词 5331 字符含范围语法）→ DshWebRestartOnce 05:32:56 触发 → 05:34:39 停 / 05:34:45 起 → **`apply() called (v0.0.121) @ 05:34:51`**。**生产首批样本**：`extract buffered` 三条（pending 1→2→3）、`segment-wait` 四条 trace（buffered 1→2→2→3，最后一条 05:36:18 就是本条消息的 pre-step、0.0.121 无触发正确等待）——**会话中不抽已是生产事实**；首个 `segment flush` 等离开点，归 ④。注：00:00 还有一次非我触发的 DshWebHost 重启（重载 0.0.120，无害）。
 
