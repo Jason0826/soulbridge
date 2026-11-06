@@ -186,10 +186,15 @@
       "date": "2026-11-06",
       "delta": 44,
       "reason": "0018 第一刀：proactive 触发器注册表（插件）——switch-session 泛化为声明式行 PROACTIVE_TRIGGERS（新习惯 = 加行，0018 §0 通用性验收线），新增 context-compact 行（每请求 200k 建议 /compact 续命、贴用户偏好留在本会话）、switch 行措辞改「优先 /compact，反复压缩再新开」，due() 返回 {id,action,block,trigger}，日志与 trace 改 proactive（带行 id、action、触发值，switch_session 事件退场）。+2 测试（注册表顺序、「新习惯=新行」验收线本身）在 test/ 不计。功能实施按 0026/0027 先例记一次；变异：去 compact 行恰 4 红、去 once-per-level 恰 4 红。"
+    },
+    {
+      "date": "2026-11-07",
+      "delta": 114,
+      "reason": "0018 顺序2：成本模型进提醒 + 压缩预算行（插件）——context-compact/compact-limit 文案带每轮 ¥（离峰价：n×命中0.02 + 驱逐0.29×未命中1，基线27k 为 turn14 实测）；新增 compact-limit 行（已压≥2 次且≥200k → 建议换新会话，两压一会话；与 context-compact 按预算瓜分 200k 线）；账本感知压缩（compaction/end → compact()：重置 prompt/requests、重武装 200k 闸门、计 compactions——修 turn14 报 350k 实为 27k 的虚报 13 倍），recentRequests 滚动窗供成本渲染。EOQ 推导（C*=R+√(2Fg/k)，叙事定价 ¥0.2 → 196k≈200k，平台 100–210k）记入 cost-visibility.md。+4 测试（压缩后重武装、预算流、partition 契约、成本文案）在 test/ 不计。变异：去重置闸门恰 2 红、去让位闸门恰 2 红、禁 compact-limit 恰 2 红。"
     }
   ],
   "coreLines": 9021,
-  "pluginLines": 3127,
+  "pluginLines": 3241,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
