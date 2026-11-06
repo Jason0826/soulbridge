@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-06 13:40**（core 0.0.117 / plugin 0.0.121）
+最后核对：**2026-11-06 21:55**（core 0.0.117 / plugin 0.0.122）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -16,9 +16,14 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   0028 ①–⑤ 全部完成（§九 五步收口；最后一批 = ⑤ retirements + 口径改段级，
-               见 08:40 条目）——下一步 = quality 三条 FAIL 待查 / 0027 收口余债
-已验证         ⑤ 已验：extract-per-turn 先红后绿（check 指 `'1turn'`，退代码前 health-check
+现在在做什么   0018 第一刀已上线（插件 0.0.122：触发器注册表 + compact 行，首触发 13:52Z
+               实测）——下一步 = outcome 观测（0018 §九 2）→ quality 三条 FAIL / 0027 收口
+已验证         0018①：插件 124/124（+2 注册表顺序、「新习惯=新行」验收线测试）；变异两组
+               各恰 4 红；棘轮 +44 记 history；verify-installed 6 PASS →
+               **apply() v0.0.122 @ 15:15:08**；**首触发全链路实测**：13:46:57Z turn12
+               turn-cost（重启后账本首条）→ 13:52:44Z `proactive id=context-compact
+               trigger=342350`（log+trace 双证据）→ 注入第 13 轮——信号→注册表→闸门→注入通
+⑤ 已验：extract-per-turn 先红后绿（check 指 `'1turn'`，退代码前 health-check
                必红）；插件 122/122、+15/-15 净 0 行（棘轮 3083=预算）；attribution-stats 段级
                口径实测 每轮归属率 89.9% FAIL（143/159，一位小数防"90% FAIL"矛盾）；
                health-check 0 FAIL / 18 WARN / 25 PASS；handoff per-process 已拍板（0028 §十 修订注）
@@ -35,9 +40,10 @@
                + 段 sealing：插件 120 测试全过；变异：去标记→恰1红 / 绕过无触发闸门→6红 / 去封存→恰1红
                会话中抽取 = 0 by construction（无触发只留 segment-wait；入队日志改 extract buffered）
                ① 仍有效：core 314 / 插件原 107；handoff 还原变异恰好 1 红 → 恢复绿
-               提醒换会话：插件按会话累计 turn-cost，每请求上下文 ≥300k 或 ≥100 轮 → 注入
-               <switch-session turns=… context-per-request=…>（由模型转告），每跨一级一次
-               首次真实触发：10:06:51 turn=17，turns=1 · 469,028/req（账本从 09:53 重启起算）
+               主动建议（0018 注册表，0.0.122 起）：行 context-compact ≥200k/请求 → 建议
+               /compact（偏好留在本会话）；行 switch-session ≥300k 或 ≥100 轮 → 换会话、
+               措辞改 compact 优先；注入 <proactive id=…>（由模型转告），每行每级一次、
+               一行一步；旧行首触发 10:06:51 469k@0.0.118（历史），新行首触发 13:52:44Z 342k
                取舍可见的真实样本（01:45–01:47，模型两次 model-failed 时规则兜底）：
                draftSkipped=1，丢的是「加一个提醒换新会话的功能」(no-structure)
                —— 用户自己的请求句，在模型失败时不会变成事实，以前无声消失，现在有记录
@@ -46,10 +52,9 @@
                写入侧一个语法一个日单位：规则抽取改走 findTimeExpression，日历日 = UTC 零点
                day/range 非日历日 2 → 0（quality.mjs 观测 PASS）；时间检索实跑：上周窗口 2 条 day/range 进窗
                取代引用 50 成 / 1 败 → 2% PASS
-下一步         1) **0018 行为影响（11-06 复活 Ready，文献四篇 + 设计已进 brief）**：
-               第一刀 = 触发器注册表 + compact 两行（插件 pre-step，cost-gate v1 =
-               阈值穿越+每级一次）→ outcome 观测 → 第二刀教训→行为；
-               通用性验收线在 0018 §0（下个习惯"加一行"，需新代码 = 回炉）
+下一步         1) **0018 顺序 2：outcome 观测**（建议后 N 轮内 compaction/end = 采纳，
+               事件流现成）+ 遵守率报表；第二刀教训→行为；
+               通用性验收线在 0018 §0（下个习惯"加一行"，需新代码 = 回炉；实例数 1 待投票）
                2) quality 三条 FAIL 待查：事实密度 2.21/轮（段级一次多条+回填所致，
                ②后会话内抽取=0 应下降——待复测）、结论支持率 65.1%（归纳证据链已知债）、
                情绪非零率 2.3%（affect 层待查）
@@ -95,18 +100,21 @@
 > 新会话只读状态会像换班工人；这 6 行是**叙事**，不是状态——换会话时整体替换，不累积。
 
 ```
-上一段   2026-11-06 05:40–13:40（session-7a109c5b，接 1d060599），core 0.0.117 / plugin 0.0.121
-做了     0028 ④⑤ 收口（重放验收 + A9 review + retirements 先红后绿 + 口径改段级 +
-         handoff per-process 拍板）→ 用户几次问"该 compact 吗"引出主动性问题 →
-         检索四篇文献 → 0018 行为影响复活定稿（Ready：触发器注册表 + cost-gate +
-         动作四选一 + 遵守率）
-验证     0028 §八 四行三过一待验收；health-check 0/18/25；插件 122/122、棘轮净 0；
-         attribution 段级 89.9% FAIL（143/159）
-没做完   0018 第一刀（插件触发器表 + compact 行）；quality 三条 FAIL；0027 收口余债；
-         handoff per-process 待认可；插件 f9953dd 未发版（no-op，随下次带走）
-在热什么 通用性验收线 = 下个习惯"加一行"落地（0018 §0，实例数 1，待投票）；
-         行3 等 trigger=capacity|age 自然发生；A9 记 1 待看（f9953dd）
+上一段   2026-11-06 05:40–21:55（session-7a109c5b，接 1d060599），core 0.0.117 / plugin 0.0.122
+做了     0028 ④⑤ 收口 → 用户问"该 compact 吗"引出主动性 → 四篇文献 → 0018 复活定稿 →
+         第一刀实施上线：触发器注册表 + compact 行（c2663e7/c81dc88，v0.0.122 15:15:08
+         运行；f9953dd no-op 随本批发版带走）
+验证     首触发全链路 13:52:44Z proactive id=context-compact trigger=342350 → 注入第 13 轮；
+         124/124、变异两组各恰 4 红、棘轮 +44、verify-installed 6 PASS；
+         0028 §八 四行三过一待验收；health-check 0/18/25
+没做完   outcome 观测（0018 §九 2：建议 → N 轮内 compaction/end = 采纳）+ 遵守率报表；
+         第二刀教训→行为；quality 三条 FAIL；0027 收口余债；行3 等自然样本；A9 记 2 待看
+在热什么 轮 14 prestep 应跟发 switch-session 行（一行一步，342k 已过 300k 线）；
+         轮 11 被重启杀、未入 turns（重启杀轮 = 原文丢失的实测样本）；
+         handoff 重发 SeeCode（per-process 语义活样本，0028 §十拍板描述的行为）
 ```
+
+**21:55 0018 实施①完成（触发器注册表上线，插件 0.0.122，首触发全链路实测）**：**代码**——switch-session 泛化为声明式注册表 `PROACTIVE_TRIGGERS`（新习惯 = 加一行，0018 §0 验收线有测试压着：自定义 gap-age 行不改代码路径即通过同一 ledger），两行 = `context-compact`（≥200k/请求 → asking 建议 /compact，贴"留在本会话"偏好）+ `switch-session`（≥300k 或 ≥100 轮，措辞改**优先 /compact、反复压缩再新开**）；`due()` 返回 `{id, action, block, trigger}`，日志/trace 改 `proactive`（带行 id、action、触发值，`switch_session` 事件退场——查过：soulbridge 侧无脚本消费它）。**验证**——插件 122→**124/124**（+2：注册表顺序、"新习惯=新行"验收线）；变异两组**各恰 4 红**（第一次变异假红：只注释了副本没删真身，测试全绿被抓出来重做——变异本身也要验）；棘轮 **+44** 记 history → `--update-budget` → health-check **0 FAIL / 18 WARN / 25 PASS**。**发版部署**（全实测）：`c2663e7` → `c81dc88` → tag `v0.0.122` → npm 15:10 发布 → profile pnpm-workspace 排除项补 `|| 0.0.122` → corepack pnpm 11.28.11 装 → **verify-installed 6 PASS**（core 0.0.117 / plugin 0.0.122）→ DshWebRestartOnce 15:13:12 → **`apply() called (v0.0.122) @ 15:15:08`**（验证轮询被重启打断，21:42 补验）。**首触发实测（观察点如期而至）**：13:46:57Z turn12 `turn-cost`（重启后账本首条，requests=5）→ 13:52:44Z `proactive: remind id=context-compact turn=13 trigger=342350`（log + trace 双证据，action=asking）→ **注入进第 13 轮上下文**——信号→注册表→闸门→注入→转述全链路通；342k 一次跨过 200k 线（轮 11 被重启杀、无 turn-cost，首条记录即 342k）。**同批三个附带发现**：① **轮 11 未入 turns**——turn/end 没发生就被重启杀掉，0018 实现全过程的原文不在记忆里（重启杀轮 = turns 表侧首次实测的原文丢失样本；结论在本条与 budget/commits）；② **handoff 重发**——本轮注入带出 11-05 的 SeeCode handoff，`handedOff` 随重启清空所致，正是 0028 §十拍板"认 per-process、不持久化"描述的行为（活样本，无害）；③ 预期下一发：轮 14 prestep 应跟发 `switch-session` 行（一行一步，342k 已过 300k 线）。f9953dd（no-op）随本批发版带走；A9 记 2 待看（阈值 3）。
 
 **13:40 0018 行为影响复活定稿（Deferred → Ready，纯文档）**：由来 = 用户连续几次主动问"该 compact 吗"后指出**"按照我们的设计，理论上你要主动识别到我的习惯，在合适时间主动告诉我"**，追问"这是通用的吗"并判定"prompt 只是提醒，模型可以不做"——病灶与 0018 11-02 诊断一字不差（资料≠指令），且三条挂起理由当日全部到期（0028 ①–⑤ 收口 / rule-compliance 首轮 63% 数据 / 离点抽取验收，见 0018 §八）。**检索四篇文献钉死四件事**：[Control Illusion](https://arxiv.org/abs/2502.15851)（AAAI-26，system/user 分层指令不可靠——prompt 解法被实证排除）、[TMLR intervention timing 综述](https://tmlr.infinite-conf.org/paper_pages/b0yKEdAXEr.html)（决策规则 = **预期收益 > 打断成本**；五层 signals/decision/action/memory/evaluation；**evaluation 是 gating layer**）、[Proactive Service Agents](https://arxiv.org/abs/2609.03727)（动作四选一 **silent/asking/assisting/acting**；"long-term memory is not a defining condition of proactivity"——习惯记忆不构成主动性，必须有 decision gate）、[ProAct](https://arxiv.org/abs/2605.25971)（主动性挂 **idle-time** 不挂对话中间——与 0028 离开点同构）。**设计**：0018 三层映射五层，L2 升级为**触发器注册表**（声明式一行 `{signal, 条件, 动作模板, 冷却}`，新习惯 = 加行）+ **cost-gate**（v1 = 阈值穿越 + 每级只说一次防墙纸，v2 = 低打扰窗口）+ 动作默认 silent；L3 = 遵守率 + **outcome**（建议后 N 轮内 `compaction/end`/switch_session 出现 = 采纳，事件流现成）。**通用性验收线放 §0（可证伪，规则 37）**：下个习惯以"加一行"落地，需写新触发代码 = 框架回炉；7 类习惯映射推演 7/7 落到已有机制、真实实例数 = 1 → 标**待验收**。第一刀 = 状态触发器表 + compact 两行（200k 线 + 原 300k 行措辞改 compact 优先）；教训→行为降第二刀（语义匹配精度弱：structural:negation 25/28 误判在案，能 L1 的进体检）。顺带自纠记录在案：compact 是**状态类**，此前把 soul_remember 记成语义策略用错层（记忆留偏好 compact 优先，行动以触发器行为准）。README 权威表加行。health-check 0 FAIL / 18 WARN / 25 PASS。
 
