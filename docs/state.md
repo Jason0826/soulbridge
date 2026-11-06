@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-06 21:55**（core 0.0.117 / plugin 0.0.122）
+最后核对：**2026-11-07 02:10**（core 0.0.117 / plugin 0.0.123）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -16,13 +16,19 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   0018 第一刀已上线（插件 0.0.122：触发器注册表 + compact 行，首触发 13:52Z
-               实测）——下一步 = outcome 观测（0018 §九 2）→ quality 三条 FAIL / 0027 收口
-已验证         0018①：插件 124/124（+2 注册表顺序、「新习惯=新行」验收线测试）；变异两组
-               各恰 4 红；棘轮 +44 记 history；verify-installed 6 PASS →
-               **apply() v0.0.122 @ 15:15:08**；**首触发全链路实测**：13:46:57Z turn12
-               turn-cost（重启后账本首条）→ 13:52:44Z `proactive id=context-compact
-               trigger=342350`（log+trace 双证据）→ 注入第 13 轮——信号→注册表→闸门→注入通
+现在在做什么   0018 顺序 2 已上线（插件 0.0.123：成本文案 + compact-limit 行 + 账本感知压缩，
+               apply() 01:51:47 实测）——下一步 = 三项待验收观察（见下）→ outcome 观测
+               （0018 §九 2）→ quality 三条 FAIL / 0027 收口
+已验证         0018②：插件 128/128（+4：压缩后重武装、预算流、partition 契约、成本文案）；
+               变异三组各恰 2 红（去重置闸门 / 去让位闸门 / 禁 compact-limit）；
+               棘轮 +114 记 history（38 条）；EOQ 推导（叙事定价 ¥0.2 → 196k≈200k、
+               平台 100–210k、硬边界 80k/300k）入 cost-visibility.md；
+               发布链全实测：v0.0.123 → npm 01:43:45 → verify-installed 6 PASS（须显式传
+               web 路径，默认打 desktop 旧拷贝会 DbNewerThanBinaryError）→ apply() 01:51:47
+               ⏳ 待验收三条：ledger-compact 事件（下次压缩）/ compact-limit 行（第 2 次压缩
+               后再过 200k）/ 成本文案（下次过 200k）
+0018① 已验    首触发 13:52:44Z context-compact trigger=342350、14:44:11Z switch-session
+               trigger=350356（log+trace 双证据）→ 注入即转述；两行注册表 + partition 测试
 ⑤ 已验：extract-per-turn 先红后绿（check 指 `'1turn'`，退代码前 health-check
                必红）；插件 122/122、+15/-15 净 0 行（棘轮 3083=预算）；attribution-stats 段级
                口径实测 每轮归属率 89.9% FAIL（143/159，一位小数防"90% FAIL"矛盾）；
@@ -32,7 +38,8 @@
                新会话 17 条旧段事实下一轮注入含 fc_mw45r3vw_e（与 <memories> 逐字同源）、
                handoff:false；quality「会话中抽取/轮」0 次/轮 PASS（闸门后 0/4 轮，窗口内
                506 次全在闸门前不计入；变异 GATE_AT 提前 → 1.39 FAIL，指标能红）
-               A9 review：audit/2026-11-06-review-attribution-replay.md（③④ 合批）
+               A9 review：audit/2026-11-06-review-attribution-replay.md（③④ 合批）→
+               audit/2026-11-07-review-proactive-cost.md（f9953dd/c2663e7/f72b010 合批，待看归零）
 ③ 仍有效：spans：core 321 / 插件 122 测试全过；变异：去范围解析→恰 1 红、
                fan-out 只挂头轮→core 5 红 + 插件集成 1 红（真模型路径：两行线索 → 两条线索、
                每轮挂上、线索记真实轮号）；两个真 bug 是测试先抓的（首行吞段、new 逐轮开克隆）
@@ -52,9 +59,12 @@
                写入侧一个语法一个日单位：规则抽取改走 findTimeExpression，日历日 = UTC 零点
                day/range 非日历日 2 → 0（quality.mjs 观测 PASS）；时间检索实跑：上周窗口 2 条 day/range 进窗
                取代引用 50 成 / 1 败 → 2% PASS
-下一步         1) **0018 顺序 2：outcome 观测**（建议后 N 轮内 compaction/end = 采纳，
-               事件流现成）+ 遵守率报表；第二刀教训→行为；
-               通用性验收线在 0018 §0（下个习惯"加一行"，需新代码 = 回炉；实例数 1 待投票）
+下一步         1) **三项待验收观察**（0018②，各等一个自然样本）：下次压缩看
+               `ledger: compaction observed` + trace `ledger-compact`；第 2 次压缩后再过
+               200k 看 `proactive id=compact-limit`；下次过 200k 看文案里的 ¥ 数字。
+               然后 **outcome 观测**（0018 §九 2：建议后 N 轮内 compaction/end = 采纳，
+               首个样本已到——13:52 建议 → 14:20 压缩 = 采纳）+ 遵守率报表；
+               第二刀教训→行为；通用性验收线在 0018 §0（下个习惯"加一行"，实例数 1 待投票）
                2) quality 三条 FAIL 待查：事实密度 2.21/轮（段级一次多条+回填所致，
                ②后会话内抽取=0 应下降——待复测）、结论支持率 65.1%（归纳证据链已知债）、
                情绪非零率 2.3%（affect 层待查）
@@ -100,19 +110,22 @@
 > 新会话只读状态会像换班工人；这 6 行是**叙事**，不是状态——换会话时整体替换，不累积。
 
 ```
-上一段   2026-11-06 05:40–21:55（session-7a109c5b，接 1d060599），core 0.0.117 / plugin 0.0.122
-做了     0028 ④⑤ 收口 → 用户问"该 compact 吗"引出主动性 → 四篇文献 → 0018 复活定稿 →
-         第一刀实施上线：触发器注册表 + compact 行（c2663e7/c81dc88，v0.0.122 15:15:08
-         运行；f9953dd no-op 随本批发版带走）
-验证     首触发全链路 13:52:44Z proactive id=context-compact trigger=342350 → 注入第 13 轮；
-         124/124、变异两组各恰 4 红、棘轮 +44、verify-installed 6 PASS；
-         0028 §八 四行三过一待验收；health-check 0/18/25
-没做完   outcome 观测（0018 §九 2：建议 → N 轮内 compaction/end = 采纳）+ 遵守率报表；
-         第二刀教训→行为；quality 三条 FAIL；0027 收口余债；行3 等自然样本；A9 记 2 待看
-在热什么 轮 14 prestep 应跟发 switch-session 行（一行一步，342k 已过 300k 线）；
-         轮 11 被重启杀、未入 turns（重启杀轮 = 原文丢失的实测样本）；
-         handoff 重发 SeeCode（per-process 语义活样本，0028 §十拍板描述的行为）
+上一段   2026-11-06 21:55–11-07 02:10（session-7a109c5b 续），core 0.0.117 / plugin 0.0.123
+做了     用户纠「缓存也花钱」→ 真价重算（价格表对官方账单分毫不差，缓存 56% 是最大头）→
+         EOQ 模型给 200k 算出推导（叙事定价 ¥0.2/次 → 196k；平台 100–210k）→
+         0018 顺序 2 实施：成本文案 + compact-limit 行 + 账本感知压缩（f72b010，v0.0.123）
+验证     128/128、变异三组各恰 2 红、棘轮 +114（history 38）、
+         verify-installed 6 PASS（须显式传 web 路径）→ apply() 01:51:47 实测；
+         A9 合批审查 audit/2026-11-07-review-proactive-cost.md（判定通过，待看归零）
+没做完   三条待验收（ledger-compact / compact-limit / 成本文案，各等自然样本）；
+         outcome 观测首样本已到（13:52 建议 → 14:20 压缩 = 采纳）待进报表；
+         第二刀教训→行为；quality 三条 FAIL；0027 收口余债；行3 等自然样本
+在热什么 重启杀轮第二次实证（turn 18 实施轮被 01:51 重启杀掉、未入 turns）；
+         compact() 对未见过会话返 0（预算可能少计 1，fail-open，归下批）；
+         离峰价写死在 render（高峰低估 2×，文案已标「离峰价」不撒谎）
 ```
+
+**02:10 0018 顺序 2 完成并上线（插件 0.0.123：成本进提醒 + 压缩预算行 + 账本感知压缩）**：由来 = 用户纠「走缓存也花钱，只是便宜一些，当上下文每轮都很大的时候光缓存就很花钱」→ 真价重算（价格表与官方账单对账**分毫不差**：11-01 周日全离峰 399.2×0.02+5.32×1+0.66×4=¥15.94 vs 账单 ¥15.95；四天 ¥99.86 里**缓存命中 ¥56.4=56% 是最大头**；旧用量表 11-04 缓存 0.56M 与实测 233M 差 400 倍——新数与「上下文×请求数」自洽、旧数怎么算都对不上账）→ 用户问「**能算出压缩的最优上下文吗**」→ **EOQ 模型**（库存问题同构：携带 k=¥0.39/M·轮 = n×命中0.02 + 驱逐0.29×未命中1，**驱逐占 3/4**（14 个轮间隔 4 次全量重读，turn12 隔夜 ¥0.343 是本会话最大单笔）；订货 F≈¥0.07；`C*=R+√(2Fg/k)`，R=27k / g=20.4k / n=5 全部实测）→ 机器答案 115k（每 4.3 轮压一次，太频）暴露模型缺叙事参数 N：**N=¥0.2/次 → 196k ≈ 现行 200k——阈值就是「给一次压缩的叙事损失定的价」**；平台 100–210k 全在 ±20% 内（200k vs 115k=¥0.33/天、355k vs 115k=¥1.37/天）、参数敏感 89k–186k 摆动 → 精调无意义，**硬边界只有两条：别低于 80k、别骑过 300k**；阈值由叙事和质量决定，钱只画边界。**实施 a+b+c**：a 账本感知压缩——`compaction/end` → `sessionLedger.compact()` 重置 prompt/requests（轮数保留作年龄守卫、recentRequests 保留属任务风格）+ **重武装 200k 闸门**（不清 reminded 的话 level1≤reminded1 静默不响，回归测试压着）+ 计 compactions，log/trace `ledger-compact`——**修 turn14 报 350k 实为 27k 的 13 倍虚报**；b `compact-limit` 行——已压 ≥2 次且 ≥200k → 建议换新会话（两压一会话：摘要套摘要会失真），与 context-compact **按预算瓜分 200k 线**（partition 单元契约测试：预算内 compact 说话、预算外让位，同一轮不打架）；c 文案带钱——「每轮约 ¥X → 压缩后 ¥Y（差 N 倍）」（离峰价）+「长离开前先压」（turn-12 教训：驱逐不可预测做不成信号、代价可算，进文案不进触发器）。**验证**：124→**128/128**（+4：压缩后重武装 / 预算流 / partition 契约 / 成本文案）；变异**三组各恰 2 红**（去重置闸门 / 去让位闸门 / 禁 compact-limit，变异本身验红才作数）；棘轮 **+114** → history 38 条 → health-check **0 FAIL / 18 WARN / 25 PASS**。**发版部署（全实测）**：`f72b010` + tag `v0.0.123` → npm **01:43:45** → pnpm-workspace 排除项补 `|| 0.0.123` → corepack pnpm 装 → **verify-installed 6 PASS**（坑：脚本**默认打 desktop profile** 的 v9 旧拷贝 → `DbNewerThanBinaryError`，须显式传 web 路径）→ DshWebRestartOnce → **`apply() called (v0.0.123) @ 01:51:47`**。**A9 合批审查**：[audit/2026-11-07-review-proactive-cost.md](audit/2026-11-07-review-proactive-cost.md) 覆盖 f9953dd/c2663e7/f72b010（core 0 个待审，9e4e886 起只动 scripts/docs）→ 判定**通过**，三条发现归下批（compact() 对未见过会话返 0 → 预算可能少计 1，方向 fail-open 贴用户偏好 / 离峰价写死 render 高峰低估 2× / verify-installed 默认 desktop 是历史遗留）；三条新行为按规则 20 记**待验收**（各等自然样本：下次压缩、第 2 次压缩后再过线、下次过 200k）。**附带**：① outcome 首样本——13:52:44Z 建议 → 14:20:57Z 压缩 = **采纳**（§九 2 观测环第一格）；② **重启杀轮第二次实证**（turn 18 实施轮被 01:51 重启杀掉、未入 turns 表——结论全在 commits 与本条）；③ 价格表存记忆 `fc_mw56wbfn_c`（旧记忆只有高峰价 ¥8 不完整）。
 
 **21:55 0018 实施①完成（触发器注册表上线，插件 0.0.122，首触发全链路实测）**：**代码**——switch-session 泛化为声明式注册表 `PROACTIVE_TRIGGERS`（新习惯 = 加一行，0018 §0 验收线有测试压着：自定义 gap-age 行不改代码路径即通过同一 ledger），两行 = `context-compact`（≥200k/请求 → asking 建议 /compact，贴"留在本会话"偏好）+ `switch-session`（≥300k 或 ≥100 轮，措辞改**优先 /compact、反复压缩再新开**）；`due()` 返回 `{id, action, block, trigger}`，日志/trace 改 `proactive`（带行 id、action、触发值，`switch_session` 事件退场——查过：soulbridge 侧无脚本消费它）。**验证**——插件 122→**124/124**（+2：注册表顺序、"新习惯=新行"验收线）；变异两组**各恰 4 红**（第一次变异假红：只注释了副本没删真身，测试全绿被抓出来重做——变异本身也要验）；棘轮 **+44** 记 history → `--update-budget` → health-check **0 FAIL / 18 WARN / 25 PASS**。**发版部署**（全实测）：`c2663e7` → `c81dc88` → tag `v0.0.122` → npm 15:10 发布 → profile pnpm-workspace 排除项补 `|| 0.0.122` → corepack pnpm 11.28.11 装 → **verify-installed 6 PASS**（core 0.0.117 / plugin 0.0.122）→ DshWebRestartOnce 15:13:12 → **`apply() called (v0.0.122) @ 15:15:08`**（验证轮询被重启打断，21:42 补验）。**首触发实测（观察点如期而至）**：13:46:57Z turn12 `turn-cost`（重启后账本首条，requests=5）→ 13:52:44Z `proactive: remind id=context-compact turn=13 trigger=342350`（log + trace 双证据，action=asking）→ **注入进第 13 轮上下文**——信号→注册表→闸门→注入→转述全链路通；342k 一次跨过 200k 线（轮 11 被重启杀、无 turn-cost，首条记录即 342k）。**同批三个附带发现**：① **轮 11 未入 turns**——turn/end 没发生就被重启杀掉，0018 实现全过程的原文不在记忆里（重启杀轮 = turns 表侧首次实测的原文丢失样本；结论在本条与 budget/commits）；② **handoff 重发**——本轮注入带出 11-05 的 SeeCode handoff，`handedOff` 随重启清空所致，正是 0028 §十拍板"认 per-process、不持久化"描述的行为（活样本，无害）；③ 预期下一发：轮 14 prestep 应跟发 `switch-session` 行（一行一步，342k 已过 300k 线）。f9953dd（no-op）随本批发版带走；A9 记 2 待看（阈值 3）。
 
