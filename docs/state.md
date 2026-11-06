@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-06 08:10**（core 0.0.117 / plugin 0.0.121）
+最后核对：**2026-11-06 08:40**（core 0.0.117 / plugin 0.0.121）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -16,9 +16,13 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   0028 实施④ 完成（§八 四行：行1 /compact、行2 新会话、行4 quality 指标
-               生产实测通过；行3 跨天/容量空样本记待验收）——下一步 = §九⑤ retirements 登记
-已验证         ④ 重放：/compact 23:58:43Z compaction/end → +4ms 只置标记 → 00:00:51Z
+现在在做什么   0028 ①–⑤ 全部完成（§九 五步收口；最后一批 = ⑤ retirements + 口径改段级，
+               见 08:40 条目）——下一步 = quality 三条 FAIL 待查 / 0027 收口余债
+已验证         ⑤ 已验：extract-per-turn 先红后绿（check 指 `'1turn'`，退代码前 health-check
+               必红）；插件 122/122、+15/-15 净 0 行（棘轮 3083=预算）；attribution-stats 段级
+               口径实测 每轮归属率 89.9% FAIL（143/159，一位小数防"90% FAIL"矛盾）；
+               health-check 0 FAIL / 18 WARN / 25 PASS；handoff per-process 已拍板（0028 §十 修订注）
+④ 仍有效：/compact 23:58:43Z compaction/end → +4ms 只置标记 → 00:00:51Z
                下一离开点 segment flush trigger=compaction → extract unit=2turns facts=9 → seal ok；
                新会话 17 条旧段事实下一轮注入含 fc_mw45r3vw_e（与 <memories> 逐字同源）、
                handoff:false；quality「会话中抽取/轮」0 次/轮 PASS（闸门后 0/4 轮，窗口内
@@ -42,16 +46,18 @@
                写入侧一个语法一个日单位：规则抽取改走 findTimeExpression，日历日 = UTC 零点
                day/range 非日历日 2 → 0（quality.mjs 观测 PASS）；时间检索实跑：上周窗口 2 条 day/range 进窗
                取代引用 50 成 / 1 败 → 2% PASS
-下一步         1) 0028 实施（§九 顺序；① ② ③ ④ 已完成——④ 四行三过一待验收、
-               A9 review 已补、health-check 0 FAIL / 18 WARN / 25 PASS）：
-               ⑤ retirements 登记（extract-per-turn 翻 done、seed-backfill 绕写入器、
-               reset 不清 seals）→ 0017/0034 指标口径改段级
-               ②的整体 review：audit/2026-11-05-review-departure-checklist.md（① 的在 floor-cost-handoff；
-               ③④ 的在 2026-11-06-review-attribution-replay）
-               2) 子代理的请求要不要滚到父轮 —— 需要 DSH 暴露会话谱系，事件流里没有
-               3) 0027 §八 剩余三个读者：注入措辞 / 排序比较 / soulbridge why 打印 precision
+下一步         1) quality 三条 FAIL 待查：事实密度 2.21/轮（段级一次多条+回填所致，
+               ②后会话内抽取=0 应下降——待复测）、结论支持率 65.1%（归纳证据链已知债）、
+               情绪非零率 2.3%（affect 层待查）
+               2) 0027 §八 剩余三个读者：注入措辞 / 排序比较 / soulbridge why 打印 precision
                收口余债（见 0027 §十）：TIME_CUE 与语法词表两份、calendarDate/parseIsoDay 两份、
                facts(since/until) 还能不带 precisions 调用
+               3) 0028 §八 行3（跨天/容量触发）等自然发生补证；handoff per-process 拍板
+               （0028 §十 修订注）待认可——不同意改回一行的事
+               4) 子代理的请求要不要滚到父轮 —— 需要 DSH 暴露会话谱系，事件流里没有
+               0028 整体 review：① floor-cost-handoff、② departure-checklist、
+               ③④ attribution-replay（⑤ 的插件提交 f9953dd 是 no-op，A9 记 1 待看
+               ——阈值 3，随下一批 review 一起看）
 不要做         抽取输入上限 —— 用户明确否决（751 次里只有 1 次超 6 万字符）
 不能忘         抽取单位 = 离开点切出的段（线索归属是抽取的产物，0028；队列在等=正常，segment-wait 可查）
                自包含闸门只对 holder 生效；事实必须写轮次
@@ -85,17 +91,19 @@
 > 新会话只读状态会像换班工人；这 6 行是**叙事**，不是状态——换会话时整体替换，不累积。
 
 ```
-上一段   2026-11-06 05:40–08:10（session-7a109c5b，接 1d060599），core 0.0.117 / plugin 0.0.121
-做了     0028 ④ 真实重放验收：quality.mjs 加「会话中抽取/轮」行（9a8c1a0，变异能红）；
-         手动 /compact 与新会话两条链路的生产日志逐条对上；③④ 合批 A9 review 补齐
-验证     §八 四行三过一待验收：行1 /compact（marker +4ms → 下一离开点 flush unit=2turns
-         facts=9 → seal ok）、行2 新会话（17 条旧段事实回注、handoff:false）、
-         行4 quality 0 次/轮 PASS；行3 跨天/容量空样本待验收；health-check 0/18/25
-没做完   ⑤ retirements（extract-per-turn 翻 done、seed-backfill 绕写入器、reset 不清 seals）
-         + 0017/0034 口径改段级；quality 三条 FAIL 待查；handoff 重启重发待定夺
-在热什么 闸门后两次段抽取（session/compaction trigger）都与 extract-queue 同 tick 配对——
-         行4 分子为 0 是配对咬合的结果；跨天/容量触发等自然发生补证
+上一段   2026-11-06 05:40–08:40（session-7a109c5b，接 1d060599），core 0.0.117 / plugin 0.0.121
+做了     0028 ④ 真实重放（quality 指标 9a8c1a0 + /compact 与新会话两条链路实测 + A9 review）
+         → ⑤ retirements（extract-per-turn 先红后绿翻 done、seed-backfill/reset-seals
+         登记）+ 0017/0034 口径改段级 + handoff per-process 拍板——§九 五步全部收口
+验证     §八 四行三过一待验收（行3 跨天/容量等自然样本）；health-check 0/18/25；
+         attribution 段级口径 89.9% FAIL（143/159）；插件 122/122、棘轮净 0
+没做完   quality 三条 FAIL 待查；0027 收口余债（三读者+两份词表+precisions）；
+         handoff per-process 拍板待认可；插件 f9953dd 未发版（no-op，随下次带走）
+在热什么 行4 指标分子 = 闸门后未配对 extract（现为 0，配对咬合）；行3 等
+         trigger=capacity|age 自然发生；A9 记 1 待看（f9953dd）
 ```
+
+**08:40 0028 实施⑤完成（retirements + 口径改段级，§九 五步全部收口）**：三件——① **extract-per-turn 翻 done（先红后绿）**：check 改指 `'1turn'` 时它还在代码里 → health-check `✗ 已退场的旧表示复活了` **红** → 同批退掉单轮最后的立足点（`runExtraction` 的 `unit = null` 默认、`unit?.turns` 链、`1turn` 日志回退、spanTurns 单轮兜底，插件 `f9953dd` +15/-15 **净 0 行**）→ health-check 绿、插件 **122/122**（spans.test 真跑该路径）；`replacedBy` 从过时的"按线索"改写为"段抽取（0028）"。**为什么能翻**：drain 唯一调用恒传 `{turns}`，单轮模式是不可达的死路径——留着它就是旧表示的活化石（规则 5）。② **两条新债登记（pending）**：`seed-backfill-write`（check 指 `writeFileSync(queueFile`——绕写行为消失即可翻 done，规则 41）、`reset-seals`（**缺失型债务，机器查不了**——不配 check，规则 26 标人工 review；方向已定：reset 联动清 seals，翻 done 不补 check 会立刻 FAIL 逼出检查）。③ **0017/0034 指标口径改段级**：ADR 0034「届时改为段级」落地——**每轮归属率分母 = 窗口轮次 − 缓冲轮次**（等离开点的 1 轮延迟不是"没归属"）、`join=` 按段并集读（去重；单原因行与旧算法逐字一致），原表保留作历史口径；0017 补 §6 场景的段级读法（通过线不变，机制从逐轮加入变段内切分）；`attribution-stats.mjs` 同批改，实测 **每轮归属率 89.9% FAIL（143/159，一位小数防"90% FAIL"自相矛盾）**、每 10 关闭 2.9 FAIL、线索级两行样本不足 14/20。**handoff 重发拍板**：`handedOff` 是进程内 Set、重启即清空（21:25/22:33 实测重发）——**认 per-process 语义、不持久化**（重发无害 ~1KB，持久化要动写入器+发版链），修订注写进 0028 §十 决定 3，不同意改回一行。棘轮：净 0 行（3083=预算）；health-check **0 FAIL / 18 WARN / 25 PASS**。注：插件仓领先已装 0.0.121 一个 no-op 提交（`f9953dd`，行为零变化），随下次发版带走；A9 记 1 待看（阈值 3）。
 
 **08:10 0028 实施④完成（§八 四行真实重放 + ③④ 合批 A9 review，health-check 0 FAIL）**：四行三过一待验收——**行 1 手动 /compact ✅**（日志原始 UTC：23:58:43.381 `compaction/end` → +4ms `segment marker: trigger=compaction` **只置位、当场不调模型** → 00:00:51.512 下一离开点（第 3 轮 prestep）`segment flush: trigger=compaction turns=2 chars=3543` → 00:01:47.382 `extract done: facts=9 unit=2turns ms=55869` → `segment-seal outcome=ok` → `extract-queue trigger=compaction` 与 extract 同 46ms 配对；抽取是异步的——flush 00:00:51 → inject 00:00:51.767 没等它 → done 00:01:47，第 3 轮注入拿不到这 9 条、第 4 轮才拿到，**开放问题 4 认的 1 轮延迟如实出现**）；**行 2 新开 session ✅**（旧 session 离开点 `segment flush trigger=session turns=3` → `extract done facts=17` → 本会话第 2 轮注入 ids 含 `fc_mw45r3vw_e`，库查 statement 与 `<memories>` 注入**逐字同源**——离开点抽取→落库→下轮注入端到端；同轮 `handoff:false` 每会话至多一条、`segment-wait buffered=1` 会话中不抽）；**行 3 跨天/容量 ⏳ 待验收**（今天无自然样本，按规则 20 不写「已通过」；同一 `planSegment` 检查表的 compaction/session 两触发已生产走通，容量/年龄有 ② 单元+变异兜着，等 `trigger=capacity|age` 真实日志补证）；**行 4 quality.mjs ✅**（`9a8c1a0`）：新增「离开点」区——`extract` 事件与带 `trigger` 的 `extract-queue` 事件配对（同 tick 实测 98/44ms、窗口 +2000ms），**闸门（GATE_AT 2026-11-05T14:33:06Z）后未配对 = 会话中调用**，输出 `会话中抽取/轮 0 次/轮 PASS（闸门后 0 次 / 4 轮；窗口内另有 506 次全在闸门前不计入——取舍写进输出行，不是悄悄换分母）`；**变异：GATE_AT 提前到 11-01 → `1.39 次/轮 FAIL（506 次 / 364 轮）` → 恢复绿**（通过线要能算出数，也要能红）。**A9 review**：[audit/2026-11-06-review-attribution-replay.md](audit/2026-11-06-review-attribution-replay.md) 覆盖 ③（`8bb2147`/`4c66d8c`）+ ④（`9a8c1a0`，`scripts/` 不计预算）→ health-check `✓ [review] 0 个提交待看` → **0 FAIL / 18 WARN / 25 PASS**。发现记录在 review §四：行 3 空样本、handoff 重启重发、配对窗口 2s 误判方向是 fail loudly、②批遗留（rules floor 末轮 / seed-backfill 绕写入器 / reset 不清 seals）——全部归 ⑤。
 
