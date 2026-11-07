@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-07 23:40**（core 0.0.119 / plugin 0.0.127）
+最后核对：**2026-11-08 00:30**（core 0.0.119 / plugin 0.0.127）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -16,14 +16,15 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   第二刀 A 已上线（core 0.0.118 / 插件 0.0.127）：教训落库即候选、分类确认
+现在在做什么   第二刀 A 已上线并验收（core 0.0.119 / 插件 0.0.127）：教训落库即候选、分类确认
                后置 active、全部教训入队分桶（T1-修正 / 全收 / 存量）+ 纠正晚到补查；
-               存量按拍板全收（37 active 由 v16 降级 + 61 候选一起入队）。下一步 =
-               观察分类产出（98 条 → 规则/画像/待修）与验收语言「上次纠正过的事，
-               下次它自己做到了」；然后 C（date() 儒略日升 L1）→ B（拍板 a：rules 层
-               scope='always' 每轮注入）。两个旧拍板点已定：① a ② b
-已验证         第二刀 A：core 324/324（+3：`角色=lesson` 也落候选 / 分类后规则与画像可注入 /
-               v16 存量降级），三组变异各恰 1 红；插件 141/141（+4：全收桶 / 桶序 /
+               存量按拍板全收（37 active 由 v16 降级 + 61 候选 = 98 条，已消化完）。
+               下一步 = **B**（拍板 a：rules 层 `scope='always'` 每轮注入）——库里有
+               **56 条活跃规则没有可解析触发槽、永不触发**，它们就是 B 的验收对象；
+               然后 C（date() 儒略日升 L1，小活可随时插队）。两个旧拍板点已定：① a ② b
+已验证         第二刀 A：core 326/326（+3：`角色=lesson` 也落候选 / 分类后规则与画像可注入 /
+               v16 存量降级；+2 红转绿：旧规则、旧画像在 600 条新事实之后仍可见），
+               变异五组各恰 1 红（含三条读路径查询各 1 红）；插件 141/141（+4：全收桶 / 桶序 /
                纠正晚到改桶 / 存量一次性入队），五组变异各红——**marker 组首跑假绿**
                （队列去重兜住了断言），补成「一次通过后再来一条」才红；
                health-check 0 FAIL / 19 WARN / 25 PASS（19 是提交前的 [同步] 提醒；
@@ -43,7 +44,10 @@
                （core 0.0.119 随 profile 装入）；装上的产物 `rules()` = **133**（0.0.118 时 11），
                空闲消息「门禁/exit code」→ 命中 fc_mw1lztl3_5（11-04 的旧规则，原在窗外）、
                「迁移/grep」→ 命中 4 条含存量分类出的 fc_mw1lscku_2，闲聊 → 0 条；
-               生产 `rule_fired` 要等一条真命中触发词的用户消息（**待验收，不写已通过**）
+               生产 `rule_fired` 已有 2 条真实样本（23:20:43 turn10 / 23:27:33 turn11，
+               fc_mw45r3sr_5「直接跑 restart-web.ps1 会被连坐杀掉」+ fc_mw5ru7sm_f「重启杀轮
+               未入 turns 表」）——但都是修复前的旧行（靠窗口碰巧可见）→
+               **分类新生规则的首次开火仍待验收**
                ⚠ 时间线更正：0.0.126 装机在 21:55，但**宿主实际加载（apply）是 22:12:27**
                ——21:35 的 compact-limit 是 0.0.125 的行为，0.0.126 的宿主读数 22:12 起才在线；
                新会话首轮 prestep 无误报（账本重建 compactions=2）
@@ -154,14 +158,18 @@
                packages/core/src/{time,retrieval,extract,prompts,sqlite,index}.ts
                D:\git-workspace\repos\dsh-plugin-soulbridge\index.js
                账单与判读：dsh-plugin-soulbridge\scripts\billing.mjs · docs\cost-visibility.md
-环境           固定端口 3080；重启 = `Start-ScheduledTask DshWebRestartOnce`（90s 延迟、脱离
-               agent 的 job 对象跑 restart-web.ps1）——**直接在会话里跑脚本会被宿主连坐杀掉**
-               （22:33 实测：Job runner 报错、重启根本没发生，宿主毫发无损）
+环境           固定端口 3080；会话内重启 = `schtasks /run /tn DshWebRestartOnce`（脱离进程树、
+               90s 延迟）——**别在会话里直接跑脚本：脚本是被杀进程的子进程，会连坐**
+               人手重启 = `powershell -File scripts\restart-web.ps1`（前台，退出码 0 成功 /
+               2 BUSY / 3 NOT READY / 4 REFUSED）；结论只看 `~/.soulbridge/web-restart.log`
+               末尾的 ready at / BUSY / NOT READY / REFUSED，新链接在 web-url.txt 与 DSH-Web.url
+               重启有 review 闸门（health-check --gate=review，300s 内绿灯复用，红则拒绝重启）
+               崩溃自愈由 supervisor 负责（5s 后自动重启并刷新 URL），别再手动补
                运行中的 profile = ~/.dsh/profiles/web（→ C:\DSH\home\profiles\web）
                发版 = 推 tag → GitHub Actions → npm（当前 core 0.0.119 / plugin 0.0.127）
                注意：npm 读侧复制延迟实测 3–15 分钟，`npm view` 马上查会 404，别判成发布失败
                装机 = profile 排除项补新版本号 → corepack pnpm 11 装 → verify-installed
-               显式传 web 路径 → DshWebRestartOnce（重启可能因机器休眠延迟生效，看 apply 时间戳）
+               显式传 web 路径 → 重启（本会话被杀也不影响，看 apply 时间戳 + ledger rebuilt）
 成本导出       D:\Download\usage_data_*.zip（平台导出，含 amount/cost 两个 CSV）
 ```
 
@@ -171,18 +179,21 @@
 > 新会话只读状态会像换班工人；这 6 行是**叙事**，不是状态——换会话时整体替换，不累积。
 
 ```
-上一段   2026-11-07 22:04–23:20（本会话第一轮；从 A 起手），core 0.0.118 / plugin 0.0.127
-做了     第二刀 A：教训落库即候选（写一条 writeStatus，干掉「角色=lesson 落 active」旁路）+
-          分类确认后置 active（此前队列跑完规则仍是候选，永不触发）+ 全部教训入队分桶
-          （拍板 b：T1-修正 / 全收 / 存量）+ 纠正晚到补查 + schema v16 降级存量 37 条；
-          存量按拍板全收：37 + 61 一起入队（98 条，10 次分类调用）
-验证     core 324/324、三组变异各 1 红；插件 141/141、五组变异各红（marker 组首跑假绿已修）；
-          棘轮 core 9093 / 插件 3563（两条 history）；旧库核对：22 条纠正轮教训 = 19 候选 + 3 active
-没做完   B（拍板 a：rules 层 scope='always'）与 C（date() 儒略日升 L1）；分类产出观测（98 条
-          → 规则/画像/待修）与「上次纠正过的事下次自己做到」的验收样本；quality 四条 FAIL
-在热什么 0.0.126 实际加载是 22:12:27（装机 21:55），21:35 的 compact-limit 是 0.0.125 行为；
-          全收会让分类队列变长（批 10），存量消化期间易被误读成"卡住"；待修教训不再注入
+上一段   2026-11-08 00:26 收尾（session-e9eddc5a），core 0.0.119 / plugin 0.0.127
+做了     第二刀 A 全链交付并上线：教训落库即候选 + 分类确认后置 active + 全部教训入队分桶
+          （b：T1-修正 / 全收 / 存量）+ 纠正晚到补查 + 存量 98 条消化完；验收时抓到第三个洞
+          （rules/profile 读「最新 500 条」→ 分类产出永不注入），修成按 role+status 查本层
+验证     core 326/326、插件 141/141、变异 8 组各恰红；verify-installed 6 PASS（已改成快照
+          验证，不再迁移生产库）；apply 23:34:38；rules() 11 → 133；生产 rule_fired 两样本
+          （23:20/23:27，属修复前旧行，分类新生的首次开火仍待验收）
+没做完   B（rules 层 scope='always'）——库里有 56 条活跃规则无触发槽、永不触发，就是 B 的
+          验收对象；C（date() 儒略日升 L1）；A9 低债 F2–F8（activatePlaced 静默 / markRule 改
+          retracted 行 / 无维度画像常驻 / 上限静默截断）
+在热什么 存量 98 条按批 10 分 10 次消化（约 70 规则 / 19 画像 / 9 待修），消化期间别误读成
+          "卡住"；重启协议 23:32 换主（受管脚本 + review 闸门 + supervisor），操作手册已更新
 ```
+
+**00:30 验收补数：生产 rule_fired 首两样本 + 56 条沉默规则（A 收尾，未动代码）**：用户问"什么状态"，顺手只读连库核数，得三件新事实。**① 生产 `rule_fired` 有样本了**——`15:20:43Z turn=10` 与 `15:27:33Z turn=11` 各一条，命中 `fc_mw45r3sr_5`（「助手实测在会话里直接跑 restart-web.ps1 会被宿主连坐杀掉」）+ `fc_mw5ru7sm_f`（「01:51 的重启杀掉实施轮 turn 18，未入 turns 表」），而且打在**正在写重启协议的那个会话**上——形态正是想要的（上次纠正过的事，这次它自己提醒了）。**但要说清**：这两条是 0.0.119 之前就存在的行、靠最新窗口碰巧可见，所以「**分类新生的规则真的会开火**」仍记待验收（规则 20）。**② 新缺口：56 条活跃规则永不触发**——只读查库：`role='rule' AND status='active'` **189 行**，其中带 `触发` 槽 **133 行**（与 `rules()` 返回的 133 逐字对上），差 **56 行没有可解析触发槽**；而 `rules()` 里 `parseTrigger` 失败即 `continue`——这些规则被分类确认成规则、写进库、从此沉默。**这是 B 步（`scope='always'` 每轮注入）的第一个具体受害者**：B 不再只是"设计上的完整性"，而是修一个能点数出来的洞。**③ 库快照（只读，未迁移）**：active lesson **0**（存量 37 条 v16 降级全生效）、candidate **9**（分类判"待修"）、active profile **49**、`pending-classify` = `[]`、`pending-profile` 积压 2 条。**④ 重启协议已换主（另一会话的活，不是本批）**：插件仓 `1157616`（23:12）+ `f575ab8`（23:32）把重启改成受管路径——`restart-web.ps1` 按端口/命令行精确定位（旧做法按进程名会同时命中桌面版）、独立 `web-restart.log`（host 用 `>>` 长期持有自己的日志，两边抢写导致 25 次启动 0 条 `ready at`）、review 闸门（`--gate=review`，300s 内绿灯复用，红则退出码 4 拒绝重启）+ supervisor 崩溃自愈；`docs/restart-protocol.md` 区分"请求重启"与"执行重启"。23:34 那次走的正是这条路：`waiting 90s → gate: ok → stopping task DshWebHost → killing pid 6508 that outlived the task stop → starting → ready at :3080`——`apply() called (v0.0.127)` @ `15:34:38Z` 与日志逐秒对得上。操作手册那条已同步改（会话内仍走 `schtasks /run /tn DshWebRestartOnce`，直接跑脚本仍会连坐）。
 
 **23:20 第二刀 A 完成（0018 §九 3：教训 → 行为，core 0.0.118 → 0.0.119 / 插件 0.0.127）**：由来 = 上一会话 17:55 诊断 + 用户拍板（①升级载体 a=rules 层 `scope='always'` 每轮注入；②候选门 b=全部教训入队分桶）。**诊断复核（对着库，不靠记忆）**：`role=lesson` 分三堆——active 37（当年 `角色=lesson` 旁路，被当 `<memories>` 资料注入）、candidate 61（沉睡）、其中**来自被纠正轮的 22 条 = 19 候选 + 3 active**，与 17:55 条目逐字对上；`promote` trace 46 条里只有 6 条 `queued>0`（11-02/11-03），此后全是 0——不是没纠正，是 `promotionCandidates` 只认 candidate，旁路行根本进不了门。**① core**：写入新增一条 `writeStatus(role)`——`role=lesson` 一律 `candidate`（`角色=lesson` 与 `原则候选=是` 是同一条决定的两说法，以前只有后者进队列）；`markRule`/`markProfile` 经 `activatePlaced()` 置 `active`（**这是本批发现的第二个洞**：分类只改 role/type，队列跑完规则仍是 candidate，而 `rules()` 只读 active → 分类成功的规则永不触发；retracted 行不被复活）；`FactQuery.role` 过滤 + `Soul.promotionBacklog()`；**schema v16** 幂等降级 `role='lesson' AND status='active'` → candidate（分类过的行角色已是 rule/profile，不动）。**② 插件**：`feedClassifyFromTurn` 去掉「仅纠正轮」门，全部教训入队、按 `T1-修正`/`全收` 分桶（有纠正→第一桶）；`peekClassifyBatch` 按桶排序（批上限 10，顺序就是"下一步"与"等一天"的差别；桶内保持到达序）；`backfillClassifyFromCorrection` 补纠正晚到的空窗——按纠正自己的两条链接（用户原话 / 被纠正的回复）找轮次，**绝不按时间窗**（0023 的 caveat），已在队里的改桶不重投、待修的重投；`backfillClassifyBacklog` 一次性把存量候选入队（走队列自己的写者 + marker，不新开第二条写路径，`seed-backfill-write` 那条退场债没有扩大）。**验证**：core 324/324（+3：显式 `角色=lesson` 也落候选 / 分类后规则与画像可注入 / v16 存量降级），变异三组各恰 1 红（恢复旁路 / 去激活 / 断迁移接线）；插件 141/141（+4：全收桶 / 桶序 / 纠正晚到改桶 / 存量一次性入队），变异五组各自红（恢复纠正门 / 去桶排序 / 断补查接线 / 断存量接线 / 去 marker）——**marker 组首跑假绿**：断言被队列自身去重兜住了，补成「一次通过后再来一条」才红，再次验证"变异本身也要验"；`npx tsc --noEmit` 0 错；棘轮 core +72 / 插件 +131，两条 history 记了理由。**顺手更正两处旧账**：0.0.126 装机 21:55 但宿主加载是 **22:12:27**（`apply() called (v0.0.126)` + `ledger: rebuilt … ledger-compact=2`），所以 21:35 那条 compact-limit 是 0.0.125 的行为；本会话首轮 prestep 无误报（新会话账本从 trace 重建，compactions=2 ✓）。**发布链（全实测）**：core tag `v0.0.118` → npm 可见（轮询 90s 命中）→ 插件仓 `npm install` 拉到**发布版** 0.0.118 替换本地叠层 → 插件测试对发布产物复跑 **141/141**（规则 21：验产物不验源码）→ 插件 tag `v0.0.127` → npm 可见 → web profile 排除项补 `0.0.118`/`0.0.127` + deps 改版本 → `corepack pnpm` **11.28.11** 装（+0.0.127 / +0.0.118）→ **verify-installed 6 PASS**（core 0.0.118 / plugin 0.0.127）→ `DshWebRestartOnce` 触发（23:06:06，约 90s 延迟）→ **`apply() called (v0.0.127)` @ 15:08:25.575Z（北京 23:08:25）** + `ledger: rebuilt from trace (turn-cost=110 ledger-compact=2)` → 重启后首个用户消息 **`classify backfill: 98 backlog lesson(s) queued (存量)` @ 15:10:01.252Z** → 第一批 `classify: batch=10 rules=6 profiles=3 pending=1 reasons=存量:10`（15:10:17）、第二批 `batch=10 rules=8 profiles=2`（15:11:11）——**队列、分类、激活、触发槽全链路在生产上跑通**：库内带触发规则 61→75、profile active 19→28、lesson 98→79。**装机时抓到一个真实事故（已修 + 记 runbook）**：`verify-installed.mjs` 原来是 `openSqlite(真实库)` 来验装上的产物，而 `openSqlite` 会跑迁移——23:00:59 那次验证把线上库从 v15 升到 **v16**（37 条教训当场降级、备份 `soul.db.bak-v15`），此时宿主还在跑 0.0.117：**库比进程新**，任何新连接都会 `DbNewerThanBinaryError`（运行中的连接不受影响，所以没炸）。修法 = 验证只读快照（`VACUUM INTO` 临时文件再 `openSqlite`），**验证不许改生产**；顺带解释了 22:58 的库内既成事实（98 candidate / 113 rule active）。**第三个洞（验收时抓到，core 0.0.119）**：重启后拿装上的产物跑 `rules()` 返回 **11 条**，而库里 `role='rule' AND status='active'` 有 **93 条带触发**——`rules()` 和 `profileItems()` 都在扫「最新 500 条事实」，而分类把**旧**教训改造成规则（created_at/valid_from 都是旧的），全排在窗口外：**分类产出永远不注入**，验收语言会直接落空。改为按 `role`+`status` 查本层（`FactQuery.role` 正是本批加的；上限 2000 是界不是预算，撞上限是过升格信号、`rule-stats.mjs` 看得到）。测试 326/326（+2：旧规则/旧画像在 600 条新事实之后仍可见，先红后绿），变异两条查询各自恰 1 红；棘轮 +16 记 history。这是「安装脚本跑迁移」「window 截断」同族的第二例：**读方按行数窗口取数，等于把旧数据静默丢掉**。
 
