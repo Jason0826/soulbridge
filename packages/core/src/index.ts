@@ -1016,11 +1016,23 @@ export class Soul {
    *
    * A rule without a usable trigger is skipped, not injected — an always-on rule is
    * wallpaper, and wallpaper is how a lesson gets ignored.
+   *
+   * Reads the rule layer itself, not "the newest N facts": a lesson from last week can
+   * be classified into a rule today, and scanning a newest-window silently dropped it
+   * (0018 §九 3 A classifies exactly the older backlog). The ceiling is a bound, not a
+   * budget — ADR 0033 keeps this layer small; hitting it means the classifier is
+   * over-promoting, which `rule-stats.mjs` is there to notice.
    */
   rules(): Rule[] {
     const out: Rule[] = [];
-    for (const fact of this.store.facts({ soulId: this.soulId, userId: this.userId, limit: 500 })) {
-      if (roleOf(fact) !== 'rule' || !isActive(fact)) continue;
+    const rows = this.store.facts({
+      soulId: this.soulId,
+      userId: this.userId,
+      role: 'rule',
+      status: FACT_STATUS.active,
+      limit: 2000,
+    });
+    for (const fact of rows) {
       const triggerSlot = fact.slots.find((slot) => slot.slot === '触发' && slot.value.kind === 'text');
       const trigger = parseTrigger(triggerSlot?.value.kind === 'text' ? triggerSlot.value.value : '');
       if (!trigger) continue;
@@ -1091,14 +1103,18 @@ export class Soul {
     this.store.setFactStatus(factId, 'candidate');
   }
 
-  /** The judgments about the person that are waiting to be merged. */
+  /**
+   * The judgments about the person that are waiting to be merged.
+   *
+   * Reads the profile layer itself: a line classified from an old lesson is about the
+   * person today, and the newest-window scan dropped it for the same reason it dropped
+   * old rules (0018 §九 3 A).
+   */
   profileItems(limit = 60): Fact[] {
     return this.store
-      .facts({ soulId: this.soulId, userId: this.userId, limit: 500 })
+      .facts({ soulId: this.soulId, userId: this.userId, role: 'profile', status: FACT_STATUS.active, limit: 2000 })
       .filter(
         (fact) =>
-          roleOf(fact) === 'profile' &&
-          isActive(fact) &&
           // A line that cites sources is derived: merging it again compresses a
           // compression, and the second round is thinner than the first.
           !isDerivedProfileLine(fact),
@@ -1140,11 +1156,16 @@ export class Soul {
     return written;
   }
 
-  /** The merged profile, strongest first — what is injected every turn. */
+  /**
+   * The merged profile, strongest first — what is injected every turn.
+   *
+   * Same rule as `rules()`: read the layer, not the newest facts. A profile line
+   * merged from an old lesson is still about the person, and a newest-window scan
+   * dropped it silently (0018 §九 3 A).
+   */
   profile(limit = 8): Fact[] {
     return this.store
-      .facts({ soulId: this.soulId, userId: this.userId, limit: 500 })
-      .filter((fact) => roleOf(fact) === 'profile' && isActive(fact))
+      .facts({ soulId: this.soulId, userId: this.userId, role: 'profile', status: FACT_STATUS.active, limit: 2000 })
       .sort((a, b) => b.confidence - a.confidence || b.createdAt - a.createdAt)
       .slice(0, limit);
   }

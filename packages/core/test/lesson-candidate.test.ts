@@ -71,6 +71,43 @@ test('classification: a classified rule is active and fires; a profile line join
   store.close();
 });
 
+test('rules: a rule derived from an old lesson still fires when newer facts pile up', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, ...base });
+  const rule = soul.recordFact({
+    ...base,
+    statement: '门禁用 exit code 判，不用人读文本',
+    role: 'rule',
+    validFrom: Date.parse('2026-11-01T00:00:00Z'),
+  });
+  store.addSlots(rule.id, [{ slot: '触发', value: { kind: 'text', value: '{"any":["门禁"]}' } }]);
+  // The classifier retags an older lesson while the store keeps growing: 600 newer
+  // observations push the rule out of the newest-window the reader used to scan.
+  for (let i = 0; i < 600; i += 1) {
+    soul.recordFact({ ...base, statement: `更晚的观察 ${i}`, validFrom: Date.parse('2026-11-07T00:00:00Z') });
+  }
+  assert.deepEqual(soul.rules().map((item) => item.id), [rule.id], 'a rule is a rule, however old');
+  store.close();
+});
+
+test('profile: a line derived from an old lesson reaches the profile layer and is injected', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, ...base });
+  const line = soul.recordFact({
+    ...base,
+    statement: '用户要机制不要 hope',
+    role: 'profile',
+    validFrom: Date.parse('2026-11-01T00:00:00Z'),
+  });
+  for (let i = 0; i < 600; i += 1) {
+    soul.recordFact({ ...base, statement: `更晚的观察 ${i}`, validFrom: Date.parse('2026-11-07T00:00:00Z') });
+  }
+  // Two readers, both used in production: the merge input and the per-turn injection.
+  assert.deepEqual(soul.profileItems().map((item) => item.id), [line.id]);
+  assert.deepEqual(soul.profile().map((item) => item.id), [line.id]);
+  store.close();
+});
+
 test('upgrade to v16: lessons written before the fix stop being injected as anchors', () => {
   const file = join(tmpdir(), `soulbridge-v16-${process.pid}-${Date.now()}.db`);
   openSqlite(file).close();

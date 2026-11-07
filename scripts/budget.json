@@ -211,14 +211,19 @@
       "date": "2026-11-07",
       "delta": 131,
       "reason": "第二刀 A 的插件侧（插件 0.0.127）：分类队列开门——feedClassifyFromTurn 去掉“仅纠正轮”门，全部教训入队并按 T1-修正/全收 分桶（拍板 b）；peekClassifyBatch 按桶排序（强证据不排在百条之后，批上限 10 时顺序就是“下一步”与“等一天”的差别）；backfillClassifyFromCorrection 补查纠正晚于抽取的空窗（按纠正自己的两条链接找轮次，绝不按时间窗；已在队的改桶、待修的重投）；backfillClassifyBacklog 一次性把存量候选入队（走队列自己的写者 + marker，不新开第二条写路径，退场登记里那条 seed-backfill-write 不扩大）。实施按 0026/0027 先例记一次；变异：纠正门、分桶排序、补查接线、存量接线、marker 五组各自恰红（其中 marker 组首跑假绿——用例被队列去重兜住了，补成“后再来一条”才红）。"
+    },
+    {
+      "date": "2026-11-07",
+      "delta": 21,
+      "reason": "第二刀 A 的验收尾巴（core 0.0.119）：rules()/profileItems()/profile() 三个读方原来都扫「最新 500 条事实」，分类把旧教训改造成规则/画像后，这些行按 created_at/valid_from 排在窗口外 → 分类产出永远不注入（生产实测 rules() 只看到 11 条，而库里有 93 条带触发规则；A9 review 复核：131 条带触发规则只有 2 条在窗内）。改为按 role+status 查本层，上限 2000 是界不是预算（ADR 0033 要求这层小；撞上限是过升格的信号，rule-stats 可查）。bug 修复按先例允许涨；变异：三条查询各自退回窗口写法各恰 1 红。"
     }
   ],
-  "coreLines": 9093,
+  "coreLines": 9114,
   "pluginLines": 3563,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 1726,
+    "index.ts": 1747,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 194,
