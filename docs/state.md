@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-07 22:05**（core 0.0.117 / plugin 0.0.126）
+最后核对：**2026-11-07 23:20**（core 0.0.118 / plugin 0.0.127）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -16,12 +16,22 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   用户决定**换新会话**（两压一会话：18:05 第 2 次压缩后 221k 过了线，闸门
-               21:35 应声开口）——本页已刷到可交接状态。下一项 = §九 3 第二刀
-               教训→行为（C 儒略日 L1 → A 角色旁路 → B 纠正≥2 升级），两个拍板点
-               仍待用户定；闸门真值链路 0.0.124→0.0.126 三步全部上线
-               → quality 三条 FAIL / 0027 收口
-已验证         0018②：插件 128/128（+4：压缩后重武装、预算流、partition 契约、成本文案）；
+现在在做什么   第二刀 A 已上线（core 0.0.118 / 插件 0.0.127）：教训落库即候选、分类确认
+               后置 active、全部教训入队分桶（T1-修正 / 全收 / 存量）+ 纠正晚到补查；
+               存量按拍板全收（37 active 由 v16 降级 + 61 候选一起入队）。下一步 =
+               观察分类产出（98 条 → 规则/画像/待修）与验收语言「上次纠正过的事，
+               下次它自己做到了」；然后 C（date() 儒略日升 L1）→ B（拍板 a：rules 层
+               scope='always' 每轮注入）。两个旧拍板点已定：① a ② b
+已验证         第二刀 A：core 324/324（+3：`角色=lesson` 也落候选 / 分类后规则与画像可注入 /
+               v16 存量降级），三组变异各恰 1 红；插件 141/141（+4：全收桶 / 桶序 /
+               纠正晚到改桶 / 存量一次性入队），五组变异各红——**marker 组首跑假绿**
+               （队列去重兜住了断言），补成「一次通过后再来一条」才红；
+               health-check 0 FAIL / 19 WARN / 25 PASS（19 是提交前的 [同步] 提醒；
+               棘轮 core 9093 / 插件 3563，两条 history 已记理由）
+               ⚠ 时间线更正：0.0.126 装机在 21:55，但**宿主实际加载（apply）是 22:12:27**
+               ——21:35 的 compact-limit 是 0.0.125 的行为，0.0.126 的宿主读数 22:12 起才在线；
+               新会话首轮 prestep 无误报（账本重建 compactions=2）
+               0018②：插件 128/128（+4：压缩后重武装、预算流、partition 契约、成本文案）；
                变异三组各恰 2 红（去重置闸门 / 去让位闸门 / 禁 compact-limit）；
                棘轮 +114 记 history（38 条）；EOQ 推导（叙事定价 ¥0.2 → 196k≈200k、
                平台 100–210k、硬边界 80k/300k）入 cost-visibility.md；
@@ -84,22 +94,20 @@
                写入侧一个语法一个日单位：规则抽取改走 findTimeExpression，日历日 = UTC 零点
                day/range 非日历日 2 → 0（quality.mjs 观测 PASS）；时间检索实跑：上周窗口 2 条 day/range 进窗
                取代引用 50 成 / 1 败 → 2% PASS
-下一步         1) **§九 3 第二刀：教训 → 行为**（诊断见 17:55 条目，未动代码），三步：
-               C = L1 体检 `date(<numeric>)` 儒略日陷阱（教训 fc_mw2tj5b4_7，能代码拦的升 L1）；
-               A = index.ts:808 角色旁路（显式「角色=lesson」落 active 绕过候选队列
-               → 永远不进分类）+ 纠正到达补查 + 存量拍板（37 active / 61 candidate、
-               22 条纠正轮教训休眠、pending-classify 11-03 起空）；
-               B = 同一教训被纠正 2 次 → 常驻升级（零 schema：rule_fired 在纠正前
-               N 分钟的时间配对）。**两个拍板点待用户定**：
-               ①升级载体 a=rules 层 scope='always'（建议）/ b=anchor；
-               ②候选门宽度 a=仅纠正轮（0023 T1 现状）/ b=全部教训入队分桶（建议——
-               「date() 儒略日」这类从不被纠正的教训 T1 永远进不来）。
+下一步         1) **观察第二刀 A 的产出**（代码已在 0.0.118 / 0.0.127）：队列 98 条（存量）
+               → 规则（带触发、active）/ 画像（进合并）/ 待修（留 candidate）；
                验收语言（用户视角）：「上次纠正过的事，下次它自己做到了，而且我能看见」；
+               观察点 = `classify-backlog queued=`、`classify: batch=… rules=… profiles=…`、
+               `promote: T1-修正 →`、`classify-backfill`；纠正后规则该触发而没触发 = 失败样本。
+               剩两步：C = L1 体检 `date(<numeric>)` 儒略日陷阱（教训 fc_mw2tj5b4_7，
+               能代码拦的升 L1）；B = 同一教训被纠正 2 次 → 常驻升级（零 schema：
+               rule_fired 在纠正前 N 分钟的时间配对），拍板已定 **a=rules 层 scope='always'
+               （每轮注入）**；候选门已定 **b=全部教训入队分桶**（A 步已落地）
                通用性验收线在 0018 §0（下个习惯"加一行"，实例数 1 待投票）
                2) ✅ **compact-limit 已验收**（13:35:26Z turn 33 trigger=220840，详见 21:55 条目）；
                闸门真值三步全上线：0.0.124 mainMax → 0.0.125 账本重启重建 →
-               0.0.126 宿主 tokenMeter 优先。换新会话后第一件事：确认新会话第一轮
-               prestep 没有误报（账本从 trace 重建，compactions 应为 2）
+               0.0.126 宿主 tokenMeter 优先（实际加载 22:12:27，见时间线更正）。
+               新会话第一轮 prestep 已确认无误报（账本从 trace 重建，compactions=2）
                3) quality 三条 FAIL 待查：事实密度 2.21/轮（段级一次多条+回填所致，
                ②后会话内抽取=0 应下降——待复测）、结论支持率 65.1%（归纳证据链已知债）、
                情绪非零率 2.3%（affect 层待查）
@@ -134,7 +142,7 @@
                agent 的 job 对象跑 restart-web.ps1）——**直接在会话里跑脚本会被宿主连坐杀掉**
                （22:33 实测：Job runner 报错、重启根本没发生，宿主毫发无损）
                运行中的 profile = ~/.dsh/profiles/web（→ C:\DSH\home\profiles\web）
-               发版 = 推 tag → GitHub Actions → npm（当前 core 0.0.117 / plugin 0.0.126）
+               发版 = 推 tag → GitHub Actions → npm（当前 core 0.0.118 / plugin 0.0.127）
                注意：npm 读侧复制延迟实测 3–15 分钟，`npm view` 马上查会 404，别判成发布失败
                装机 = profile 排除项补新版本号 → corepack pnpm 11 装 → verify-installed
                显式传 web 路径 → DshWebRestartOnce（重启可能因机器休眠延迟生效，看 apply 时间戳）
@@ -147,23 +155,24 @@
 > 新会话只读状态会像换班工人；这 6 行是**叙事**，不是状态——换会话时整体替换，不累积。
 
 ```
-上一段   2026-11-07 18:55–22:00（session-7a109c5b 收尾；用户拍板换新会话），core 0.0.117 / plugin 0.0.126
-做了     闸门真值链路三步全部上线：0.0.124 mainMax → 0.0.125 重启时从 trace 重建账本
-         → 0.0.126 宿主 tokenMeter 优先（含「占 1M 窗口的 Y%」文案）；
-         0018② 三条观察全部验收（最后一条 compact-limit 于 21:35 应声触发）；
-         查清 DSH 顶部「轮/步/tok」是累计账、真上下文看 contextPressure、
-         前端本有输入框下的 ContextMeter——不是 bug 是信息架构，用户决定不碰安装包
-验证     0.0.126（f2bda1f）137/137、变异两组各 1 红；装机 6 PASS（显式 web 路径）；
-         turn32 mainMax=220840 vs 宿主 tokenUsage.last=228170（差 3%，口径差）
-没做完   第二刀 C→A→B（诊断见 17:55 条目，两个拍板点待用户定）——新会话的正题；
-         quality 三条 FAIL；0027 收口余债；0028 行3 等自然样本；DSH 显示问题留给上游
-在热什么 阈值来历单独成节（只有价格与 27k 是硬实测，200k 半推导、两压=2 与
-         纠正窗等是拍的）；重启杀轮（turn 未入 turns）；reminded 不重放（可能重复一次建议）
+上一段   2026-11-07 22:04–23:20（本会话第一轮；从 A 起手），core 0.0.118 / plugin 0.0.127
+做了     第二刀 A：教训落库即候选（写一条 writeStatus，干掉「角色=lesson 落 active」旁路）+
+          分类确认后置 active（此前队列跑完规则仍是候选，永不触发）+ 全部教训入队分桶
+          （拍板 b：T1-修正 / 全收 / 存量）+ 纠正晚到补查 + schema v16 降级存量 37 条；
+          存量按拍板全收：37 + 61 一起入队（98 条，10 次分类调用）
+验证     core 324/324、三组变异各 1 红；插件 141/141、五组变异各红（marker 组首跑假绿已修）；
+          棘轮 core 9093 / 插件 3563（两条 history）；旧库核对：22 条纠正轮教训 = 19 候选 + 3 active
+没做完   B（拍板 a：rules 层 scope='always'）与 C（date() 儒略日升 L1）；分类产出观测（98 条
+          → 规则/画像/待修）与「上次纠正过的事下次自己做到」的验收样本；quality 四条 FAIL
+在热什么 0.0.126 实际加载是 22:12:27（装机 21:55），21:35 的 compact-limit 是 0.0.125 行为；
+          全收会让分类队列变长（批 10），存量消化期间易被误读成"卡住"；待修教训不再注入
 ```
+
+**23:20 第二刀 A 完成（0018 §九 3：教训 → 行为，core 0.0.118 / 插件 0.0.127）**：由来 = 上一会话 17:55 诊断 + 用户拍板（①升级载体 a=rules 层 `scope='always'` 每轮注入；②候选门 b=全部教训入队分桶）。**诊断复核（对着库，不靠记忆）**：`role=lesson` 分三堆——active 37（当年 `角色=lesson` 旁路，被当 `<memories>` 资料注入）、candidate 61（沉睡）、其中**来自被纠正轮的 22 条 = 19 候选 + 3 active**，与 17:55 条目逐字对上；`promote` trace 46 条里只有 6 条 `queued>0`（11-02/11-03），此后全是 0——不是没纠正，是 `promotionCandidates` 只认 candidate，旁路行根本进不了门。**① core**：写入新增一条 `writeStatus(role)`——`role=lesson` 一律 `candidate`（`角色=lesson` 与 `原则候选=是` 是同一条决定的两说法，以前只有后者进队列）；`markRule`/`markProfile` 经 `activatePlaced()` 置 `active`（**这是本批发现的第二个洞**：分类只改 role/type，队列跑完规则仍是 candidate，而 `rules()` 只读 active → 分类成功的规则永不触发；retracted 行不被复活）；`FactQuery.role` 过滤 + `Soul.promotionBacklog()`；**schema v16** 幂等降级 `role='lesson' AND status='active'` → candidate（分类过的行角色已是 rule/profile，不动）。**② 插件**：`feedClassifyFromTurn` 去掉「仅纠正轮」门，全部教训入队、按 `T1-修正`/`全收` 分桶（有纠正→第一桶）；`peekClassifyBatch` 按桶排序（批上限 10，顺序就是"下一步"与"等一天"的差别；桶内保持到达序）；`backfillClassifyFromCorrection` 补纠正晚到的空窗——按纠正自己的两条链接（用户原话 / 被纠正的回复）找轮次，**绝不按时间窗**（0023 的 caveat），已在队里的改桶不重投、待修的重投；`backfillClassifyBacklog` 一次性把存量候选入队（走队列自己的写者 + marker，不新开第二条写路径，`seed-backfill-write` 那条退场债没有扩大）。**验证**：core 324/324（+3：显式 `角色=lesson` 也落候选 / 分类后规则与画像可注入 / v16 存量降级），变异三组各恰 1 红（恢复旁路 / 去激活 / 断迁移接线）；插件 141/141（+4：全收桶 / 桶序 / 纠正晚到改桶 / 存量一次性入队），变异五组各自红（恢复纠正门 / 去桶排序 / 断补查接线 / 断存量接线 / 去 marker）——**marker 组首跑假绿**：断言被队列自身去重兜住了，补成「一次通过后再来一条」才红，再次验证"变异本身也要验"；`npx tsc --noEmit` 0 错；棘轮 core +72 / 插件 +131，两条 history 记了理由。**顺手更正两处旧账**：0.0.126 装机 21:55 但宿主加载是 **22:12:27**（`apply() called (v0.0.126)` + `ledger: rebuilt … ledger-compact=2`），所以 21:35 那条 compact-limit 是 0.0.125 的行为；本会话首轮 prestep 无误报（新会话账本从 trace 重建，compactions=2 ✓）。
 
 **18:55 闸门真实上下文修复 + 账本重建（插件 0.0.124 / 0.0.125）**：由来 = 用户点名「会话已 27 轮 434 步 81M tok，你没提醒我压缩还是换新会话」。**诊断两层**：① `due()` 用弧平均 `prompt/requests`（自上次 compact 起的累计均值），压缩后爬升期系统性低估——t24–t27 弧读 119k/140k/141k/141k，真值（宿主主请求前缀）193k→221k→244k→245k，**200k 线连哑五轮**（turn-14 13× 虚报的镜像：f72b010 修了方向没修度量）；② 次级稀释：弧里混插件自己的小模型调用（t27 两请求一主一探 → 平均 125k）。**修法（0.0.124，ff0c51c）**：turn-cost 新增 `mainMax` = 本轮宿主 assistant/message 单请求最大前缀（input+cacheRead+cacheWrite；observe 只见宿主事件，pluginUsage 不进）；note 取最近轮 mainMax（无 host 消息的轮不清零）、compact() 随弧归零、due() 读 mainMax（缺失回退弧平均——旧记录与测试）；算钱口径不变（四类 token 全量 + recentRequests 携带率）。**部署风险与修法（0.0.125，ca94368）**：18:05 用户压了第 2 次（`ledger-compact compactions=2`，**两压一会话预算花光**）→ 账本是内存态，重启装新版会清零 → 下次过线会建议压缩已花光的预算（摘要套摘要）→ `apply()` 启动时从 trace.jsonl 全量重放（2.95MB：turn-cost→note、ledger-compact→compact 按事件绝对数对账），预算/弧/mainMax/轮数全部存活；compact() 对未见过会话也计数——**A9 §四 1 发现关闭**；reminded 不重放（proactive 事件只带 trigger 不带 level）→ 重启可能把仍有效的建议再说一次，预算数精确。**验证**：0.0.124 插件 131/131（+3：弧 141k/真值 221k 该响且 trigger=221000、compact 清真值、插件 300k 调用不进 mainMax），变异三组各恰 1 红——**插件剔除组首跑没抓到**（用例里插件调用比主请求小、断言无区分度），补强为「插件调用 300k > 主请求 200k（压缩刚完的真实形态）」后才红：**测试按行为写，不按现实比例写**；0.0.125 插件 134/134（+3：预算重放含坏行跳过、ghost compact 计数、丢行按绝对数对账），变异三组恰 2/1/2 红。npm 0.0.124 已发布、0.0.125 发布中；**待装 web profile + verify-installed + 重启**。重启后行为预期：重放使本会话 arc 归零（18:05 压缩是最后账本事件）→ 静默至本轮 turn-cost 落地（首个带 mainMax 的记录）→ 下条弧过 200k 时 compact-limit 行（预算=2）建议换新会话——**0018② 最后一条观察由此武装**。
 
-**21:55 闸门真值链路收口（0.0.126）+ 0018② 三条全验收 + DSH 显示之谜查清**：**① 验收**——`13:35:26.875Z turn 33 prestep proactive: remind id=compact-limit trigger=220840`（log+trace 双证据），正是「压 2 次后再过 200k 该它说话」那条观察；`mainMax`=**220,840** 与宿主 `tokenUsage.last`（turn33 step1：cacheRead 223,104 + 未命中 5,066 = **228,170**，与 `contextPressure.pressureTokens` 逐字一致）差 3%——口径差：我们=上一轮最大请求，宿主=下一次请求预估。两独立来源同量级 = 度量对。**0018② 三条（成本文案 08:30 / ledger-compact 10:10 / compact-limit 21:35）全部命中**，按规则 20 记「已验收 1 次」不吹统计显著。**② 显示之谜**——拆安装包（app.asar，18,188 个文件）：前端确实有 `Composer context-occupancy meter`（输入框下方圆环 + 百分比，点开看 `contextBreakdown` 构成：系统 1.5k / 工具 7.7k / 对话 156k）；顶部三个数 = `sessionStats.turns/steps` + `tokenUsage.totals`（累计，压缩不重置）；真上下文 = `contextPressure`（228,170 / 1,000,000）。**不是 bug，是信息架构**（累计数没标"累计"）。用户拍板：**不碰安装包**（app.asar 是 nightly 自动更新 + 签名的包，本地补丁会被覆盖），DSH 若修走上游。**③ 0.0.126（f2bda1f）**——账本新增 `noteContext()`，闸门按权威度三级取数：宿主 `ctx.get('tokenMeter').contextPressure(session).pressureTokens`（provider 自报，含工具与系统提示词）→ `mainMax`（我们重建）→ 弧平均（极旧记录）；`compact()` 清读数但**保留窗口容量**（模型属性不是测量值）；文案加「（占 XM 窗口的 Y%）」——百分比才是人能当场核对的比例。137 测试（+3：宿主读数优先于我们的估算 / compact 清读数 / 窗口占比只在有容量时渲染），变异两组各恰 1 红；npm 已发布 → 装机 6 PASS → 重启 21:55:55 拉起。
+**21:55 闸门真值链路收口（0.0.126）+ 0018② 三条全验收 + DSH 显示之谜查清**：**① 验收**——`13:35:26.875Z turn 33 prestep proactive: remind id=compact-limit trigger=220840`（log+trace 双证据），正是「压 2 次后再过 200k 该它说话」那条观察；`mainMax`=**220,840** 与宿主 `tokenUsage.last`（turn33 step1：cacheRead 223,104 + 未命中 5,066 = **228,170**，与 `contextPressure.pressureTokens` 逐字一致）差 3%——口径差：我们=上一轮最大请求，宿主=下一次请求预估。两独立来源同量级 = 度量对。**0018② 三条（成本文案 08:30 / ledger-compact 10:10 / compact-limit 21:35）全部命中**，按规则 20 记「已验收 1 次」不吹统计显著。**② 显示之谜**——拆安装包（app.asar，18,188 个文件）：前端确实有 `Composer context-occupancy meter`（输入框下方圆环 + 百分比，点开看 `contextBreakdown` 构成：系统 1.5k / 工具 7.7k / 对话 156k）；顶部三个数 = `sessionStats.turns/steps` + `tokenUsage.totals`（累计，压缩不重置）；真上下文 = `contextPressure`（228,170 / 1,000,000）。**不是 bug，是信息架构**（累计数没标"累计"）。用户拍板：**不碰安装包**（app.asar 是 nightly 自动更新 + 签名的包，本地补丁会被覆盖），DSH 若修走上游。**③ 0.0.126（f2bda1f）**——账本新增 `noteContext()`，闸门按权威度三级取数：宿主 `ctx.get('tokenMeter').contextPressure(session).pressureTokens`（provider 自报，含工具与系统提示词）→ `mainMax`（我们重建）→ 弧平均（极旧记录）；`compact()` 清读数但**保留窗口容量**（模型属性不是测量值）；文案加「（占 XM 窗口的 Y%）」——百分比才是人能当场核对的比例。137 测试（+3：宿主读数优先于我们的估算 / compact 清读数 / 窗口占比只在有容量时渲染），变异两组各恰 1 红；npm 已发布 → 装机 6 PASS → **重启实际生效时间 22:12:27**（`apply() called (v0.0.126)`；21:55 只是装机完成，见 23:20 条目的时间线更正）。
 
 **17:55 第二刀诊断落盘（0018 §九 3 教训→行为，未动代码）**：产品反思的验收语言 = 用户视角「**上次纠正过的事，下次它自己做到了，而且我能看见**」（不是队列文件条数）。**三步诊断**：C = L1 体检 `date(<numeric>)` 儒略日陷阱（教训 fc_mw2tj5b4_7——能代码拦的升 L1，0018 §七 第二刀步骤 2）；A = **存储角色旁路** `packages/core/src/index.ts:808`——prompt 显式「角色=lesson」时 `role` 落 active 绕过候选队列（只有 `principle && !role` 才进 candidate）→ 永远不进分类；修法 = lesson 一律 candidate + 纠正到达时补查队列空窗；存量 37 active / 61 candidate、**22 条纠正轮教训休眠**、`pending-classify.json` 11-03 起空（唯一生产者 feedClassifyFromTurn 只吃段抽取成功轮）；B = 升级（同一教训被纠正 2 次 → 常驻）零 schema——`rule_fired` 在纠正前 N 分钟的时间配对信号。**两个拍板点待用户定**：① 升级载体 a=rules 层 `scope='always'`（建议）/ b=anchor；② 候选门宽度 a=仅纠正轮（0023 T1 现状）/ b=全部教训入队分桶（建议——「date() 儒略日」这类从不被纠正的教训，T1 永远进不来）。
 

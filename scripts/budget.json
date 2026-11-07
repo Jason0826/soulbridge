@@ -201,14 +201,24 @@
       "date": "2026-11-07",
       "delta": 75,
       "reason": "0018 闸门改读宿主真值（插件 0.0.126）——账本新增 noteContext()：闸门按权威度三级取数（宿主 ctx.get(tokenMeter).contextPressure(session) 的 provider 自报 prompt 数 → mainMax → 弧平均），compact() 清读数保窗口容量；windowNote() 让文案带上「占 XM 窗口的 Y%」；apply() 里惰性解析服务、首次读到宿主读数时打一行日志。+3 测试（宿主读数优先、compact 清读数、窗口占比只在有容量时渲染）在 test/ 不计。变异两组各恰 1 红。"
+    },
+    {
+      "date": "2026-11-07",
+      "delta": 72,
+      "reason": "第二刀 A 的 core 侧（core 0.0.118）：教训落库即候选——写一条 writeStatus()，`角色=lesson` 与 `原则候选=是` 不再一个进候选一个落 active（index.ts +40）；分类确认后置 active（activatePlaced，否则 rules() 读到 candidate 永远不注入）；schema v16 把存量 37 条旁路教训降为候选（sqlite.ts +14，幂等，分类后角色已变规则/画像的不动）；FactQuery.role 过滤 + Soul.promotionBacklog()（存量清点，types.ts +2）。功能实施按 0026/0027 先例记一次；变异：写入口径、激活两处、迁移接线各恰红。"
+    },
+    {
+      "date": "2026-11-07",
+      "delta": 131,
+      "reason": "第二刀 A 的插件侧（插件 0.0.127）：分类队列开门——feedClassifyFromTurn 去掉“仅纠正轮”门，全部教训入队并按 T1-修正/全收 分桶（拍板 b）；peekClassifyBatch 按桶排序（强证据不排在百条之后，批上限 10 时顺序就是“下一步”与“等一天”的差别）；backfillClassifyFromCorrection 补查纠正晚于抽取的空窗（按纠正自己的两条链接找轮次，绝不按时间窗；已在队的改桶、待修的重投）；backfillClassifyBacklog 一次性把存量候选入队（走队列自己的写者 + marker，不新开第二条写路径，退场登记里那条 seed-backfill-write 不扩大）。实施按 0026/0027 先例记一次；变异：纠正门、分桶排序、补查接线、存量接线、marker 五组各自恰红（其中 marker 组首跑假绿——用例被队列去重兜住了，补成“后再来一条”才红）。"
     }
   ],
-  "coreLines": 9021,
-  "pluginLines": 3432,
+  "coreLines": 9093,
+  "pluginLines": 3563,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 1670,
+    "index.ts": 1726,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 194,
@@ -230,7 +240,7 @@
     "retrieval.ts": 121,
     "roles.ts": 28,
     "scoring.ts": 170,
-    "sqlite.ts": 1944,
+    "sqlite.ts": 1958,
     "config.ts": 96,
     "merge.ts": 41,
     "steering.ts": 103,
@@ -238,6 +248,6 @@
     "store.ts": 181,
     "measure.ts": 45,
     "time.ts": 213,
-    "types.ts": 819
+    "types.ts": 821
   }
 }

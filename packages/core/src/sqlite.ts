@@ -44,7 +44,7 @@ import type {
 import type { SoulStore } from './store.ts';
 import { bm25, buildCorpusStats, tokenize } from './scoring.ts';
 
-export const SCHEMA_VERSION = 15;
+export const SCHEMA_VERSION = 16;
 /** How many recent pairs are considered before scoring. Bounded so recall stays O(candidates). */
 const RECALL_CANDIDATES = 500;
 export const AFFECT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -380,6 +380,15 @@ export function upgradeToV15(db: DatabaseSync): void {
   db.exec('CREATE INDEX IF NOT EXISTS idx_facts_scope ON facts(soul_id, user_id, valid_from DESC)');
 }
 
+export function upgradeToV16(db: DatabaseSync): void {
+  // 0018 §九 3 A: a lesson the model roled itself (`角色=lesson`) used to be stored
+  // active, which injected it as background text and skipped the classification queue —
+  // the row was never placed, so it could never become a rule. A lesson is a candidate
+  // until the classifier places it, and rows the classifier already placed carry role
+  // rule/profile, so they are untouched. Idempotent: a second run matches nothing.
+  db.exec("UPDATE facts SET status = 'candidate' WHERE role = 'lesson' AND status = 'active'");
+}
+
 export function upgradeToV14(db: DatabaseSync): void {
   // A database created by the current SCHEMA already has the 0027 shape: it has no `at`
   // and no valid_until, so this step has nothing to say. Checking the column keeps a
@@ -605,6 +614,7 @@ export function openSqlite(file: string): SoulStore {
       if (version < 8) upgradeToV8(db);
       if (version < 14) upgradeToV14(db);
       if (version < 15) upgradeToV15(db);
+      if (version < 16) upgradeToV16(db);
       // v6 adds tables only; SCHEMA creates them on every open, nothing to copy.
       setVersion(db, SCHEMA_VERSION);
       db.exec('COMMIT');
@@ -1217,6 +1227,10 @@ export function openSqlite(file: string): SoulStore {
       if (query.status) {
         where.push('f.status = ?');
         args.push(query.status);
+      }
+      if (query.role) {
+        where.push('f.role = ?');
+        args.push(query.role);
       }
       if (query.holder) {
         where.push('f.holder = ?');

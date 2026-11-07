@@ -107,6 +107,8 @@ import type {
   TurnStep,
   PortableBundle,
   Visibility,
+  FactRole,
+  FactStatus,
 } from './types.ts';
 import { buildPortableBundle } from './portable.ts';
 import type { SoulStore } from './store.ts';
@@ -140,6 +142,18 @@ const MEMORY_TYPE_TO_FACT: Record<MemoryType, string> = {
 
 /** Longest statement accepted from a host; matches the extractor's ceiling. */
 const MAX_FACT_CHARS = 200;
+
+/**
+ * The lifecycle state a fact is *written* with, from its role (config/status.ts).
+ *
+ * A lesson is a candidate: held, injected nowhere, waiting for the classifier that
+ * turns it into a rule or a profile line (0018 §九 3). Every other role starts in use
+ * — `undefined` lets the column default stay the single declaration of "active".
+ * This is the code's decision, never the model's: the model supplies the role.
+ */
+function writeStatus(role: FactRole | undefined): FactStatus | undefined {
+  return role === 'lesson' ? FACT_STATUS.candidate : undefined;
+}
 
 /**
  * Read a fact as the shape `recall()` has always returned.
@@ -332,6 +346,21 @@ export class Soul {
     return this.store
       .factsByTurns([turnId], { includeCandidates: true })
       .filter((fact) => fact.role === 'lesson' && fact.status === 'candidate');
+  }
+
+  /**
+   * Every lesson still waiting to be classified, oldest first.
+   *
+   * The queue's live producer feeds one drained turn at a time, so lessons extracted
+   * before the producer existed never reach the classifier. This is the inventory one
+   * pass puts back in the queue (0018 §九 3 A, 存量), not a ranking: all of them are
+   * owed the same second look.
+   */
+  promotionBacklog(limit = 400): Fact[] {
+    return this.store
+      .facts({ soulId: this.soulId, userId: this.userId, role: 'lesson', status: 'candidate', limit: 1000 })
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .slice(0, Math.max(0, limit));
   }
 
   /**
@@ -805,7 +834,11 @@ export class Soul {
       // place in a role. It is held and shown to the classifier, injected nowhere.
       // This replaced the old `原则候选` slot, which was the same decision stored as text.
       const role = factDraft.principle && !factDraft.role ? 'lesson' : factDraft.role;
-      const status = factDraft.principle && !factDraft.role ? 'candidate' : undefined;
+      // ...and the same holds when the model named the role itself: `角色=lesson` and
+      // `原则候选=是` are two ways of saying it, but only the flag used to reach the
+      // queue. A roled lesson went straight to `active`, where it was injected as
+      // background text and never classified into a rule (0018 §九 3 A).
+      const status = writeStatus(role);
       // Which turn this fact came from: the model's 轮次=N when it named one, else the
       // turn the caller passed. A thread-level extraction needs the per-fact answer.
       const sourceTurnId = factDraft.sourceTurnNo
@@ -917,7 +950,14 @@ export class Soul {
 
   /** Write one connection between things. */
   recordFact(spec: Omit<FactSpec, 'soulId' | 'userId'>): Fact {
-    return this.store.putFact({ ...spec, soulId: this.soulId, userId: this.userId });
+    // The same write rule as extraction: a lesson is a candidate until classified.
+    // An explicit status still wins — this is a port, not a policy of its own.
+    return this.store.putFact({
+      ...spec,
+      status: spec.status ?? writeStatus(spec.role),
+      soulId: this.soulId,
+      userId: this.userId,
+    });
   }
 
   /**
@@ -1008,6 +1048,21 @@ export class Soul {
     ];
     if (classification.action) slots.push({ slot: '动作', value: { kind: 'text', value: classification.action } });
     this.store.addSlots(factId, slots);
+    this.activatePlaced(factId);
+  }
+
+  /**
+   * Classification is the decision the candidate was waiting for: the row is in use now.
+   *
+   * Without this the queue drained and every classified rule stayed a candidate —
+   * `rules()` reads active rows only, so the rule would never fire (0018 §九 3 A).
+   * A row retired while it sat in the queue is not resurrected: being classified is
+   * not evidence that it became true again.
+   */
+  private activatePlaced(factId: string): void {
+    const fact = this.store.fact(factId);
+    if (!fact || isRetracted(fact)) return;
+    this.store.setFactStatus(factId, FACT_STATUS.active);
   }
 
   /** Apply a profile classification: it is about the person, not a triggered rule. */
@@ -1022,6 +1077,7 @@ export class Soul {
     if (dimension && (PROFILE_DIMENSIONS as readonly string[]).includes(dimension)) {
       this.store.addSlots(factId, [{ slot: '维度', value: { kind: 'text', value: dimension } }]);
     }
+    this.activatePlaced(factId);
   }
 
   /**

@@ -4,6 +4,17 @@
 - 日期：2026-11-02
 - 关联：[ADR 0032](0032-two-layers-of-memory.md)（世界/人物两层）、[0018](../briefs/0018-behaviour-influence.md)（行为影响）、[ADR 0031](0031-model-dependency-acceptance.md)
 
+> **2026-11-07 修订注（0018 §九 3 第二刀 A）**：分类不止决定「去哪一层」，也决定「能不能用」。
+> 写入侧：`role=lesson` 一律 `candidate`（`角色=lesson` 与 `原则候选=是` 是同一条决定的两说法，
+> 以前只有后者进候选队列，前者落 `active` 被当资料注入、永不被分类）；分类侧：`markRule`/`markProfile`
+> 把候选置 `active`（此前队列跑完、规则仍是候选，而 `rules()` 只读 active → 规则永不触发）。
+> 存量行由 schema v16 按新口径追一遍：`role='lesson' AND status='active'` → `candidate`，幂等；
+> 已被分类的行角色已是 rule/profile，不受影响。
+>
+> 迁移第 4 条（「分类不出来的，留在记忆层当普通事实（不注入）」）由此第一次真正成立：`待修` 就是
+> `candidate`，`<memories>` 不再从教训池自动捞背景文本——代价是知识型教训在分类前不出现在注入里，
+> 它是设计选择，不是遗漏。
+
 ## 背景
 
 锚点（anchors）现在的做法是：把 `结论 / 教训 / 原则 / 性格` 放在一个池子里，按置信度取前 3 条注入。

@@ -518,6 +518,8 @@ export interface FactQuery {
    */
   precisions?: readonly AtPrecision[];
   status?: FactStatus;
+  /** Only facts whose role is this (config/domains.ts FACT_ROLES). */
+  role?: FactRole;
   /** Only facts whose holder is this (world / self / entity id). */
   holder?: string;
   /** Sort by event time. Default desc (newest first); asc gives the earliest. */
