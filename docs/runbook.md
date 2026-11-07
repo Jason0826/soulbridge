@@ -213,6 +213,10 @@ profile 位置：`D:\DSH\home\profiles\desktop\node_modules\`（`~/.dsh/profiles
 - 故意说一句纠正话术，日志出现 `correction recorded: <id> layer=structural|rule`
 - `soul.db` 的 `corrections` 表出现行（之前一直是 0）
 
+**坑**：`verify-installed` 以前直接打开真实库（`~/.soulbridge/soul.db`）来加载产物，而 `openSqlite` 会跑迁移——
+2026-11-07 就因此在宿主还跑旧二进制时把线上库升到了 v16（库比进程新，新连接会 `DbNewerThanBinaryError`）。
+现在它只开 **`VACUUM INTO` 快照**；但**装完仍要立刻重启**：profile 里已经是新版本、进程里还是旧版本的那段时间没有保护。
+
 **坑**：在 profile 目录里跑 `npm install`，会按 `package.json` 的 `^0.0.x` 把 core 覆盖回 npm 上的旧版。
 overlay 装过之后，任何 `npm install` 都要重新走一遍第 3 步。
 

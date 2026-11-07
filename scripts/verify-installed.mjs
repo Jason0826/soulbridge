@@ -8,10 +8,11 @@
  *
  * Usage: node --experimental-strip-types scripts/verify-installed.mjs [profileDir]
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
+import { DatabaseSync } from 'node:sqlite';
 
 const profile = process.argv[2] ?? join(homedir(), '.dsh', 'profiles', 'desktop');
 const coreDir = join(profile, 'node_modules', 'soulbridge');
@@ -48,8 +49,24 @@ check('core dist entry exists', () => {
 const { openSqlite } = await import(pathToFileURL(sqliteEntry).href);
 const { Soul } = await import(pathToFileURL(coreEntry).href);
 
-const dbFile = join(homedir(), '.soulbridge', 'soul.db');
-const store = openSqlite(dbFile);
+// The live database, never opened: `openSqlite` runs migrations, so verifying the
+// installed copy used to migrate production as a side effect. On 2026-11-07 that
+// demoted the legacy lessons (v16) while the host was still running the old binary —
+// the DB became newer than the process that owns it. A snapshot is enough for every
+// check below, and a snapshot cannot be upgraded.
+const liveDb = join(homedir(), '.soulbridge', 'soul.db');
+const dbFile = join(tmpdir(), `soulbridge-verify-${process.pid}-${Date.now()}.db`);
+let store;
+try {
+  const source = new DatabaseSync(liveDb, { readOnly: true });
+  // VACUUM INTO takes a consistent snapshot including whatever is in the WAL.
+  source.exec(`VACUUM INTO '${dbFile.replaceAll("'", "''")}'`);
+  source.close();
+  store = openSqlite(dbFile);
+} catch (error) {
+  console.log(`  FAIL  live database snapshot — ${error instanceof Error ? error.message : String(error)}`);
+  process.exit(1);
+}
 const soul = new Soul({ store, soulId: 'xiaoling', userId: 'local' });
 
 check('section excludes anchors (includeAnchors:false)', () => {
@@ -88,6 +105,11 @@ await import(pathToFileURL(pluginEntry).href).then(
 );
 
 store.close();
+try {
+  rmSync(dbFile, { force: true });
+} catch {
+  /* a Windows handle can keep the snapshot alive; it is in tmp */
+}
 
 if (failures.length > 0) {
   console.log(`\n${failures.length} check(s) failed: ${failures.join(', ')}`);
