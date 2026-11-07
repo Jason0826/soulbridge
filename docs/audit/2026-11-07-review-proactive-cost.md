@@ -3,7 +3,7 @@
 - 日期：2026-11-07
 - 批次：插件 `f9953dd`（0028 5）· `c2663e7`（0018 1）· `f72b010`（0018 2，v0.0.123）；core **0 个待审**（`9e4e886` 起只动 `scripts/` 与 `docs/`，不进 A9 路径）
 - 关联：[state.md](../state.md) 02:10 条目 · [0018 §九](../briefs/0018-behaviour-influence.md) · 插件仓 `docs/cost-visibility.md` 主动建议节 · [11-06 审查](2026-11-06-review-attribution-replay.md)
-- 判定：**通过（三条发现见 §四；三条新行为的生产证据按规则 20 记「待验收」，见 §三）**
+- 判定：**通过（三条发现见 §四；三条新行为的生产证据按规则 20 记「待验收」——08:30 已补其一：成本文案 ✅，余两条见 §三）**
 
 ## 一、加了什么、退了什么
 
@@ -39,11 +39,11 @@ EOQ 推导（`C* = R + √(2Fg/k)`，参数全部来自本会话 trace；叙事�
 | `context-compact` 触发（0018①） | 11-06 13:52:44Z turn 13 `proactive id=context-compact trigger=342350` → 注入 | ✅ 已验收 |
 | `switch-session` 触发（0018①） | 11-06 14:44:11Z turn 14 `proactive id=switch-session trigger=350356` | ✅ 已验收 |
 | 段单元抽取（0028⑤） | 11-06 14:46:44Z `segment-seal trigger=compaction turns=10 outcome=ok`（0.0.122 运行） | ✅ 已验收 |
-| `ledger-compact` 事件（0018②） | 需 v0.0.123 上线（01:51:47 ✓）**之后**的下一次真实 compaction | ⏳ 待验收 |
-| `compact-limit` 行 | 需同会话第 2 次压缩、再过 200k 线 | ⏳ 待验收 |
-| 成本文案（每轮 ¥ / 13 倍） | 需 `context-compact` 再次触发（重启后账本从空起步，本会话压缩后弧未过 200k） | ⏳ 待验收 |
+| `ledger-compact` 事件（0018②） | 需 v0.0.123 上线（01:51:47 ✓）**之后**的下一次真实 compaction（截至 08:30 无：`ledger:` 日志 0 条，最后一次压缩 11-06 14:20 属 v0.0.122 时代） | ⏳ 待验收 |
+| `compact-limit` 行 | 需同会话第 2 次压缩、再过 200k 线（本会话 compactions=0，需两轮完整弧） | ⏳ 待验收 |
+| 成本文案（每轮 ¥ / 13 倍） | 11-07 **08:30:49Z** turn 20 `proactive id=context-compact trigger=347805`（log+trace 双证据）→ 注入块含「每轮约 **¥0.21** → 压缩后 **¥0.02**（差 **13** 倍）」+ 离峰价标注 + 长离开建议；数字与 turn 19 实测（15 请求 × 348k，k=0.59）对账一致 | ✅ **已验收** |
 
-三条各等一个自然样本：下次压缩看 `ledger: compaction observed` + trace `ledger-compact`；第二次压缩后再过线看 `proactive id=compact-limit`；下次过 200k 看文案里的 ¥ 数字。
+剩两条各等一个压缩样本：下次压缩看 `ledger: compaction observed` + trace `ledger-compact`（顺带完成 outcome 第二格）；第 2 次压缩后再过 200k 看 `proactive id=compact-limit`。成本文案这条按预期在下次过 200k 时**还会**再响（新弧翻倍级），但验收线已由 08:30:49Z 这一发满足。
 
 ## 四、发现了什么（没在这次修的）
 
