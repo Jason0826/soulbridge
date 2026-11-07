@@ -196,10 +196,15 @@
       "date": "2026-11-07",
       "delta": 116,
       "reason": "0018 闸门真实上下文 + 账本重建（插件 0.0.124/0.0.125）——turn-cost 新增 mainMax（宿主 assistant/message 单请求最大前缀，插件自己的调用不进），due() 改读最近轮 mainMax 修弧平均滞后（弧 141k 真值 245k、200k 线哑五轮，turn-14 虚报的镜像）；apply() 启动从 trace.jsonl 重放账本（turn-cost→note、ledger-compact→compact 按绝对数对账，预算/弧/轮数活得过重启——A9 §四 1 关闭），compact() 对未见过会话也计数。+6 测试（真值该响 trigger=221000、compact 清真值、插件 300k 调用不进、预算重放含坏行、ghost 计数、丢行对账）在 test/ 不计。变异：mainMax 三组各恰 1 红（插件剔除组首跑断言无区分度，用例补强后才红）、rebuild 三组恰 2/1/2 红。"
+    },
+    {
+      "date": "2026-11-07",
+      "delta": 75,
+      "reason": "0018 闸门改读宿主真值（插件 0.0.126）——账本新增 noteContext()：闸门按权威度三级取数（宿主 ctx.get(tokenMeter).contextPressure(session) 的 provider 自报 prompt 数 → mainMax → 弧平均），compact() 清读数保窗口容量；windowNote() 让文案带上「占 XM 窗口的 Y%」；apply() 里惰性解析服务、首次读到宿主读数时打一行日志。+3 测试（宿主读数优先、compact 清读数、窗口占比只在有容量时渲染）在 test/ 不计。变异两组各恰 1 红。"
     }
   ],
   "coreLines": 9021,
-  "pluginLines": 3357,
+  "pluginLines": 3432,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,

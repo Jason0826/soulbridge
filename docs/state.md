@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-07 18:55**（core 0.0.117 / plugin 0.0.125）
+最后核对：**2026-11-07 22:05**（core 0.0.117 / plugin 0.0.126）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -16,17 +16,19 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   闸门真实上下文修复 + 账本重建已发布（0.0.124 mainMax、0.0.125 启动时
-               从 trace 重建账本，0.0.125 装机+重启待做）——下一项 = §九 3 第二刀
-               教训→行为（C 儒略日 L1 → A 角色旁路 → B 纠正≥2 升级，两个拍板点
-               见下一步）→ quality 三条 FAIL / 0027 收口
+现在在做什么   用户决定**换新会话**（两压一会话：18:05 第 2 次压缩后 221k 过了线，闸门
+               21:35 应声开口）——本页已刷到可交接状态。下一项 = §九 3 第二刀
+               教训→行为（C 儒略日 L1 → A 角色旁路 → B 纠正≥2 升级），两个拍板点
+               仍待用户定；闸门真值链路 0.0.124→0.0.126 三步全部上线
+               → quality 三条 FAIL / 0027 收口
 已验证         0018②：插件 128/128（+4：压缩后重武装、预算流、partition 契约、成本文案）；
                变异三组各恰 2 红（去重置闸门 / 去让位闸门 / 禁 compact-limit）；
                棘轮 +114 记 history（38 条）；EOQ 推导（叙事定价 ¥0.2 → 196k≈200k、
                平台 100–210k、硬边界 80k/300k）入 cost-visibility.md；
                发布链全实测：v0.0.123 → npm 01:43:45 → verify-installed 6 PASS（须显式传
                web 路径，默认打 desktop 旧拷贝会 DbNewerThanBinaryError）→ apply() 01:51:47
-               ⏳ 待验收一条：compact-limit 行（compactions=1/2，等新弧：过 200k → 再压 → 再过 200k）；
+               ✅ 待验收那条已闭环：compact-limit 于 11-07 13:35:26.875Z 触发
+               （turn 33 prestep，trigger=220840，log+trace）——0018② 三条全过；
                ✅ ledger-compact 已验收：11-07 02:10:39.945Z compaction/end（北京 10:10:39）
                → +31ms `ledger: compaction observed (compactions=1)` + trace ledger-compact（双证据）；
                ✅ 成本文案已验收：11-07 00:30:49.922Z turn20 proactive trigger=347805，
@@ -42,6 +44,14 @@
                账本重建（0.0.125 ca94368）：插件 134/134（+3：预算重放含坏行跳过、
                ghost compact 计数、丢行按绝对数对账），变异三组恰 2/1/2 红；
                A9 §四 1（compact() 未见会话返 0）已关闭
+               宿主真值（0.0.126 f2bda1f）：插件 137/137（+3：宿主读数优先于我们的
+               估算、compact 清读数保窗口、窗口占比只在有容量时渲染），变异两组各 1 红；
+               生产实测 turn32 mainMax=220840 与宿主 tokenUsage.last=228170 差 3%（口径差：
+               我们=上一轮最大请求，宿主=下一次预估）——两独立度量同量级
+               DSH 显示之谜（21:50 查清）：顶部「轮/步/tok」= sessionStats.turns/steps +
+               tokenUsage.totals（累计，不随压缩重置）；真上下文 = contextPressure
+               （当时 228,170 / window 1M）；前端本有 Composer context-occupancy meter
+               （输入框下方圆环+点开构成）——**不是 bug，是信息架构**
 0018① 已验    首触发 13:52:44Z context-compact trigger=342350、14:44:11Z switch-session
                trigger=350356（log+trace 双证据）→ 注入即转述；两行注册表 + partition 测试
 ⑤ 已验：extract-per-turn 先红后绿（check 指 `'1turn'`，退代码前 health-check
@@ -86,10 +96,10 @@
                「date() 儒略日」这类从不被纠正的教训 T1 永远进不来）。
                验收语言（用户视角）：「上次纠正过的事，下次它自己做到了，而且我能看见」；
                通用性验收线在 0018 §0（下个习惯"加一行"，实例数 1 待投票）
-               2) **compact-limit 观察已武装**：18:05 用户压了第 2 次（预算花光，
-               ledger-compact compactions=2），下一条弧过 200k 就该看
-               `proactive id=compact-limit` 换会话建议——装 0.0.125 + 重启后
-               账本从 trace 重建，预算数不会因重启丢失（重启本身即验收时刻）
+               2) ✅ **compact-limit 已验收**（13:35:26Z turn 33 trigger=220840，详见 21:55 条目）；
+               闸门真值三步全上线：0.0.124 mainMax → 0.0.125 账本重启重建 →
+               0.0.126 宿主 tokenMeter 优先。换新会话后第一件事：确认新会话第一轮
+               prestep 没有误报（账本从 trace 重建，compactions 应为 2）
                3) quality 三条 FAIL 待查：事实密度 2.21/轮（段级一次多条+回填所致，
                ②后会话内抽取=0 应下降——待复测）、结论支持率 65.1%（归纳证据链已知债）、
                情绪非零率 2.3%（affect 层待查）
@@ -124,8 +134,10 @@
                agent 的 job 对象跑 restart-web.ps1）——**直接在会话里跑脚本会被宿主连坐杀掉**
                （22:33 实测：Job runner 报错、重启根本没发生，宿主毫发无损）
                运行中的 profile = ~/.dsh/profiles/web（→ C:\DSH\home\profiles\web）
-               发版 = 推 tag → GitHub Actions → npm（当前 core 0.0.117 / plugin 0.0.125）
+               发版 = 推 tag → GitHub Actions → npm（当前 core 0.0.117 / plugin 0.0.126）
                注意：npm 读侧复制延迟实测 3–15 分钟，`npm view` 马上查会 404，别判成发布失败
+               装机 = profile 排除项补新版本号 → corepack pnpm 11 装 → verify-installed
+               显式传 web 路径 → DshWebRestartOnce（重启可能因机器休眠延迟生效，看 apply 时间戳）
 成本导出       D:\Download\usage_data_*.zip（平台导出，含 amount/cost 两个 CSV）
 ```
 
@@ -135,24 +147,23 @@
 > 新会话只读状态会像换班工人；这 6 行是**叙事**，不是状态——换会话时整体替换，不累积。
 
 ```
-上一段   2026-11-07 11:10–18:55（session-7a109c5b 续），core 0.0.117 / plugin 0.0.125
-做了     用户产品反思（三承诺：不重复交代 / 不重复犯错 / 该说的时候说）→ 点名
-         「27 轮 434 步 81M tok，你没提醒压缩还是换会话」→ 诊断两层病：due() 弧
-         平均滞后（弧 141k 真值 245k，200k 线哑五轮，turn-14 虚报的镜像）+ 插件
-         调用稀释 → mainMax 修复；18:05 用户已压第 2 次（预算花光）→ 发现重启
-         会清空内存账本 → 账本启动时从 trace 重建（0.0.124 + 0.0.125）
-验证     0.0.124（ff0c51c）131/131 三变异各 1 红（插件剔除组用例补强过一次：
-         首跑断言无区分度）；0.0.125（ca94368）134/134 三变异 2/1/2 红；
-         npm 已上 0.0.124、0.0.125 发布中；待装 web profile + verify-installed + 重启
-没做完   第二刀 C→A→B（诊断落盘 17:55 条目，两个拍板点待定）；compact-limit 观察
-         已武装（预算=2，下条弧过 200k 即验收，装机重启后账本重建保住预算数）；
-         quality 三条 FAIL；0027 收口余债；0028 行3 等自然样本
-在热什么 账本仍是内存态（重建只在启动跑一次；reminded 不重放 → 重启可能把仍有效的
-         建议再说一次，预算数精确）；重启杀轮第二次实证（turn 18 实施轮被 01:51
-         重启杀掉、未入 turns）；离峰价写死在 render（高峰低估 2×，文案已标）
+上一段   2026-11-07 18:55–22:00（session-7a109c5b 收尾；用户拍板换新会话），core 0.0.117 / plugin 0.0.126
+做了     闸门真值链路三步全部上线：0.0.124 mainMax → 0.0.125 重启时从 trace 重建账本
+         → 0.0.126 宿主 tokenMeter 优先（含「占 1M 窗口的 Y%」文案）；
+         0018② 三条观察全部验收（最后一条 compact-limit 于 21:35 应声触发）；
+         查清 DSH 顶部「轮/步/tok」是累计账、真上下文看 contextPressure、
+         前端本有输入框下的 ContextMeter——不是 bug 是信息架构，用户决定不碰安装包
+验证     0.0.126（f2bda1f）137/137、变异两组各 1 红；装机 6 PASS（显式 web 路径）；
+         turn32 mainMax=220840 vs 宿主 tokenUsage.last=228170（差 3%，口径差）
+没做完   第二刀 C→A→B（诊断见 17:55 条目，两个拍板点待用户定）——新会话的正题；
+         quality 三条 FAIL；0027 收口余债；0028 行3 等自然样本；DSH 显示问题留给上游
+在热什么 阈值来历单独成节（只有价格与 27k 是硬实测，200k 半推导、两压=2 与
+         纠正窗等是拍的）；重启杀轮（turn 未入 turns）；reminded 不重放（可能重复一次建议）
 ```
 
 **18:55 闸门真实上下文修复 + 账本重建（插件 0.0.124 / 0.0.125）**：由来 = 用户点名「会话已 27 轮 434 步 81M tok，你没提醒我压缩还是换新会话」。**诊断两层**：① `due()` 用弧平均 `prompt/requests`（自上次 compact 起的累计均值），压缩后爬升期系统性低估——t24–t27 弧读 119k/140k/141k/141k，真值（宿主主请求前缀）193k→221k→244k→245k，**200k 线连哑五轮**（turn-14 13× 虚报的镜像：f72b010 修了方向没修度量）；② 次级稀释：弧里混插件自己的小模型调用（t27 两请求一主一探 → 平均 125k）。**修法（0.0.124，ff0c51c）**：turn-cost 新增 `mainMax` = 本轮宿主 assistant/message 单请求最大前缀（input+cacheRead+cacheWrite；observe 只见宿主事件，pluginUsage 不进）；note 取最近轮 mainMax（无 host 消息的轮不清零）、compact() 随弧归零、due() 读 mainMax（缺失回退弧平均——旧记录与测试）；算钱口径不变（四类 token 全量 + recentRequests 携带率）。**部署风险与修法（0.0.125，ca94368）**：18:05 用户压了第 2 次（`ledger-compact compactions=2`，**两压一会话预算花光**）→ 账本是内存态，重启装新版会清零 → 下次过线会建议压缩已花光的预算（摘要套摘要）→ `apply()` 启动时从 trace.jsonl 全量重放（2.95MB：turn-cost→note、ledger-compact→compact 按事件绝对数对账），预算/弧/mainMax/轮数全部存活；compact() 对未见过会话也计数——**A9 §四 1 发现关闭**；reminded 不重放（proactive 事件只带 trigger 不带 level）→ 重启可能把仍有效的建议再说一次，预算数精确。**验证**：0.0.124 插件 131/131（+3：弧 141k/真值 221k 该响且 trigger=221000、compact 清真值、插件 300k 调用不进 mainMax），变异三组各恰 1 红——**插件剔除组首跑没抓到**（用例里插件调用比主请求小、断言无区分度），补强为「插件调用 300k > 主请求 200k（压缩刚完的真实形态）」后才红：**测试按行为写，不按现实比例写**；0.0.125 插件 134/134（+3：预算重放含坏行跳过、ghost compact 计数、丢行按绝对数对账），变异三组恰 2/1/2 红。npm 0.0.124 已发布、0.0.125 发布中；**待装 web profile + verify-installed + 重启**。重启后行为预期：重放使本会话 arc 归零（18:05 压缩是最后账本事件）→ 静默至本轮 turn-cost 落地（首个带 mainMax 的记录）→ 下条弧过 200k 时 compact-limit 行（预算=2）建议换新会话——**0018② 最后一条观察由此武装**。
+
+**21:55 闸门真值链路收口（0.0.126）+ 0018② 三条全验收 + DSH 显示之谜查清**：**① 验收**——`13:35:26.875Z turn 33 prestep proactive: remind id=compact-limit trigger=220840`（log+trace 双证据），正是「压 2 次后再过 200k 该它说话」那条观察；`mainMax`=**220,840** 与宿主 `tokenUsage.last`（turn33 step1：cacheRead 223,104 + 未命中 5,066 = **228,170**，与 `contextPressure.pressureTokens` 逐字一致）差 3%——口径差：我们=上一轮最大请求，宿主=下一次请求预估。两独立来源同量级 = 度量对。**0018② 三条（成本文案 08:30 / ledger-compact 10:10 / compact-limit 21:35）全部命中**，按规则 20 记「已验收 1 次」不吹统计显著。**② 显示之谜**——拆安装包（app.asar，18,188 个文件）：前端确实有 `Composer context-occupancy meter`（输入框下方圆环 + 百分比，点开看 `contextBreakdown` 构成：系统 1.5k / 工具 7.7k / 对话 156k）；顶部三个数 = `sessionStats.turns/steps` + `tokenUsage.totals`（累计，压缩不重置）；真上下文 = `contextPressure`（228,170 / 1,000,000）。**不是 bug，是信息架构**（累计数没标"累计"）。用户拍板：**不碰安装包**（app.asar 是 nightly 自动更新 + 签名的包，本地补丁会被覆盖），DSH 若修走上游。**③ 0.0.126（f2bda1f）**——账本新增 `noteContext()`，闸门按权威度三级取数：宿主 `ctx.get('tokenMeter').contextPressure(session).pressureTokens`（provider 自报，含工具与系统提示词）→ `mainMax`（我们重建）→ 弧平均（极旧记录）；`compact()` 清读数但**保留窗口容量**（模型属性不是测量值）；文案加「（占 XM 窗口的 Y%）」——百分比才是人能当场核对的比例。137 测试（+3：宿主读数优先于我们的估算 / compact 清读数 / 窗口占比只在有容量时渲染），变异两组各恰 1 红；npm 已发布 → 装机 6 PASS → 重启 21:55:55 拉起。
 
 **17:55 第二刀诊断落盘（0018 §九 3 教训→行为，未动代码）**：产品反思的验收语言 = 用户视角「**上次纠正过的事，下次它自己做到了，而且我能看见**」（不是队列文件条数）。**三步诊断**：C = L1 体检 `date(<numeric>)` 儒略日陷阱（教训 fc_mw2tj5b4_7——能代码拦的升 L1，0018 §七 第二刀步骤 2）；A = **存储角色旁路** `packages/core/src/index.ts:808`——prompt 显式「角色=lesson」时 `role` 落 active 绕过候选队列（只有 `principle && !role` 才进 candidate）→ 永远不进分类；修法 = lesson 一律 candidate + 纠正到达时补查队列空窗；存量 37 active / 61 candidate、**22 条纠正轮教训休眠**、`pending-classify.json` 11-03 起空（唯一生产者 feedClassifyFromTurn 只吃段抽取成功轮）；B = 升级（同一教训被纠正 2 次 → 常驻）零 schema——`rule_fired` 在纠正前 N 分钟的时间配对信号。**两个拍板点待用户定**：① 升级载体 a=rules 层 `scope='always'`（建议）/ b=anchor；② 候选门宽度 a=仅纠正轮（0023 T1 现状）/ b=全部教训入队分桶（建议——「date() 儒略日」这类从不被纠正的教训，T1 永远进不来）。
 
@@ -472,6 +483,30 @@ node scripts/billing.mjs --days 4    # 每天花了多少：金额/请求/三类
 | 线索验收 | `scripts/abba-check.mjs --topic <词>` |
 | 队列文件 | `pending-extract / pending-classify / pending-profile / pending-threads.json`；段状态 `segment-state.json`（压缩标记 + seal ≤100，超限有日志） |
 
+## 阈值来历（哪些是算的、哪些是拍的）
+
+> 为什么单列：阈值一旦被当成「事实」引用，就没人再问它凭什么。三档：**实测**（有数据）、
+> **推导**（有公式但带假设）、**拍的**（没有依据，等数据回填）。
+
+| 阈值 | 值 | 来历 | 档 |
+|---|---|---|---|
+| 单价 | 命中 0.02 / 未命中 1 / 输出 4（元每 M，离峰） | 用户给的价格表；与官方账单对账**分毫不差**（11-01 全离峰 ¥15.94 vs 账单 ¥15.95） | 实测 |
+| 压缩后基线 | 27k | turn 14 压缩后实测 | 实测（单点） |
+| 驱逐率 | 0.29 | 14 个轮间隔里 4 次全量重读 | 实测（n=14，小样本） |
+| 请求数/轮 | 5（回退值） | 七日内 39 轮中位数 | 实测 |
+| 上下文增速 g | 20.4k/轮 | 实测 | 实测 |
+| **compact 线** | **200k** | EOQ：C*=R+√(2Fg/k)，k=¥0.39/M·轮（价格×请求数+驱逐项）、F≈¥0.07（**估**）、g/R 实测；纯钱最优 115k，加入**叙事定价 N=¥0.2/次（拍的）** 才落到 196k≈200k | 推导（含一个拍的参数） |
+| **switch 线** | 300k / 100 轮 | 观测：420k 会话出现过整轮空回复、573 轮会话退化（样本个位数）；100 轮是经验 | 观测（小样本）+ 经验 |
+| **两压一会话** | compactions ≥ 2 | 假设「摘要套摘要会失真」，**没有任何测量** | **拍的** |
+| 请求告警 | ≥30 次/轮 | 无依据（7 日 p90=49、最重 271） | 拍的 |
+| 段容量 / 年龄 | 40 轮 / 6 万字 / 24h | 工程兜底，凭手感 | 拍的 |
+| seal 上限 | 100 条 | 防文件膨胀 | 拍的 |
+| 纠正窗口 | 10 分钟 | rule-compliance 代理的取证窗 | 拍的 |
+| 事实密度线 | ≤1.5 条/轮 | 逐轮抽取时代口径；段级后分母变了，指标失效（复测 2.12 FAIL，待重定） | **过期待重定** |
+| 账本上限 | 16 会话 | 内存兜底 | 拍的 |
+
+**结论**：真正硬的只有**价格**和**27k**；200k 是「钱 + 叙事价」的推导；300k/100 轮是小样本观测；其余（两压=2、纠正窗、段阈值、告警线）都是拍的。回填顺序：① 两压=2 → 看 quality 比率随压缩深度怎么变；② 纠正窗 → 用 corrections 的 133 条真实时间分布定；③ 段阈值 → 用段大小分布定；④ 事实密度 → 重定口径。
+
 ## 八之三、踩过的坑（每一条都真踩过）
 
 | 坑 | 结论 |
@@ -484,6 +519,8 @@ node scripts/billing.mjs --days 4    # 每天花了多少：金额/请求/三类
 | PowerShell 改代码 | 模板字符串会被吃掉、`\n` 变字面量；**用 edit 工具** |
 | 改完就重启 | profile 装的是**副本**，必须先 `verify-installed.mjs` |
 | 把测试跑通当 review | 局部验收 ≠ 整体一致，见审计第七节 |
+| 把界面上的「轮/步/tok」当上下文 | 那是 `sessionStats`/`tokenUsage.totals` 的**累计账**，压缩不重置；真上下文看 `contextPressure`（前端圆环在输入框下方，点开有构成） |
+| PowerShell `Set-Content -Encoding utf8` 写 JSON | 带 BOM → `Invalid package.json`；用 node 写或 `-Encoding utf8NoBOM`（装机脚本里踩过一次） |
 
 ## 八之四、约定（必须遵守）
 
