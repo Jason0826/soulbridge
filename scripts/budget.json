@@ -1,5 +1,5 @@
 {
-  "date": "2026-11-06",
+  "date": "2026-11-07",
   "note": "棘轮预算：数字是实测值，只能往下调，不能往上调。要加功能导致超限时，先删掉同等规模的东西，再跑 --update-budget。",
   "history": [
     {
@@ -191,10 +191,15 @@
       "date": "2026-11-07",
       "delta": 114,
       "reason": "0018 顺序2：成本模型进提醒 + 压缩预算行（插件）——context-compact/compact-limit 文案带每轮 ¥（离峰价：n×命中0.02 + 驱逐0.29×未命中1，基线27k 为 turn14 实测）；新增 compact-limit 行（已压≥2 次且≥200k → 建议换新会话，两压一会话；与 context-compact 按预算瓜分 200k 线）；账本感知压缩（compaction/end → compact()：重置 prompt/requests、重武装 200k 闸门、计 compactions——修 turn14 报 350k 实为 27k 的虚报 13 倍），recentRequests 滚动窗供成本渲染。EOQ 推导（C*=R+√(2Fg/k)，叙事定价 ¥0.2 → 196k≈200k，平台 100–210k）记入 cost-visibility.md。+4 测试（压缩后重武装、预算流、partition 契约、成本文案）在 test/ 不计。变异：去重置闸门恰 2 红、去让位闸门恰 2 红、禁 compact-limit 恰 2 红。"
+    },
+    {
+      "date": "2026-11-07",
+      "delta": 116,
+      "reason": "0018 闸门真实上下文 + 账本重建（插件 0.0.124/0.0.125）——turn-cost 新增 mainMax（宿主 assistant/message 单请求最大前缀，插件自己的调用不进），due() 改读最近轮 mainMax 修弧平均滞后（弧 141k 真值 245k、200k 线哑五轮，turn-14 虚报的镜像）；apply() 启动从 trace.jsonl 重放账本（turn-cost→note、ledger-compact→compact 按绝对数对账，预算/弧/轮数活得过重启——A9 §四 1 关闭），compact() 对未见过会话也计数。+6 测试（真值该响 trigger=221000、compact 清真值、插件 300k 调用不进、预算重放含坏行、ghost 计数、丢行对账）在 test/ 不计。变异：mainMax 三组各恰 1 红（插件剔除组首跑断言无区分度，用例补强后才红）、rebuild 三组恰 2/1/2 红。"
     }
   ],
   "coreLines": 9021,
-  "pluginLines": 3241,
+  "pluginLines": 3357,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
