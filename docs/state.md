@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-08 09:58**（core 0.0.120 / plugin 0.0.129）
+最后核对：**2026-11-08 17:58**（core 0.0.120 / plugin 0.0.129）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -16,16 +16,13 @@
 ## 接手须知（新会话先读这一段，约 1K 字符）
 
 ```
-现在在做什么   第二刀拆成两刀，**B0 已上线、等一次重启验收**（core 0.0.120 / 插件 0.0.129）：
-               「`角色=rule` 也落候选」——规则只有带分类器写的 `触发` 槽才算成立；队列取数改
-               按 status 不再按 role；schema v17 把 active 但无可用触发的规则降为候选（生产
-               56 条，含发现当天新写的 11 条）；backlog marker 改记 inventory 摘要（迁移新增
-               的候选不会被「跑过了」的戳挡住）。
-               **重启后必查这五个数**：active 规则 189→133、`rules()` 与 active 相等、
-               candidates 9→65、日志 `classify backfill: 65 backlog candidate(s) queued`、
-               随后几批 `classify` 把 65 条消化掉。
-               然后 **B1** = 升级载体（拍板 a：`scope='always'` 每轮注入，同一规则被纠正 2 次；
-               口径照 rule-compliance 现行：触发后 10 分钟内的纠正、且纠正文本提到该规则触发词）；
+现在在做什么   **B0 已上线并验收**（core 0.0.120 / 插件 0.0.129；重启 10:02，五个数全对）：
+               规则只有带分类器写的 `触发` 槽才算成立——`角色=rule` 落候选、队列按 status 取、
+               schema v17 把无可用触发的 active 规则降为候选（56 条）、marker 改记 inventory 摘要。
+               **下一步 = B1**（升级载体，拍板 a：`scope='always'` 每轮注入，同一规则被纠正
+               2 次；口径照 rule-compliance 现行：触发后 10 分钟内的纠正且纠正文本提到规则触发词）。
+               载体半成品在代码里：`Rule.scope` 字段存在但从未被写过，`selectRules` 是纯关键词
+               匹配且 `RULE_LIMIT = 5`，`rules()` 目前因 v17 恒等于「能触发的规则」。
                然后 C（date() 儒略日升 L1，小活可随时插队）。拍板已定：① a ② b ③ 56 条降级
                重分类 ④ 口径复用
 已验证         第二刀 B0（core 0.0.120 / 插件 0.0.129）：core 328/328（+2：`角色=rule` 落候选 /
@@ -36,7 +33,14 @@
                生产库未动）：schema 16→17、active 规则 189→133、`rules()`=133（相等）、
                candidates 9→65、active-无触发槽 **0**、backlog 65
                ✅ 装机：verify-installed 6 PASS（core 0.0.120 / plugin 0.0.129）
-               待验收（重启后）：上面那五个数 + 65 条按批消化 + 分类新生规则的首次开火
+               ✅ **重启后实测（五个数全对，02:02:11Z apply v0.0.129）**：schema 17、
+               active 规则 **133**、带槽 133、`rules()` **133（相等）**、无槽 **0**、
+               candidates **65**（role: lesson 9 / rule 56）、backlog 65、
+               队列 **65 条全在 `存量` 桶**（`classify backfill: 65 backlog candidate(s) queued`
+               @ 09:57:00.906Z，出在本会话首个用户消息那一刻 —— **marker 内容寻址的活证据**：
+               旧的「跑过了」戳在场，65 还是进来了）；分类消化进行中（chain 忙时 `background:
+               chain still running` 让位，未到批）
+               待验收：65 条按批消化完 + 分类新生规则的首次开火
                第二刀 A：core 326/326（+3：`角色=lesson` 也落候选 / 分类后规则与画像可注入 /
                v16 存量降级；+2 红转绿：旧规则、旧画像在 600 条新事实之后仍可见），
                变异五组各恰 1 红（含三条读路径查询各 1 红）；插件 141/141（+4：全收桶 / 桶序 /
@@ -194,19 +198,21 @@
 > 新会话只读状态会像换班工人；这 6 行是**叙事**，不是状态——换会话时整体替换，不累积。
 
 ```
-上一段   2026-11-08 09:58 收尾（session-e9eddc5a），core 0.0.120 / plugin 0.0.129（装机完成，
-          重启未执行——接手第一件事就是重启，然后核对下面那五个数）
-做了     B0：把「规则也能被静默」这个洞堵上。56 条不是"等触发"，是被 39 种中文类型名映射成
-          rule、而抽取提示词还在教 `规则用 rule`（当天新写 11 条）→ 写入口径 + 队列取数 +
-          schema v17 三处一起改；顺手发现 backlog marker 是枚「跑过了」的戳，会把迁移新增的
-          候选全挡在队列外（队列看着是空的）→ 改记 inventory 摘要
+上一段   2026-11-08 17:58 收尾（session-e9eddc5a），core 0.0.120 / plugin 0.0.129
+做了     B0 全链：把「规则也能被静默」这个洞堵上。56 条不是"等触发"，是被 39 种中文类型名
+          映射成 rule、而抽取提示词还在教 `规则用 rule`（当天新写 11 条）→ 写入口径 + 队列
+          取数 + schema v17 三处一起改；再发现 backlog marker 是枚「跑过了」的戳、会把迁移新增
+          的候选全挡在队列外（队列看着是空的）→ 改记 inventory 摘要（插件 0.0.129）
 验证     core 328/328、插件 142/142；变异 3 组（core）+ 1 组（marker）各恰红；真实库快照预演
-          189→133 / rules()=133 / candidates 9→65 / 无触发槽 0；verify-installed 6 PASS
+          189→133 / rules()=133 / candidates 9→65 / 无触发槽 0；重启后实测五个数全对
+          （apply v0.0.129 @ 02:02:11Z、schema 17、133=133、65 条全进 `存量` 桶）
 没做完   B1（`scope='always'` 每轮注入 + 纠正 2 次升级）；C（date() 儒略日升 L1）；A9 低债
           F2–F8（activatePlaced 静默 / markRule 改 retracted 行 / 无维度画像常驻 / 上限静默）
-在热什么 重启后 65 条从 `存量` 桶分批进分类（约 10 条一批，别把"队列在动"误读成卡住）；
-          `role=rule` 新行现在会先落候选，日志里 `promote: 全收 → 1 candidate(s)` 是正常的
+在热什么 65 条 `存量` 待分类（chain 忙时 `background: chain still running` 会让位，未到批）；
+          `role=rule` 新行现在先落候选，日志里 `promote: 全收 → N candidate(s)` 是正常的
 ```
+
+**17:58 B0 验收通过（重启 10:02，五个数全对）：规则层从此「数得出来」**：重启走的受管路径逐行可对上——`10:00:05 waiting 90s → 10:01:37 gate: ok → 10:01:39 stopping task DshWebHost → 10:02:00 killing pid 28532 that outlived the task stop → 10:02:02 starting → 10:02:14 ready at :3080`（token 换新），`apply() called (v0.0.129)` @ **02:02:11Z** + `ledger: rebuilt from trace (turn-cost=124 ledger-compact=4)`。**五个数全对**（只读快照 + 装上的 core 打开，生产库没被我写过）：schema **17**、active 规则 **133**（was 189）、带 `触发` 槽 133、`rules()` **133 = active（相等）**、active-无触发槽 **0**（was 56）、candidates **65**（role 明细 lesson 9 / rule 56 —— 正是那 56 条 + 原来的 9 条）、backlog 65、`pending-classify.json` **65 条且全在 `存量` 桶**。**marker 修的活证据**：`classify backfill: 65 backlog candidate(s) queued (存量)` @ **09:57:00.906Z**，出现在本会话**重启后第一条用户消息**那一刻——重启是 10:02 北京，中间空了近 8 小时没人说话；旧 marker（ISO 时间戳）一直在场，内容寻址比较不匹配才让它跑起来，**换成裸 done 戳这里就是 0 条、队列空着、债再次消失**。**分类消化还没开始，不是卡住**：`background: chain still running, skipping this step`（09:58:08 / 09:58:16）——分类步在后台链里，轮次进行中让位，等本轮结束才轮到它。**一条假警报我按下去了**：日志里那行在 PowerShell 里显示成 `(瀛橀噺)`，看着像编码损坏；取字节核对两行完全相同（`e5ad98e9878f` = 存量），是控制台渲染的假象，文件没坏——**先说清是假象，再往下走**。
 
 **09:58 第二刀 B0 上线待重启（core 0.0.120 / 插件 0.0.129）：把「规则也能被静默」这个洞堵上**：00:30 那 56 条我先判断成「等触发的规则」，重新查来历后**这个判断是错的**——它们的 `type_name` 有 **39 种**（决定/建议/技术约束/承诺/验收标准/设计原则…），是被一张「中文类型名 → role」的映射表标成 rule 的行，有些句子根本不是规则（「用户认为历史事件的 valid_until 应等于事件发生时间」）。**洞还在长**：抽取提示词教模型 `规则用 rule`，而 `writeStatus()` 只把 `lesson` 写成候选，`role=rule` 直接落 active、没有触发槽、`rules()` 跳过、队列也不收（队列按 `role=lesson` 取数）——**发现的当天新写了 11 条**。这与 A 修掉的是同一个形状，**A 只补了 lesson 那一路**。三处一起改，缺一处这 56 条就还是静默的：**① 写入口径**（`角色=rule` 也落候选：规则由分类器写的 `触发` 槽定义，不由角色名定义）；**② 队列取数**（`promotionCandidates`/`promotionBacklog` 按 status 取，不按 role——否则降级后仍在队列视野外）；**③ schema v17**（把「active 但触发槽缺失或解析失败」的行降为候选；解析用 `parseTrigger`，和读方同一处定义，幂等；分类后角色是 rule 且已带触发的不动）。**验收口径也随之变了**：不再是「rules() 与 active 数相等」这种自证，而是「active 集合 = 能触发的集合」——预演后 active-无触发槽 = **0**。**真实库快照预演**（`VACUUM INTO` 副本 + 装上的 0.0.120 打开，生产库没动）：schema 16→17、active 规则 **189→133**、`rules()`=**133**（相等）、candidates **9→65**、backlog 65。**然后踩到第二个坑（插件 0.0.129）**：降级出来的 56 条没有生产者——它们的轮次早就抽过了，只能靠 `backfillClassifyBacklog()` 的存量一次性入队；而那枚 marker 是「跑过了」的戳，于是**新债一条也进不了队列，队列反而显示为空**——同一批行第二次变得不可见，这次还有「队列是空的」当不在场证明。marker 改成记 inventory 的 id 摘要：同一批答 0（重启不重复计费），多一条就重开一次。**过程事故（自己记过的坑又踩）**：给插件 package.json 升版本时用了 PowerShell 字符串替换 → `Set-Content` 写入 **BOM**（`﻿{` 出现在 diff 里），`git checkout --` 重来、改用 edit 工具。这正是「不用字符串替换改代码」那条的来源，理由是编码与换行。**装好但没重启**：`verify-installed` 6 PASS，`apply` 仍是 15:34:38Z 的 0.0.127——重启在会话内走 `schtasks /run /tn DshWebRestartOnce`（90s 后动手，会杀掉当前轮），所以**重启是接手后第一件事**。
 
