@@ -25,6 +25,20 @@ export interface Rule {
   trigger: RuleTrigger;
   scope?: string;
   confidence?: number;
+  /**
+   * One neutral line that indexes this rule for the always-on catalog (0029).
+   *
+   * A rule has two representations: the index line says "this exists" and the
+   * statement says what to do. Absent means the rule predates the catalog or the
+   * classifier did not answer that column — it stays out of the catalog, which is
+   * visible as a count, not filled in with a cut-down statement.
+   */
+  index?: string;
+  /**
+   * How often this rule has been surfaced. The catalog's only computed rank:
+   * 复现频率 is measurable (`recall_count`), while scope is not modelled yet.
+   */
+  recallCount?: number;
 }
 
 /**
@@ -105,12 +119,23 @@ export interface RuleClassification {
    * triggered rule nor clearly a statement about the person must not be forced into
    * either. As a rule it would become wallpaper; as a profile line it would put an
    * imperative into the description of a person.
+   *
+   * `index` is not a classification: the row is already a rule and only owes its
+   * catalog line (0029). It exists so backfilling the index goes through the same
+   * queue and the same prompt instead of a second model caller.
    */
-  kind: 'rule' | 'profile' | 'pending';
+  kind: 'rule' | 'profile' | 'pending' | 'index';
   /** Trigger JSON built by this parser, never authored by the model. */
   trigger?: string;
   /** One sentence of what to do, when this is a rule. */
   action?: string;
+  /**
+   * One neutral line, when this is a rule or an `index` answer.
+   *
+   * Optional even on an `index` answer: an empty column is reported by the caller
+   * instead of being written as a blank catalog line.
+   */
+  index?: string;
   /**
    * Which lens the person statement belongs to, when this is a profile item.
    *
@@ -123,22 +148,25 @@ export interface RuleClassification {
   reason?: string;
 }
 
-const CLASSIFIED = /^(规则|画像|待修)\s*[:：]\s*(.+)$/;
-const KEY_FIELD = /^(关键词|正则|状态|动作|原因|维度)\s*[=＝]\s*(.*)$/;
+const CLASSIFIED = /^(规则|画像|待修|索引)\s*[:：]\s*(.+)$/;
+const KEY_FIELD = /^(关键词|正则|状态|动作|原因|维度|索引)\s*[=＝]\s*(.*)$/;
 
 /**
  * Parse the classifier's answer. Line-table, not JSON — the model fills fields and
  * the code assembles the trigger, because we already know model-authored JSON is a
  * hope (the extractor was moved off it for the same reason).
  *
- *   规则: fc_x | 关键词=json,package.json | 动作=用 edit 工具改 JSON
+ *   规则: fc_x | 关键词=json,package.json | 动作=用 edit 工具改 JSON | 索引=改 JSON 要防 BOM
  *   规则: fc_y | 正则=\.json\b
  *   规则: fc_z | 状态=long-session
  *   画像: fc_p
  *   待修: fc_q | 原因=不知道什么时候该用
+ *   索引: fc_r | 索引=会话里直接跑重启脚本会被连坐杀掉
  *
  * A 规则 with no usable condition becomes 待修, not 画像: the two failures have
- * different consequences and only one of them pollutes the profile.
+ * different consequences and only one of them pollutes the profile. The 索引 line
+ * is a separate answer by design: a rule already placed only owes its catalog line
+ * (0029), and re-classifying it would rewrite a trigger nobody asked about.
  */
 export function parseRuleClassifications(raw: string): RuleClassification[] {
   const out: RuleClassification[] = [];
@@ -156,6 +184,11 @@ export function parseRuleClassifications(raw: string): RuleClassification[] {
       if (field) fields.set(field[1], field[2].trim());
     }
 
+    if (kindLabel === '索引') {
+      const index = fields.get('索引') ?? '';
+      out.push({ id, kind: 'index', ...(index ? { index } : {}) });
+      continue;
+    }
     if (kindLabel === '画像') {
       const dimension = fields.get('维度');
       // A dimension the merge step does not know is not a dimension; keeping it out
@@ -188,6 +221,7 @@ export function parseRuleClassifications(raw: string): RuleClassification[] {
       kind: 'rule',
       trigger: JSON.stringify(trigger),
       action: fields.get('动作') || undefined,
+      ...(fields.get('索引') ? { index: fields.get('索引') } : {}),
     });
   }
   return out;

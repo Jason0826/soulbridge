@@ -1040,6 +1040,10 @@ export class Soul {
    * (0018 §九 3 A classifies exactly the older backlog). The ceiling is a bound, not a
    * budget — ADR 0033 keeps this layer small; hitting it means the classifier is
    * over-promoting, which `rule-stats.mjs` is there to notice.
+   *
+   * `index` and `recallCount` are carried for the catalog (0029): the rule layer is
+   * already read once per turn, so the always-on directory is a projection of this
+   * same query instead of a second scan.
    */
   rules(): Rule[] {
     const out: Rule[] = [];
@@ -1054,14 +1058,42 @@ export class Soul {
       const triggerSlot = fact.slots.find((slot) => slot.slot === '触发' && slot.value.kind === 'text');
       const trigger = parseTrigger(triggerSlot?.value.kind === 'text' ? triggerSlot.value.value : '');
       if (!trigger) continue;
+      // Stored as 目录句, not 索引: extraction also writes slot names from what the
+      // conversation talks about, and 索引 already occurs as a slot name in the wild
+      // (facts about index files). A catalog line that silently loses to a noise slot
+      // would be an entry nobody can explain.
+      const indexSlot = fact.slots.find((slot) => slot.slot === '目录句' && slot.value.kind === 'text');
       out.push({
         id: fact.id,
         statement: fact.statement,
         trigger,
         confidence: fact.confidence,
+        ...(indexSlot?.value.kind === 'text' && indexSlot.value.value.trim()
+          ? { index: indexSlot.value.value.trim() }
+          : {}),
+        recallCount: fact.recallCount ?? 0,
       });
     }
     return out;
+  }
+
+  /**
+   * The always-on catalog (0029 stage 1): one neutral line per rule, with the id
+   * needed to expand it.
+   *
+   * Ordered by `recallCount` — how often the situation reproduced — then confidence.
+   * Scope is not modelled, so it is not pretended: open question 4 in 0029 stays open
+   * and this ordering is the computable part. A rule without an index line is left
+   * out and counted in `missingIndex`; filling it with a cut-down statement is the
+   * mistake the brief exists to avoid (an imperative is not an index).
+   */
+  catalog(limit = 20): { entries: Rule[]; total: number; missingIndex: number } {
+    const all = this.rules();
+    const indexed = all.filter((rule) => rule.index);
+    const entries = indexed
+      .sort((a, b) => (b.recallCount ?? 0) - (a.recallCount ?? 0) || (b.confidence ?? 0) - (a.confidence ?? 0))
+      .slice(0, Math.max(0, limit));
+    return { entries, total: all.length, missingIndex: all.length - indexed.length };
   }
 
   /**
@@ -1070,15 +1102,32 @@ export class Soul {
    * The trigger is what makes the rule injectable later; a rule without one would
    * have to be always-on, which is exactly what this split exists to avoid.
    */
-  markRule(factId: string, classification: { trigger: string; action?: string }): void {
+  markRule(factId: string, classification: { trigger: string; action?: string; index?: string }): void {
     this.store.setFactRole(factId, 'rule');
     this.store.setFactTypeName(factId, '规则');
     const slots: { slot: string; value: { kind: 'text'; value: string } }[] = [
       { slot: '触发', value: { kind: 'text', value: classification.trigger } },
     ];
     if (classification.action) slots.push({ slot: '动作', value: { kind: 'text', value: classification.action } });
+    if (classification.index) slots.push({ slot: '目录句', value: { kind: 'text', value: classification.index } });
     this.store.addSlots(factId, slots);
     this.activatePlaced(factId);
+  }
+
+  /**
+   * Give an already-placed rule its catalog line (0029 backfill).
+   *
+   * Returns false when the id is not an active rule: the answer is skipped and
+   * reported, never applied to a lesson (an index on a parked row would put a
+   * candidate into the always-on block) and never demoting it either.
+   */
+  markRuleIndex(factId: string, index: string): boolean {
+    const line = String(index ?? '').trim();
+    if (!line) return false;
+    const fact = this.store.fact(factId);
+    if (!fact || fact.role !== 'rule' || !isActive(fact)) return false;
+    this.store.addSlots(factId, [{ slot: '目录句', value: { kind: 'text', value: line } }]);
+    return true;
   }
 
   /**

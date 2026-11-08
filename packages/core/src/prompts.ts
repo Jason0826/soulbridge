@@ -363,6 +363,7 @@ export function renderRelationPrompt(input: RelationPromptInput): string {
 
 const CLASSIFY_ROLE = `<role>
 你在整理一批候选条目（模型自己标的教训、规则、决定，都还没安置）。每条要么是一条**规则**（知道什么时候该做什么），要么是一条**画像**（说的是这个人是什么样）。你只做分类，不改写原文。
+已经分好类的规则（带「规则|」前缀的行）只补一句目录索引，不重新分类。
 </role>`;
 
 const CLASSIFY_RULES = `<rules>
@@ -376,7 +377,9 @@ const CLASSIFY_RULES = `<rules>
   正则=\.json\b                  关键词不够具体时用
   状态=long-session              会话状态（长会话、连续空回复）
   动作=用 edit 工具改 JSON        祈使句，一句话
+  索引=改 JSON 别用字符串替换     常驻目录里的一行，≤30 字，中性陈述（"我记得有这件事"），不是命令
   至少给一个触发条件；一个都没有就写"待修"。
+  每条规则都必须给索引：以后它只靠这一行被想起来，写不出就说明这条规则还没想清楚。
 
 - 关键词不要用"代码""工作"这种大词，它们每天都会出现。
 - 只能输出 <input> 里出现过的 id，不许编。
@@ -384,26 +387,47 @@ const CLASSIFY_RULES = `<rules>
   维度决定这条判断以后跟谁合并，选错等于把它归到别的类别里，所以拿不准时按下面 <dimensions> 的定义选，不要自己造词。
 </rules>`;
 
+/**
+ * The index-only mode (0029): items already classified as rules owe one line.
+ *
+ * Kept out of the main rules block so a batch of new candidates never sees it — the
+ * two jobs must not blur, or a newly classified rule gets a catalog line and no trigger.
+ */
+const CLASSIFY_INDEX_MODE = `<index-mode>
+带「规则|」前缀的行已经分好类了，**只补目录索引句**，不要重新分类、不要改触发条件：
+  索引: fc_a | 索引=改 JSON 别用字符串替换
+索引句 ≤30 字、中性陈述、一句话说清"我记得有这件事"；不是命令，不重复触发关键词，不写"必须/一定要"。
+</index-mode>`;
+
 const CLASSIFY_EXAMPLE = `<example>
 <input>
 - fc_a | PowerShell 的 Set-Content 会写入 BOM，改 JSON 一律用 edit 工具
 - fc_b | 用户讨厌同一件事反复讲，换工具又要重新交代
+- fc_c | 规则 | 会话里直接跑 restart-web.ps1 会被宿主连坐杀掉
 </input>
 <output>
-规则: fc_a | 关键词=json,package.json,配置 | 动作=用 edit 工具或 BOM 安全写入，不要用字符串替换
+规则: fc_a | 关键词=json,package.json,配置 | 动作=用 edit 工具或 BOM 安全写入，不要用字符串替换 | 索引=改 JSON 别用字符串替换
 画像: fc_b | 维度=沟通偏好
+索引: fc_c | 索引=重启要用计划任务，别在会话里直接跑脚本
 </output>
 </example>`;
 
 export interface RuleClassifyPromptInput {
-  items: { id: string; statement: string }[];
+  /**
+   * `kind: 'index'` marks a row already classified as a rule (0029 backfill):
+   * it only owes its catalog line, so the prompt must say so per item.
+   */
+  items: { id: string; statement: string; kind?: 'index' }[];
 }
 
 /** Classify a batch of lessons into rules (with a trigger) or profile items. */
 export function renderRuleClassifyPrompt(input: RuleClassifyPromptInput): string {
   // Whole statements: classification reads the judgement itself, and a 120-char
   // prefix can hide the qualifier that decides rule vs profile.
-  const items = input.items.map((item) => `- ${item.id} | ${item.statement}`);
+  const items = input.items.map(
+    (item) => `- ${item.id} | ${item.kind === 'index' ? '规则 | ' : ''}${item.statement}`,
+  );
+  const indexMode = input.items.some((item) => item.kind === 'index');
   return [
     CLASSIFY_ROLE,
     CLASSIFY_RULES,
@@ -411,7 +435,8 @@ export function renderRuleClassifyPrompt(input: RuleClassifyPromptInput): string
     // copy of the admission criteria is a copy that stops matching after one edit.
     PROFILE_DIMENSIONS_BLOCK,
     CLASSIFY_EXAMPLE,
-    '<format>每行：规则: id | 关键词=… | 动作=… ／ 画像: id | 维度=… ／ 待修: id | 原因=…</format>',
+    ...(indexMode ? [CLASSIFY_INDEX_MODE] : []),
+    '<format>每行：规则: id | 关键词=… | 动作=… | 索引=… ／ 画像: id | 维度=… ／ 待修: id | 原因=… ／ 索引: id | 索引=…</format>',
     ['<input>', ...items, '</input>'].join('\n'),
     '<output>',
   ].join('\n\n');

@@ -121,6 +121,96 @@ test('classifier: a keyed line becomes a rule; no condition becomes 待修', () 
   assert.equal(classified[3].reason, '规则缺少触发条件');
 });
 
+test('classifier: a rule line can carry its catalog line, an index line is its own answer', () => {
+  const classified = parseRuleClassifications(
+    [
+      '规则: fc_a | 关键词=json | 动作=用 edit 工具改 JSON | 索引=改 JSON 别用字符串替换',
+      '索引: fc_b | 索引=重启要用计划任务，别在会话里直接跑脚本',
+      '索引: fc_c',
+    ].join('\n'),
+  );
+  assert.deepEqual(
+    classified.map((item) => item.kind),
+    ['rule', 'index', 'index'],
+  );
+  assert.equal(classified[0].index, '改 JSON 别用字符串替换');
+  assert.ok(classified[0].trigger, '索引不是触发条件的替代品');
+  assert.equal(classified[1].index, '重启要用计划任务，别在会话里直接跑脚本');
+  // An empty column is not an index: the caller reports it instead of writing a blank
+  // catalog line, and it is not silently turned into a re-classification either.
+  assert.equal(classified[2].index, undefined);
+});
+
+test('catalog: indexed rules only, ordered by reproduction then confidence, capped', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  const put = (id: string, statement: string, confidence: number, index?: string, recalls = 0) => {
+    store.putFact({
+      soulId: 's1',
+      userId: 'u1',
+      id,
+      statement,
+      role: 'rule',
+      typeName: '规则',
+      holder: 'self',
+      confidence,
+      slots: [
+        { slot: '触发', value: { kind: 'text', value: '{"any":["json"]}' } },
+        ...(index ? [{ slot: '目录句', value: { kind: 'text' as const, value: index } }] : []),
+      ],
+    });
+    for (let i = 0; i < recalls; i += 1) store.recordRecalls([id], 1000 + i);
+  };
+  put('r-fired', '经常复现的规则', 0.6, '经常复现', 2);
+  put('r-once', '复现过一次的规则', 0.6, '复现过一次', 1);
+  put('r-strong', '置信最高但没复现的规则', 1, '置信最高', 0);
+  // No catalog line: counted as missing, never shown with a cut-down statement.
+  put('r-raw', '没有索引句的规则', 0.9, undefined);
+
+  const all = soul.catalog(10);
+  assert.deepEqual(all.entries.map((rule) => rule.id), ['r-fired', 'r-once', 'r-strong']);
+  assert.equal(all.total, 4);
+  assert.equal(all.missingIndex, 1);
+  assert.deepEqual(soul.catalog(2).entries.map((rule) => rule.id), ['r-fired', 'r-once']);
+  store.close();
+});
+
+test('catalog: an index can be filled after classification, but never onto a lesson', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, soulId: 's1', userId: 'u1' });
+  store.putFact({
+    soulId: 's1',
+    userId: 'u1',
+    id: 'r-1',
+    statement: '用 edit 工具改 JSON',
+    role: 'rule',
+    typeName: '规则',
+    holder: 'self',
+    confidence: 0.9,
+    slots: [{ slot: '触发', value: { kind: 'text', value: '{"any":["json"]}' } }],
+  });
+  store.putFact({
+    soulId: 's1',
+    userId: 'u1',
+    id: 'l-1',
+    statement: '还没分类的教训',
+    role: 'lesson',
+    status: 'candidate',
+    holder: 'self',
+    confidence: 0.9,
+  });
+
+  // The backfill writes onto a placed rule through the same slot the classifier uses.
+  assert.equal(soul.markRuleIndex('r-1', '改 JSON 别用字符串替换'), true);
+  assert.equal(soul.catalog(5).entries[0].index, '改 JSON 别用字符串替换');
+  // A candidate must not enter the always-on block by the back door, and it must not
+  // be demoted or promoted by being asked: the answer is skipped and reported.
+  assert.equal(soul.markRuleIndex('l-1', '一条不该出现的索引'), false);
+  assert.equal(soul.markRuleIndex('nope', '不存在的 id'), false);
+  assert.equal(store.fact('l-1')?.status, 'candidate');
+  store.close();
+});
+
 test('classifier: a profile line carries its dimension, and only a real one', () => {
   // The dimension decided here is what the merge step later cuts batches along, so
   // it has to travel with the classification instead of being guessed downstream.

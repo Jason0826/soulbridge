@@ -15,6 +15,7 @@ import {
   parseVerificationDraft,
 } from '../src/consolidate.ts';
 import { renderConsolidationPrompt, renderVerificationPrompt, renderRuleClassifyPrompt } from '../src/prompts.ts';
+import { parseRuleClassifications } from '../src/rules.ts';
 
 const base = { soulId: 's1', userId: 'u1' };
 
@@ -460,6 +461,39 @@ test('profile prompt: the classifier and the merge share one definition of a dim
     assert.ok(classify.includes(line), `classify prompt missing ${line}`);
   }
   assert.match(classify, /画像: id \| 维度=/);
+});
+
+test('classifier prompt: the catalog column is asked for, and the example passes the parser', () => {
+  const prompt = renderRuleClassifyPrompt({ items: [{ id: 'fc_a', statement: '先验证再动手' }] });
+  // 0029: every rule owes one neutral line for the always-on catalog. It is part of
+  // the same call — a second model call for the index would be a second judgement.
+  assert.match(prompt, /每条规则都必须给索引/);
+  // A batch of new candidates must not see the index-only instruction: a rule that
+  // only gets a catalog line and no trigger is a rule that can never fire.
+  assert.equal(prompt.includes('<index-mode>'), false, '新候选批次不该看到索引模式');
+
+  const example = /<output>\n([\s\S]*?)\n<\/output>/.exec(prompt)?.[1] ?? '';
+  const parsed = parseRuleClassifications(example);
+  // The example is the contract: a model copying it must parse into one of each.
+  assert.deepEqual(parsed.map((item) => item.kind), ['rule', 'profile', 'index']);
+  assert.ok(parsed[0].trigger, '规则行必须带可用的触发条件');
+  assert.equal(parsed[0].index, '改 JSON 别用字符串替换');
+  assert.equal(parsed[2].index, '重启要用计划任务，别在会话里直接跑脚本');
+});
+
+test('classifier prompt: an already-classified rule is marked and only owes its index line', () => {
+  const prompt = renderRuleClassifyPrompt({
+    items: [
+      { id: 'fc_a', statement: '已经分好类的规则', kind: 'index' },
+      { id: 'fc_b', statement: '新候选' },
+    ],
+  });
+  // The item line says which job it is; the output anchor says what to answer.
+  assert.match(prompt, /- fc_a \| 规则 \| 已经分好类的规则/);
+  assert.match(prompt, /- fc_b \| 新候选/);
+  assert.match(prompt, /<index-mode>/);
+  assert.match(prompt, /索引: fc_a \| 索引=/);
+  assert.match(prompt, /不要重新分类/);
 });
 
 test('profile prompt: the example inside the prompt must pass the parser', () => {
