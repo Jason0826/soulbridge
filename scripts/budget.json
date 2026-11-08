@@ -1,5 +1,5 @@
 {
-  "date": "2026-11-07",
+  "date": "2026-11-08",
   "note": "棘轮预算：数字是实测值，只能往下调，不能往上调。要加功能导致超限时，先删掉同等规模的东西，再跑 --update-budget。",
   "history": [
     {
@@ -216,14 +216,19 @@
       "date": "2026-11-07",
       "delta": 21,
       "reason": "第二刀 A 的验收尾巴（core 0.0.119）：rules()/profileItems()/profile() 三个读方原来都扫「最新 500 条事实」，分类把旧教训改造成规则/画像后，这些行按 created_at/valid_from 排在窗口外 → 分类产出永远不注入（生产实测 rules() 只看到 11 条，而库里有 93 条带触发规则；A9 review 复核：131 条带触发规则只有 2 条在窗内）。改为按 role+status 查本层，上限 2000 是界不是预算（ADR 0033 要求这层小；撞上限是过升格的信号，rule-stats 可查）。bug 修复按先例允许涨；变异：三条查询各自退回窗口写法各恰 1 红。"
+    },
+    {
+      "date": "2026-11-08",
+      "delta": 49,
+      "reason": "第二刀 B0：规则也要过分类门（core 0.0.120）。writeStatus 让 `角色=rule` 和 lesson 一样落候选——规则只有带 `触发` 槽才算成立，而那个槽只有分类器写得出来；写成 active 的行进不了 rules()，也不进任何计数，56 条就这样静默了四天，其中 11 条是发现当天新写的（A 只补了 lesson 那一路，同一形状的洞还在长）。队列取数改按 status 不按 role（promotionCandidates/promotionBacklog），否则 56 条降级后仍在队列视野外；schema v17 把「active 但触发槽缺失或解析失败」的规则降为候选，解析用 parseTrigger，和读方同一处定义，幂等；分类后角色是 rule 且已带触发的不动。插件侧只扩了注释（+1 行）。bug 修复按先例允许涨；变异：写入口径、队列取数、迁移接线三组，各自恰 1–2 红。"
     }
   ],
-  "coreLines": 9114,
-  "pluginLines": 3563,
+  "coreLines": 9162,
+  "pluginLines": 3564,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 1747,
+    "index.ts": 1765,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 194,
@@ -245,7 +250,7 @@
     "retrieval.ts": 121,
     "roles.ts": 28,
     "scoring.ts": 170,
-    "sqlite.ts": 1958,
+    "sqlite.ts": 1988,
     "config.ts": 96,
     "merge.ts": 41,
     "steering.ts": 103,

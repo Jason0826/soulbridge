@@ -12,6 +12,9 @@ import { DEFAULT_EMOTION } from './types.ts';
 import { FACT_STATUS, MEMORY_STATUS } from './config/status.ts';
 import type { FactStatus } from './config/status.ts';
 import { FACT_ROLES } from './config/domains.ts';
+// The migration asks the same question the reader asks ("can this rule fire?"), so it
+// must use the same answer: parseTrigger is the one definition of a usable trigger.
+import { parseTrigger } from './rules.ts';
 import type {
   AffectSignal,
   Correction,
@@ -44,7 +47,7 @@ import type {
 import type { SoulStore } from './store.ts';
 import { bm25, buildCorpusStats, tokenize } from './scoring.ts';
 
-export const SCHEMA_VERSION = 16;
+export const SCHEMA_VERSION = 17;
 /** How many recent pairs are considered before scoring. Bounded so recall stays O(candidates). */
 const RECALL_CANDIDATES = 500;
 export const AFFECT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -389,6 +392,32 @@ export function upgradeToV16(db: DatabaseSync): void {
   db.exec("UPDATE facts SET status = 'candidate' WHERE role = 'lesson' AND status = 'active'");
 }
 
+export function upgradeToV17(db: DatabaseSync): void {
+  // 0018 §九 3 B: `角色=rule` written by the extractor was stored active, but a rule is
+  // only a rule once it has a 触发 slot, and only the classifier writes one. So those
+  // rows sat in the rule layer with no trigger: `rules()` skipped them, they injected
+  // nowhere, and nothing counted them as debt — 56 of them, 11 written the day before
+  // this migration. A rule that cannot fire is a candidate: the queue sees it, and the
+  // classifier either supplies a trigger or says 待修 (visible, not silent).
+  //
+  // A malformed trigger is the same silence and goes too: parseTrigger is the single
+  // definition of "this rule can fire", and asking a second copy of that question here
+  // is how the two answers drift apart. Idempotent: once demoted, nothing matches.
+  const rows = db
+    .prepare(
+      `SELECT f.id AS id,
+              (SELECT s.value_text FROM fact_slots s
+                WHERE s.fact_id = f.id AND s.slot = '触发' AND s.value_type = 'text'
+                LIMIT 1) AS trigger
+         FROM facts f WHERE f.role = 'rule' AND f.status = 'active'`,
+    )
+    .all() as { id: string; trigger: string | null }[];
+  const demote = db.prepare("UPDATE facts SET status = 'candidate' WHERE id = ?");
+  for (const row of rows) {
+    if (!parseTrigger(row.trigger ?? '')) demote.run(row.id);
+  }
+}
+
 export function upgradeToV14(db: DatabaseSync): void {
   // A database created by the current SCHEMA already has the 0027 shape: it has no `at`
   // and no valid_until, so this step has nothing to say. Checking the column keeps a
@@ -615,6 +644,7 @@ export function openSqlite(file: string): SoulStore {
       if (version < 14) upgradeToV14(db);
       if (version < 15) upgradeToV15(db);
       if (version < 16) upgradeToV16(db);
+      if (version < 17) upgradeToV17(db);
       // v6 adds tables only; SCHEMA creates them on every open, nothing to copy.
       setVersion(db, SCHEMA_VERSION);
       db.exec('COMMIT');

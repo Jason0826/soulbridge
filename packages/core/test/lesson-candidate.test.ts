@@ -56,8 +56,10 @@ test('classification: a classified rule is active and fires; a profile line join
   const rule = soul.recordFact({ ...base, statement: '改 JSON 用 edit 工具', role: 'rule' });
   const profile = soul.recordFact({ ...base, statement: '用户要机制不要 hope', role: 'profile' });
 
-  // Both arrive as candidates: the classifier, not the writer, decides the layer.
-  store.setFactStatus(rule.id, 'candidate');
+  // A rule arrives as a candidate: it has no 触发 slot yet, so it cannot fire (0018 §九 3 B).
+  assert.equal(rule.status, 'candidate', 'a rule is a candidate until its trigger exists');
+  // A profile line is a description, not an instruction: it is in use on write.
+  assert.equal(profile.status, 'active');
   store.setFactStatus(profile.id, 'candidate');
 
   soul.markRule(rule.id, { trigger: '{"any":["json"]}', action: '用 edit 工具改 JSON' });
@@ -80,7 +82,8 @@ test('rules: a rule derived from an old lesson still fires when newer facts pile
     role: 'rule',
     validFrom: Date.parse('2026-11-01T00:00:00Z'),
   });
-  store.addSlots(rule.id, [{ slot: '触发', value: { kind: 'text', value: '{"any":["门禁"]}' } }]);
+  // The classifier is what gives a rule its trigger and puts it in use.
+  soul.markRule(rule.id, { trigger: '{"any":["门禁"]}' });
   // The classifier retags an older lesson while the store keeps growing: 600 newer
   // observations push the rule out of the newest-window the reader used to scan.
   for (let i = 0; i < 600; i += 1) {
@@ -134,9 +137,65 @@ test('upgrade to v16: lessons written before the fix stop being injected as anch
     .sort((a, b) => a[0].localeCompare(b[0]));
   store.close();
 
+  // f_rule is demoted by v17 in the same open: it has no 触发 slot, so it could
+  // never fire and is a candidate like the lessons (0018 §九 3 B). The v17 test
+  // below covers the shape of that decision; this one pins that the chain runs.
   assert.deepEqual(statuses, [
     ['f_candidate_lesson', 'candidate'],
     ['f_legacy_lesson', 'candidate'],
-    ['f_rule', 'active'],
+    ['f_rule', 'candidate'],
   ]);
+});
+
+test('upgrade to v17: an active rule that cannot fire becomes a candidate, a usable one stays', () => {
+  const file = join(tmpdir(), `soulbridge-v17-${process.pid}-${Date.now()}.db`);
+  openSqlite(file).close();
+
+  const raw = new DatabaseSync(file);
+  const insert = raw.prepare(
+    `INSERT INTO facts (id, soul_id, user_id, statement, holder, role, status, confidence, source, created_at)
+     VALUES (?, 's1', 'u1', ?, 'world', 'rule', 'active', 1, 'told', 1)`,
+  );
+  const slot = raw.prepare(
+    `INSERT INTO fact_slots (fact_id, slot, value_type, value_text) VALUES (?, '触发', 'text', ?)`,
+  );
+  // Three shapes the reader treats differently: absent, unparseable, usable.
+  insert.run('f_no_trigger', '判断层的准入条件是证据不少于两条');
+  insert.run('f_bad_trigger', '新会话开场先读交接');
+  slot.run('f_bad_trigger', 'not json at all');
+  insert.run('f_empty_trigger', '改 JSON 用 edit 工具');
+  slot.run('f_empty_trigger', '{}');
+  insert.run('f_good_trigger', '门禁用 exit code 判');
+  slot.run('f_good_trigger', '{"any":["门禁"]}');
+  raw.prepare("UPDATE schema_meta SET v = '16' WHERE k = 'schema_version'").run();
+  raw.close();
+
+  const store = openSqlite(file);
+  const statuses = store
+    .facts({ soulId: 's1', userId: 'u1', limit: 10 })
+    .map((fact) => [fact.id, String(fact.status)])
+    .sort((a, b) => a[0].localeCompare(b[0]));
+  // The rule layer reads what can fire; a demoted row is somebody's decision to make.
+  const soul = new Soul({ store, ...base });
+  const firing = soul.rules().map((rule) => rule.id);
+  store.close();
+
+  assert.deepEqual(statuses, [
+    ['f_bad_trigger', 'candidate'],
+    ['f_empty_trigger', 'candidate'],
+    ['f_good_trigger', 'active'],
+    ['f_no_trigger', 'candidate'],
+  ]);
+  assert.deepEqual(firing, ['f_good_trigger'], 'only a rule with a trigger is in the layer');
+});
+
+test('backlog: a rule candidate waits with the lessons instead of sitting in the rule layer', () => {
+  const store = openSqlite(':memory:');
+  const soul = new Soul({ store, ...base });
+  const lesson = soul.recordFact({ ...base, statement: '先看见红再修', role: 'lesson' });
+  const rule = soul.recordFact({ ...base, statement: '用户认为 valid_until 等于事件发生时间', role: 'rule' });
+  assert.equal(rule.status, 'candidate', 'a rule with no trigger is waiting, not in use');
+  const backlog = soul.promotionBacklog().map((fact) => fact.id);
+  assert.deepEqual(backlog.sort(), [lesson.id, rule.id].sort(), 'the queue takes candidates, whatever role');
+  store.close();
 });

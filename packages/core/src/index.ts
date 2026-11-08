@@ -147,12 +147,20 @@ const MAX_FACT_CHARS = 200;
  * The lifecycle state a fact is *written* with, from its role (config/status.ts).
  *
  * A lesson is a candidate: held, injected nowhere, waiting for the classifier that
- * turns it into a rule or a profile line (0018 §九 3). Every other role starts in use
- * — `undefined` lets the column default stay the single declaration of "active".
- * This is the code's decision, never the model's: the model supplies the role.
+ * turns it into a rule or a profile line (0018 §九 3). A rule is a candidate for the
+ * same reason from the other end: it only becomes a rule once its 触发 slot exists,
+ * and the classifier is the only writer of that slot. Stored active without one, the
+ * row sat in the rule layer that `rules()` must skip — injected nowhere, counted
+ * nowhere, and invisible as debt until it was counted by hand (56 rows in production,
+ * 11 written the day before they were found). So both roles start as candidates; the
+ * classifier is what puts either one in use.
+ *
+ * Every other role starts in use — `undefined` lets the column default stay the single
+ * declaration of "active". This is the code's decision, never the model's: the model
+ * supplies the role.
  */
 function writeStatus(role: FactRole | undefined): FactStatus | undefined {
-  return role === 'lesson' ? FACT_STATUS.candidate : undefined;
+  return role === 'lesson' || role === 'rule' ? FACT_STATUS.candidate : undefined;
 }
 
 /**
@@ -336,29 +344,35 @@ export class Soul {
   }
 
   /**
-   * The experiences of one turn that were flagged as lessons, and nothing else.
+   * The experiences of one turn that still owe a classification decision, and nothing else.
    *
    * Promotion reads the flag, never the statement: whether a sentence is "about how
    * to work" is the semantic call the extractor already made, and re-deriving it in
    * code would be the guess ADR 0027 forbids.
+   *
+   * The filter is the status, not the role: a candidate is a row held out of every
+   * layer because nobody has placed it yet, and the queue's job is to place rows, not
+   * to re-check the model's guess at a role. Filtering on `role === 'lesson'` is what
+   * left 56 `角色=rule` rows invisible — they were candidates in fact and lessons in
+   * filter (0018 §九 3 B).
    */
   promotionCandidates(turnId: string): Fact[] {
     return this.store
       .factsByTurns([turnId], { includeCandidates: true })
-      .filter((fact) => fact.role === 'lesson' && fact.status === 'candidate');
+      .filter((fact) => fact.status === 'candidate');
   }
 
   /**
-   * Every lesson still waiting to be classified, oldest first.
+   * Every candidate still waiting to be placed, oldest first.
    *
    * The queue's live producer feeds one drained turn at a time, so lessons extracted
    * before the producer existed never reach the classifier. This is the inventory one
    * pass puts back in the queue (0018 §九 3 A, 存量), not a ranking: all of them are
-   * owed the same second look.
+   * owed the same second look. Same filter as `promotionCandidates`: the status.
    */
   promotionBacklog(limit = 400): Fact[] {
     return this.store
-      .facts({ soulId: this.soulId, userId: this.userId, role: 'lesson', status: 'candidate', limit: 1000 })
+      .facts({ soulId: this.soulId, userId: this.userId, status: 'candidate', limit: 1000 })
       .sort((a, b) => a.createdAt - b.createdAt)
       .slice(0, Math.max(0, limit));
   }
@@ -1015,7 +1029,11 @@ export class Soul {
    * The rules we hold (ADR 0033): facts whose type is 规则 and whose 触发 slot parses.
    *
    * A rule without a usable trigger is skipped, not injected — an always-on rule is
-   * wallpaper, and wallpaper is how a lesson gets ignored.
+   * wallpaper, and wallpaper is how a lesson gets ignored. Skipping is also how such a
+   * row used to hide: written active with no trigger it was counted in the layer but
+   * could never fire. The writers keep that from happening now (role `rule` is stored
+   * as a candidate, schema v17 demotes the rows that predate it), so a row skipped here
+   * is a tell, not a normal case.
    *
    * Reads the rule layer itself, not "the newest N facts": a lesson from last week can
    * be classified into a rule today, and scanning a newest-window silently dropped it

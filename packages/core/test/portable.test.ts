@@ -18,7 +18,8 @@ test('portable: the bundle carries archive, summary and injection', () => {
     steps: [{ idx: 0, kind: 'text', text: '好的', at: 1100 }],
   });
   const rule = soul.recordFact({ ...base, statement: '改 JSON 用 edit 工具', role: 'rule' });
-  store.addSlots(rule.id, [{ slot: '触发', value: { kind: 'text', value: '改 json' } }]);
+  // A rule is placed by the classifier: it writes the trigger and puts the row in use.
+  soul.markRule(rule.id, { trigger: '{"any":["改 json"]}' });
   soul.rememberEntity('小林', 'person', { aliases: ['阿林'] });
 
   const bundle = soul.portableBundle(2000);
