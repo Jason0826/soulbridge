@@ -236,10 +236,15 @@
       "date": "2026-11-08",
       "delta": 157,
       "reason": "0029 阶段 1：目录进 pre-step + 取数可计数（插件 0.0.130）。L0 `<catalog shown total>` 紧接画像块，关键词推送原样保留作对照；soul_recall / soul_detail 写 tool-call 事件（判决线是调用次数，日志散文不可机读——「0 次」这个基线以前只能靠人肉 grep）；catalog 事件带 ids，用来判 soul_detail 取的是不是目录里的条目；规则开火也记一次 practice（目录排序唯一的可算信号）。存量补齐走 pending-classify 自己的写者（kind=index、reason=索引、桶排最后），marker 按 id 记账：只投没投过的，新规则缺索引仍会被拾起（B0 的「摘要变小也重跑」不能再来一次）。索引回答只走 applyClassifications 路由：空索引/已退场的规则跳过并计数，不落成 待修（那会把在用的规则降级）。新增功能按先例记 history；变异六组：kind 传递、计数夹紧、id 记账、转义、补齐接线、索引路由，各恰 1 红。"
+    },
+    {
+      "date": "2026-11-08",
+      "delta": 8,
+      "reason": "0029 阶段 1 的前缀守卫（插件 0.0.131）：补索引的批次里，模型如果无视「规则|」前缀把已安置的规则重新分类，旧路由会改写一条没人要求改的触发条件（addSlots 会叠第二个 `触发` 槽），而且它仍然拿不到目录句。守卫保留原安置、把这类回答计入 index-skipped 并记一行日志——第一批就能看见 index-skipped=10，而不是安静地弄脏规则层。+8 行（路由分支 + 注释），功能先例记 history；变异：禁用守卫 → 路由用例恰 1 红。"
     }
   ],
   "coreLines": 9270,
-  "pluginLines": 3733,
+  "pluginLines": 3741,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
