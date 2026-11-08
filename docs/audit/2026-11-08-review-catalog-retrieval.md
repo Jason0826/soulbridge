@@ -39,18 +39,19 @@ health-check 0 FAIL / 18 WARN / 25 PASS（WARN 全是老账）
 
 | 行为 | 需要的自然样本 | 状态 |
 |---|---|---|
-| 目录进 pre-step | 重启后第一轮：`catalog: entries=… total=188` 且注入块含 `<catalog>` | ⏳ 待验收（部署后立刻可看） |
-| 存量补齐 188 条 | 首个真实用户消息触发 `catalog backfill: N rule(s) queued` → 19 批 `classify: … indexed=10` | ⏳ 待验收 |
-| 判决线（soul_recall / soul_detail 调用 > 0） | `catalog-stats.mjs` 窗口内调用数；相关率需 10 条人工抽样 | ⏳ 待验收（3 天观察） |
-| 分类新生规则的索引句 | 下一次分类批次的输出含 `索引=`，且 `catalog missing` 不随批次上涨 | ⏳ 待验收 |
+| 目录进 pre-step | 重启后第一轮：`catalog: entries=… total=188` 且注入块含 `<catalog>` | ✅ 12:09:16Z `catalog entries=20 total=189 missing=0 chars=917`；块里 20 个 id 与 trace `ids` 逐一对上 |
+| 存量补齐 188 条 | 首个真实用户消息触发 `catalog backfill: N rule(s) queued` → 19 批 `classify: … indexed=10` | ✅ 11:59:31Z `queued=189`；19 批（18×10 + 1×9）`indexed=10`、`index-skipped=0`；库内 189/189 有 `目录句`；12:09:16Z 再次盘点 `queued=0 missing=0 attempted=189`（幂等） |
+| 判决线（soul_recall / soul_detail 调用 > 0） | `catalog-stats.mjs` 窗口内调用数；相关率需 10 条人工抽样 | ⏳ 观察中（窗口自 12:09:16Z 起，3 天）；窗口 <24h 不判 FAIL |
+| 分类新生规则的索引句 | 下一次分类批次的输出含 `索引=`，且 `catalog missing` 不随批次上涨 | ⏳ 待验收（部署后还没有新规则进分类队列） |
 | B0 的 56 条已收口 | 已在 10-02 重启后实测：active 规则 133、带槽 133、无槽 0、candidates 65 | ✅ 已验收 |
 
 ## 四、发现了什么（没在这次修的）
 
 1. **目录排序只算了一半**：brief §四 要求「scope + 复现频率」，scope 没有建模（fact 上没有作用域字段），所以排序只有 `recall_count → confidence`。开放问题 4 仍未关；当前排序是「可算的那一半」，不是「够用的那个」。
-2. **索引句没有机器上限**：prompt 要求 ≤30 字，代码不截断（规则 17），也不拒绝长句——模型写 80 字时目录会变胖。`catalog-stats` 目前只报目录字符数，没报单条超长数；先观察，不为一个未出现的失败加闸门。
+2. **索引句没有机器上限**：prompt 要求 ≤30 字，代码不截断（规则 17），也不拒绝长句——模型写 80 字时目录会变胖。实测 189 条里 7 条 >30 字（最长 40，均值 17.7），没成灾；`catalog-stats` 目前只报目录字符数，没报单条超长数——先观察，不为一个未出现的失败加闸门。
 3. **补齐的失败是可见但不自愈**：一批三次失败会 `classify-abandoned` + 该规则留在 `missing` 计数里，不会被下一次启动重投（这是 B0 marker 的取舍：绝不因集合变小而重跑）。它不静默，但也需要人工看 `catalog missing` 才会发现。
 4. **流程事故（自己的坑）**：变异测试用 `git checkout --` 恢复文件，会把**未提交**的重构一起回滚——本次 `applyClassifications` 差点丢失，靠 3 个测试变红抓回来。教训：变异只对已提交代码做；「恢复」恢复的是 HEAD，不是编辑前。已记进 state.md 的坑清单。
+5. **判决工具在 t=0 会说谎**：`catalog-stats` 原来在调用数为 0 时直接打 FAIL，可目录上线后的第一轮按构造必然是 0 次——它会把「还没轮到」念成「失败」，正好诱发 brief 明令禁止的「逼一次调用」。改成窗口 ≥24h（`--min-hours`）才判 FAIL，窗口不是就报「待观察」。判决线要带样本量，工具也一样。
 
 ## 五、结论
 

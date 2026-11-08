@@ -33,6 +33,14 @@ function argValue(name, fallback) {
 }
 
 const SAMPLE = Math.max(1, Number(argValue('--sample', 10)));
+// The judgement needs a window, not just a count: the first turn after the catalog
+// ships has zero calls by construction, and calling that a failure would invite
+// exactly the forcing the brief forbids. 24h is the floor before "no calls" is news.
+const MIN_HOURS = Number(argValue('--min-hours', 24));
+if (!Number.isFinite(MIN_HOURS) || MIN_HOURS < 0) {
+  console.error(`--min-hours 不是非负数字：${argValue('--min-hours', '')}`);
+  process.exit(1);
+}
 const SINCE_ARG = argValue('--since', '');
 if (SINCE_ARG && Number.isNaN(Date.parse(SINCE_ARG))) {
   console.error(`--since 不是可解析的时间：${SINCE_ARG}`);
@@ -102,12 +110,22 @@ if (classify.length > 0) {
   console.log(`索引    ${classify.length} 个分类批次 · 补出 ${indexed} 条索引句 · 跳过 ${skipped}`);
 }
 if (backfill.length > 0) {
-  console.log(`补齐    ${backfill.reduce((n, e) => n + (e.queued ?? 0), 0)} 条规则进过索引队列（${backfill.length} 次盘点）`);
+  const last = backfill.at(-1);
+  console.log(
+    `补齐    ${backfill.reduce((n, e) => n + (e.queued ?? 0), 0)} 条规则进过索引队列（${backfill.length} 次盘点，` +
+      `末次 attempted=${last.attempted ?? '?'}）`,
+  );
 }
 
 const calls = recalls.length + details.length;
+const windowHours = (Date.now() - gateMs) / 3_600_000;
 if (calls === 0) {
-  console.log('判决    FAIL：目录上线后一次 soul_recall / soul_detail 都没有——按 0029 §0 记「模型主动取数」失败，不硬撑。');
+  console.log(
+    windowHours < MIN_HOURS
+      ? `判决    待观察：窗口 ${windowHours.toFixed(1)} 小时 < ${MIN_HOURS}——空样本不是判决（规则 20），` +
+          `也不是要现在逼一次调用（0029 §0）。`
+      : '判决    FAIL：目录上线超过窗口下限，一次 soul_recall / soul_detail 都没有——按 0029 §0 记「模型主动取数」失败，不硬撑。',
+  );
 } else if (calls < 5) {
   console.log(`判决    样本不足（${calls} 次 < 5）：只报数，不写「已通过」（规则 20）。`);
 } else {
