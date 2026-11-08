@@ -221,10 +221,15 @@
       "date": "2026-11-08",
       "delta": 49,
       "reason": "第二刀 B0：规则也要过分类门（core 0.0.120）。writeStatus 让 `角色=rule` 和 lesson 一样落候选——规则只有带 `触发` 槽才算成立，而那个槽只有分类器写得出来；写成 active 的行进不了 rules()，也不进任何计数，56 条就这样静默了四天，其中 11 条是发现当天新写的（A 只补了 lesson 那一路，同一形状的洞还在长）。队列取数改按 status 不按 role（promotionCandidates/promotionBacklog），否则 56 条降级后仍在队列视野外；schema v17 把「active 但触发槽缺失或解析失败」的规则降为候选，解析用 parseTrigger，和读方同一处定义，幂等；分类后角色是 rule 且已带触发的不动。插件侧只扩了注释（+1 行）。bug 修复按先例允许涨；变异：写入口径、队列取数、迁移接线三组，各自恰 1–2 红。"
+    },
+    {
+      "date": "2026-11-08",
+      "delta": 12,
+      "reason": "B0 的第二个坑（插件 0.0.129）：backlog marker 从「跑过了」的戳改成记 inventory 的 id 摘要。v17 把 56 条不能触发的规则降为候选，而这些行的轮次早抽过，没有生产者会喂；旧 marker 于是把这批新债全挡在队列外，队列显示为空——同一批行第二次不可见，这次有「队列是空的」当不在场证明。改动 +12 行（createHash + 摘要比较 + 注释说明为什么不是裸戳）。bug 修复按先例允许涨；变异：退回裸戳 → 新用例恰 1 红（a new candidate re-opens the pass）。"
     }
   ],
   "coreLines": 9162,
-  "pluginLines": 3564,
+  "pluginLines": 3576,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
