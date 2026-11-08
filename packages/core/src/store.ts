@@ -91,6 +91,13 @@ export interface SoulStore {
   closeIdleThreads(soulId: string, userId: string, sessionId: string, idleTurns: number, idleMs: number, archivedSessionIds: string[], at: number): Array<{ id: string; reason: 'archived' | 'quiet-turns' | 'quiet-time' }>;
   /** Append slots to an existing fact, skipping ones it has. Returns how many were added. */
   addSlots(factId: string, slots: { slot: string; value: SlotValue }[]): number;
+  /**
+   * Replace the value of one single-valued slot (0029 index rewrite).
+   *
+   * `addSlots` appends, so rewriting a catalog line would leave the old one in the
+   * same slot and the row would carry two answers to one question.
+   */
+  replaceSlot(factId: string, slot: string, value: SlotValue): boolean;
   setFactTypeName(factId: string, typeName: string): void;
   /** What the fact is for (config/domains.ts FACT_ROLES); the caller decides. */
   setFactRole(factId: string, role: FactRole): void;

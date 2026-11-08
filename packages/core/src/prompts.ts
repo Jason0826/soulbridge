@@ -366,6 +366,22 @@ const CLASSIFY_ROLE = `<role>
 已经分好类的规则（带「规则|」前缀的行）只补一句目录索引，不重新分类。
 </role>`;
 
+/**
+ * What a catalog line must be (0029). One definition, used by both the classifying
+ * batch and the index-only batch: the two jobs write into the same slot, so a second
+ * copy would drift the moment one of them is edited.
+ *
+ * The bar is self-containment, not brevity. A sample of 189 lines reviewed by the user
+ * found a quarter of them pointing at a location instead of carrying information
+ * ("重启杀掉 turn 18" — a later reader does not know which turn that was), which makes
+ * the line useless exactly when it is the only thing visible.
+ */
+const INDEX_LINE_RULES = `索引句是以后**唯一**能想起这条规则的线索，必须自带信息：
+  - 写「发生了什么、该注意什么」本身，不写位置：不出现 turn 编号、step、fc_/tp_ 这类 id、commit hash、日志里的内部标记（unit=…）、schema 版本号。
+  - 不写变更动作：不要「新增了…字段」「改成…」这种记录，写改动之后定下来的规则内容。
+  - 离开原句也能读懂：一个不知道这段对话的人看完，能说出大概发生了什么。
+  - ≤30 字、中性陈述（"我记得有这件事"），不是命令，不写"必须/一定要"，不重复触发关键词。`;
+
 const CLASSIFY_RULES = `<rules>
 一条一条判断，每种输出一行：
 - 规则 = 能回答"什么时候该做什么"。它必须有一个具体的触发场景。
@@ -377,9 +393,10 @@ const CLASSIFY_RULES = `<rules>
   正则=\.json\b                  关键词不够具体时用
   状态=long-session              会话状态（长会话、连续空回复）
   动作=用 edit 工具改 JSON        祈使句，一句话
-  索引=改 JSON 别用字符串替换     常驻目录里的一行，≤30 字，中性陈述（"我记得有这件事"），不是命令
+  索引=改 JSON 别用字符串替换     常驻目录里的一行，规则见下
   至少给一个触发条件；一个都没有就写"待修"。
   每条规则都必须给索引：以后它只靠这一行被想起来，写不出就说明这条规则还没想清楚。
+${INDEX_LINE_RULES}
 
 - 关键词不要用"代码""工作"这种大词，它们每天都会出现。
 - 只能输出 <input> 里出现过的 id，不许编。
@@ -394,9 +411,10 @@ const CLASSIFY_RULES = `<rules>
  * two jobs must not blur, or a newly classified rule gets a catalog line and no trigger.
  */
 const CLASSIFY_INDEX_MODE = `<index-mode>
-带「规则|」前缀的行已经分好类了，**只补目录索引句**，不要重新分类、不要改触发条件：
+带「规则|」前缀的行已经分好类了，**只写目录索引句**，不要重新分类、不要改触发条件。
+这一行如果已经有旧的索引句就重写它：只改写法，不改规则的意思，也不许加原句里没有的内容。
   索引: fc_a | 索引=改 JSON 别用字符串替换
-索引句 ≤30 字、中性陈述、一句话说清"我记得有这件事"；不是命令，不重复触发关键词，不写"必须/一定要"。
+${INDEX_LINE_RULES}
 </index-mode>`;
 
 const CLASSIFY_EXAMPLE = `<example>

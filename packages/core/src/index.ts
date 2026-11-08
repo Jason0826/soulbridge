@@ -1115,18 +1115,23 @@ export class Soul {
   }
 
   /**
-   * Give an already-placed rule its catalog line (0029 backfill).
+   * Give an already-placed rule its catalog line (0029), or rewrite one (0029 §五).
    *
    * Returns false when the id is not an active rule: the answer is skipped and
    * reported, never applied to a lesson (an index on a parked row would put a
    * candidate into the always-on block) and never demoting it either.
+   *
+   * A rewrite **replaces** the line instead of appending: `addSlots` skips only exact
+   * duplicates, so a different line would sit next to the old one in the same slot and
+   * `rules()` would keep returning whichever it read first — the rewrite would look
+   * applied and change nothing.
    */
   markRuleIndex(factId: string, index: string): boolean {
     const line = String(index ?? '').trim();
     if (!line) return false;
     const fact = this.store.fact(factId);
     if (!fact || fact.role !== 'rule' || !isActive(fact)) return false;
-    this.store.addSlots(factId, [{ slot: '目录句', value: { kind: 'text', value: line } }]);
+    this.store.replaceSlot(factId, '目录句', { kind: 'text', value: line });
     return true;
   }
 

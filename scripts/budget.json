@@ -241,14 +241,24 @@
       "date": "2026-11-08",
       "delta": 8,
       "reason": "0029 阶段 1 的前缀守卫（插件 0.0.131）：补索引的批次里，模型如果无视「规则|」前缀把已安置的规则重新分类，旧路由会改写一条没人要求改的触发条件（addSlots 会叠第二个 `触发` 槽），而且它仍然拿不到目录句。守卫保留原安置、把这类回答计入 index-skipped 并记一行日志——第一批就能看见 index-skipped=10，而不是安静地弄脏规则层。+8 行（路由分支 + 注释），功能先例记 history；变异：禁用守卫 → 路由用例恰 1 红。"
+    },
+    {
+      "date": "2026-11-08",
+      "delta": 68,
+      "reason": "0029 §五：索引句要带信息，不是指路（core 0.0.122）。用户抽读 20 条索引句，5 条判 ✗ —— 三条写的是位置（turn 18 / unit=Nturns），一条写的是变更动作（新增了某字段），一条是口号。抽样 25%、正则只能抓 4%，所以修的是提示词而不是加过滤器：索引句定义收成一处 INDEX_LINE_RULES（分类批次与索引批次共用，两个副本会漂移），明写「不写位置、不写变更、离开原句能读懂」。顺带修一个真 bug：markRuleIndex 用 addSlots 追加，重写必然留下两条 目录句（addSlots 只跳过完全相同的值），rules() 会读到旧的那条；新增 store.replaceSlot（delete+insert 同事务），重写才是替换。变异三组：重写退回 addSlots、索引模式块丢掉共用规则、分类规则块丢掉共用规则，各恰 1 红（第二组首跑假绿：断言整篇搜关键词，另一块里也有同一句话，改成在块内搜才红）。"
+    },
+    {
+      "date": "2026-11-08",
+      "delta": 85,
+      "reason": "0029 §五：全量重写目录句 + 结构闸门（插件 0.0.132）。`isLocalCoordinate` 拦「本地坐标」这一类：turn 编号/step、fc_/tp_ id、commit hash、unit= 这类日志标记、schema 版本号、「新增了…字段」这种变更记录 —— 形态的东西代码管，语义漂移（口号）仍留给人的抽样，不把「没查」包装成「查过了」。重写复用同一条队列与同一个提示词（kind=index、reason=索引重写、桶排最后），一次性 marker：新提示词覆盖此后所有新规则，再跑只会把好的改一遍。被拦下的行不写库、旧行保留、计 index-rejected 并记日志——宁可留旧的可读行，也不覆盖成更差的指针。变异三组：闸门恒 false、重写接线被删、桶顺序颠倒，各恰 1 红。"
     }
   ],
-  "coreLines": 9270,
-  "pluginLines": 3741,
+  "coreLines": 9338,
+  "pluginLines": 3826,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 1814,
+    "index.ts": 1819,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 228,
@@ -265,17 +275,17 @@
     "portable.ts": 115,
     "profile-prompt.ts": 119,
     "prompts.generated.ts": 15,
-    "prompts.ts": 446,
+    "prompts.ts": 464,
     "reflect.ts": 417,
     "retrieval.ts": 121,
     "roles.ts": 28,
     "scoring.ts": 170,
-    "sqlite.ts": 1988,
+    "sqlite.ts": 2026,
     "config.ts": 96,
     "merge.ts": 41,
     "steering.ts": 103,
     "transcript.ts": 96,
-    "store.ts": 181,
+    "store.ts": 188,
     "measure.ts": 45,
     "time.ts": 213,
     "types.ts": 821

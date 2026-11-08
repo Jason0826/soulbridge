@@ -1594,6 +1594,44 @@ export function openSqlite(file: string): SoulStore {
       return added;
     },
 
+    /**
+     * Replace one single-valued slot in one transaction (0029 index rewrite).
+     *
+     * `addSlots` appends, so a rewritten catalog line would sit next to the old one
+     * in slot `目录句` and `rules()` would keep reading whichever row it met first —
+     * the rewrite would look applied and change nothing. Delete + insert must commit
+     * together or the row loses its slot entirely.
+     */
+    replaceSlot(factId: string, slot: string, value: SlotValue): boolean {
+      return withRetry(() => {
+        db.exec('BEGIN IMMEDIATE');
+        try {
+          db.prepare('DELETE FROM fact_slots WHERE fact_id = ? AND slot = ?').run(factId, slot);
+          db.prepare(
+            `INSERT INTO fact_slots (fact_id, slot, value_type, entity_id, value_num, value_text, ref_fact_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          ).run(
+            factId,
+            slot,
+            value.kind,
+            value.kind === 'entity' ? value.entityId : null,
+            value.kind === 'number' ? value.value : null,
+            value.kind === 'text' ? value.value : null,
+            value.kind === 'fact' ? value.factId : null,
+          );
+          db.exec('COMMIT');
+          return true;
+        } catch (error) {
+          try {
+            db.exec('ROLLBACK');
+          } catch {
+            // The transaction is already gone; the original error is what matters.
+          }
+          throw error;
+        }
+      });
+    },
+
     /** Retag a fact, e.g. a lesson that turned out to be a rule (ADR 0033). */
     setFactTypeName(factId: string, typeName: string): void {
       withRetry(() => db.prepare('UPDATE facts SET type_name = ? WHERE id = ?').run(typeName, factId));

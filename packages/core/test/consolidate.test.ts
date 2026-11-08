@@ -468,6 +468,11 @@ test('classifier prompt: the catalog column is asked for, and the example passes
   // 0029: every rule owes one neutral line for the always-on catalog. It is part of
   // the same call — a second model call for the index would be a second judgement.
   assert.match(prompt, /每条规则都必须给索引/);
+  // One definition, two statements of it: the self-containment bar is a shared block,
+  // so the classifying batch and the index-only batch cannot drift apart. Scoped to the
+  // rules block so the index-mode copy cannot make this pass on its own.
+  const rulesBlock = /<rules>([\s\S]*?)<\/rules>/.exec(prompt)?.[1] ?? '';
+  assert.match(rulesBlock, /索引句是以后\*\*唯一\*\*能想起这条规则的线索/);
   // A batch of new candidates must not see the index-only instruction: a rule that
   // only gets a catalog line and no trigger is a rule that can never fire.
   assert.equal(prompt.includes('<index-mode>'), false, '新候选批次不该看到索引模式');
@@ -494,6 +499,15 @@ test('classifier prompt: an already-classified rule is marked and only owes its 
   assert.match(prompt, /<index-mode>/);
   assert.match(prompt, /索引: fc_a \| 索引=/);
   assert.match(prompt, /不要重新分类/);
+  // 0029 §五: the line must carry the information, not point at a place. The assertions
+  // are scoped to the index-mode block on purpose: the same sentences also appear in the
+  // classifying rules block, so a whole-prompt search would stay green after the mode
+  // block lost them (that mutation was caught here, not in review).
+  const modeBlock = /<index-mode>([\s\S]*?)<\/index-mode>/.exec(prompt)?.[1] ?? '';
+  assert.match(modeBlock, /不出现 turn 编号/);
+  assert.match(modeBlock, /离开原句也能读懂/);
+  // The rewrite job reuses this mode: it must say "rewrite", not only "fill in".
+  assert.match(modeBlock, /已经有旧的索引句就重写它/);
 });
 
 test('profile prompt: the example inside the prompt must pass the parser', () => {

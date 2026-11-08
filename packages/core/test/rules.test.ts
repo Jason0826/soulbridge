@@ -203,6 +203,16 @@ test('catalog: an index can be filled after classification, but never onto a les
   // The backfill writes onto a placed rule through the same slot the classifier uses.
   assert.equal(soul.markRuleIndex('r-1', '改 JSON 别用字符串替换'), true);
   assert.equal(soul.catalog(5).entries[0].index, '改 JSON 别用字符串替换');
+  // 0029 §五 rewrite: the second line replaces the first instead of stacking next to it.
+  // `addSlots` skips only exact duplicates, so an append would leave two answers to
+  // "what is this rule" in slot 目录句 and `rules()` would keep whichever came first.
+  assert.equal(soul.markRuleIndex('r-1', '改 JSON 用 edit，别用字符串替换'), true);
+  assert.equal(soul.catalog(5).entries[0].index, '改 JSON 用 edit，别用字符串替换');
+  assert.equal(
+    store.fact('r-1')?.slots.filter((s) => s.slot === '目录句').length,
+    1,
+    '重写是替换，不是追加',
+  );
   // A candidate must not enter the always-on block by the back door, and it must not
   // be demoted or promoted by being asked: the answer is skipped and reported.
   assert.equal(soul.markRuleIndex('l-1', '一条不该出现的索引'), false);
