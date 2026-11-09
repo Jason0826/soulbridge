@@ -90,8 +90,32 @@ if (existsSync(TRACE_FILE)) {
   }
 }
 
-const firstCatalog = events.find((event) => event.event === 'catalog')?.ts;
-const GATE = SINCE_ARG || firstCatalog;
+// The window belongs to the content the model currently sees: after a rewrite the
+// block is a different directory, and calls made before it do not count (0029 §九 —
+// the window resets on content change). So the gate is the first injection of the
+// *current* content: the first catalog event after the last content change.
+//
+// What counts as a change: the injected sentences changed — a rewrite (chars moves)
+// or a membership swap (a line enters/leaves the top 20). What does NOT count: the
+// same sentences in a different order (a rank swap from `rule_fired` bumps a
+// recall_count and reshuffles; resetting there would let the keyword control arm keep
+// clearing the window that judges it, so 24h could never be reached). `total` alone
+// is not content: a new rc=0 rule never enters the top 20.
+// `--since` still wins for changes the trace cannot show (e.g. a stats-semantics edit
+// in this script). The change count is printed so an unreachable window is visible
+// before the judgement quietly fails to arrive.
+const catalogsAll = events.filter((event) => event.event === 'catalog');
+const fingerprint = (event) =>
+  JSON.stringify([Array.isArray(event.ids) ? [...event.ids].sort() : null, event.chars ?? null]);
+let gateFromContent = catalogsAll[0]?.ts;
+let contentChanges = 0;
+for (let i = 1; i < catalogsAll.length; i++) {
+  if (fingerprint(catalogsAll[i - 1]) !== fingerprint(catalogsAll[i])) {
+    gateFromContent = catalogsAll[i].ts;
+    contentChanges += 1;
+  }
+}
+const GATE = SINCE_ARG || gateFromContent;
 if (!GATE) {
   console.log('还没有 catalog 事件：目录没有上线过（或 trace 已轮转），判决线无从谈起。');
   // The line sample reads only the database, so it still runs without a window.
@@ -114,7 +138,14 @@ const details = toolCalls.filter((event) => event.name === 'soul_detail');
 const fired = after.filter((event) => event.event === 'rule_fired');
 
 if (GATE) {
-  console.log(`窗口    自 ${GATE}（${SINCE_ARG ? '--since' : '第一条 catalog 事件'}）`);
+  console.log(`窗口    自 ${GATE}（${SINCE_ARG ? '--since' : '当前目录内容的首次注入'}）`);
+  if (!SINCE_ARG) {
+    console.log(
+      contentChanges > 0
+        ? `重置    目录内容共变更 ${contentChanges} 次，窗口自最近一次起算（变更频繁会推迟 24h 读数）`
+        : '重置    目录内容没变过（窗口自首次注入起算）',
+    );
+  }
   console.log(
     `目录    ${catalogs.length} 次注入 · 平均 ${Math.round(mean(catalogs.map((e) => e.chars ?? 0)))} 字符` +
       ` · 平均 ${mean(catalogs.map((e) => e.entries ?? 0)).toFixed(1)} 条` +
