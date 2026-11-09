@@ -1,0 +1,712 @@
+{
+  "note": "2026-11-09 判定快照：把当时的 201 条 active 规则按「换个项目和工具后是否仍成立」分成 prior / local / record / vague。判定是人/模型做的（单判官），机器只做分区校验与统计。规则增删后重跑 scripts/rule-compression.mjs 会报「未分类的 id」——这是故意的门禁。",
+  "schema": "families[].ids 引用 facts.id；同一 id 只能出现在一族里",
+  "date": "2026-11-09",
+  "families": [
+    {
+      "key": "P01",
+      "kind": "prior",
+      "label": "动手前说清",
+      "statement": "改动或设计前先说清为什么、怎么做、影响面、怎么验",
+      "ids": [
+        "fc_lg_mem_mvsqf91c_43k0",
+        "fc_lg_mem_mvt0rlo7_2x8z"
+      ]
+    },
+    {
+      "key": "P02",
+      "kind": "prior",
+      "label": "先验证再说话",
+      "statement": "想法先做最小验证、用数据说话；没验证过的结论不说",
+      "ids": [
+        "fc_lg_mem_mvsub3oa_j2nq",
+        "fc_lg_mem_mvu8p1vs_grtd",
+        "fc_lg_mem_mvy0ija2_c837",
+        "fc_mw1zc8l9_9",
+        "fc_mw2tj5bk_8"
+      ]
+    },
+    {
+      "key": "P03",
+      "kind": "prior",
+      "label": "从根上解决",
+      "statement": "从架构和设计上解决，不靠兜底；实现可以重写",
+      "ids": [
+        "fc_lg_mem_mvuw8hjl_d3cf",
+        "fc_lg_mem_mvw8m4yx_rqy6",
+        "fc_mw01k11r_p"
+      ]
+    },
+    {
+      "key": "P04",
+      "kind": "prior",
+      "label": "判断归模型",
+      "statement": "语义判断归模型，结构校验归代码；代码不替模型猜",
+      "ids": [
+        "fc_lg_mem_mvwq3ku4_x6sj",
+        "fc_lg_mem_mvwu6qmn_f9bh",
+        "fc_mw0aqg89_6",
+        "fc_mw0m2bv5_1b",
+        "fc_mw1h3ly8_a",
+        "fc_mw1ru4hi_b"
+      ]
+    },
+    {
+      "key": "P05",
+      "kind": "prior",
+      "label": "要有证据",
+      "statement": "判断和规则要带证据、可追溯；关于用户的判断先确认再记",
+      "ids": [
+        "fc_lg_mem_mvti3n6t_cgam",
+        "fc_lg_mem_mvtldu08_zt00",
+        "fc_mw0e7m0o_1t",
+        "fc_mw1h3lz2_c",
+        "fc_mw1h9svy_f",
+        "fc_mw22fzjn_1g"
+      ]
+    },
+    {
+      "key": "P06",
+      "kind": "prior",
+      "label": "挂实体",
+      "statement": "每条记忆必须挂在一个实体上，挂不上的只是片段",
+      "ids": [
+        "fc_mw0d4q7j_34"
+      ]
+    },
+    {
+      "key": "P07",
+      "kind": "prior",
+      "label": "按主题",
+      "statement": "按主题提取（含我的回复），不按轮数切",
+      "ids": [
+        "fc_mw08q3vs_3",
+        "fc_mw230so1_23"
+      ]
+    },
+    {
+      "key": "P08",
+      "kind": "prior",
+      "label": "一句话索引",
+      "statement": "先一句能独立看懂的事实，细节按需展开；索引句写「以后怎么做」",
+      "ids": [
+        "fc_lg_mem_mvxmk09f_tfnt",
+        "fc_mw7wm51a_d",
+        "fc_mw99smx9_b"
+      ]
+    },
+    {
+      "key": "P09",
+      "kind": "prior",
+      "label": "流程与 review",
+      "statement": "改动走 checklist、同步文档、前后各整体 review 一次",
+      "ids": [
+        "fc_mvzz3884_3",
+        "fc_mvzz389a_7",
+        "fc_mvzz38b4_c",
+        "fc_mvzz38bu_e",
+        "fc_mvzz38c6_f",
+        "fc_mw006fbd_3",
+        "fc_mw0g0qmy_26",
+        "fc_mw0g0qna_27"
+      ]
+    },
+    {
+      "key": "P10",
+      "kind": "prior",
+      "label": "结构化写入",
+      "statement": "不用字符串替换改代码，用编辑工具；PowerShell 往返会坏编码",
+      "ids": [
+        "fc_lg_mem_mvti3nz4_cqze",
+        "fc_lg_mem_mvwggyg1_wgqw",
+        "fc_mvzz387t_2",
+        "fc_mw0ajyam_5",
+        "fc_mw228i7w_t",
+        "fc_mw23gq89_2l",
+        "fc_mw7xbjqa_6"
+      ]
+    },
+    {
+      "key": "P11",
+      "kind": "prior",
+      "label": "术语要解释",
+      "statement": "提示词里每个术语和边界都要解释清楚",
+      "ids": [
+        "fc_mvzy75ii_1",
+        "fc_mvzz386s_1",
+        "fc_mw00bf1s_1"
+      ]
+    },
+    {
+      "key": "P12",
+      "kind": "prior",
+      "label": "解析优先",
+      "statement": "结构化输出靠解析器或模板，不靠 prompt 直出 JSON",
+      "ids": [
+        "fc_lg_mem_mvxufjpr_p5bs"
+      ]
+    },
+    {
+      "key": "P13",
+      "kind": "prior",
+      "label": "先查文献",
+      "statement": "设计或写提示词前先查文献，不靠猜（中文直接搜即可）",
+      "ids": [
+        "fc_lg_mem_mvwm8vu1_0kzh",
+        "fc_lg_mem_mvwnq4d5_s4g9",
+        "fc_lg_mem_mvwoxcpd_mls8",
+        "fc_lg_mem_mvxylzny_x64j",
+        "fc_mw0d3q6v_2x"
+      ]
+    },
+    {
+      "key": "P14",
+      "kind": "prior",
+      "label": "自上而下",
+      "statement": "从构想出发自上而下：先梳理需求和问题，再建表、写代码",
+      "ids": [
+        "fc_lg_mem_mvwnw28e_562l",
+        "fc_lg_mem_mvwo5q1r_thil",
+        "fc_mw0d5y9n_38",
+        "fc_mw0d5ya8_3a"
+      ]
+    },
+    {
+      "key": "P15",
+      "kind": "prior",
+      "label": "交付顺序",
+      "statement": "需求 → 文献 → 边界 → 唯一声明 → 验收，顺序不能跳",
+      "ids": [
+        "fc_lg_mem_mvwmt1ww_6rcj"
+      ]
+    },
+    {
+      "key": "P16",
+      "kind": "prior",
+      "label": "抽样由人判",
+      "statement": "效果抽样由我判，你只出数和候选",
+      "ids": [
+        "fc_mw7wm50h_6"
+      ]
+    },
+    {
+      "key": "P17",
+      "kind": "prior",
+      "label": "成本归宿主",
+      "statement": "成本计量与运维可观测性归宿主，产品层只引用结果",
+      "ids": [
+        "fc_mw2w0aol_n",
+        "fc_mw6intgv_2j"
+      ]
+    },
+    {
+      "key": "P18",
+      "kind": "prior",
+      "label": "规则要可迁移",
+      "statement": "规则要能搬到新项目：规则 + 权威 + 检查三件套；新项目先立三条",
+      "ids": [
+        "fc_mw0dcu4t_i",
+        "fc_mw0dcu59_j",
+        "fc_mw0dd92o_n"
+      ]
+    },
+    {
+      "key": "P19",
+      "kind": "prior",
+      "label": "单写者",
+      "statement": "排队的工作只有一个写入器，绕过它就是例外",
+      "ids": [
+        "fc_mw7xbjqi_7"
+      ]
+    },
+    {
+      "key": "P20",
+      "kind": "prior",
+      "label": "单一入口",
+      "statement": "查询和时间口径只留一个入口，不并存两套",
+      "ids": [
+        "fc_mw2a6ajc_15"
+      ]
+    },
+    {
+      "key": "P21",
+      "kind": "prior",
+      "label": "迁移与发版顺序",
+      "statement": "提交 → CI 绿 → 打 tag → 发布；迁移走 expand/contract；锁文件同批提交",
+      "ids": [
+        "fc_mw0lqg9n_14",
+        "fc_mw0o9pc7_g",
+        "fc_mw0qbrvf_8",
+        "fc_mw1lscku_2",
+        "fc_mw7wm52f_i"
+      ]
+    },
+    {
+      "key": "P22",
+      "kind": "prior",
+      "label": "验产物",
+      "statement": "核验部署生效要看多层，只看版本号会被文件缺失骗过",
+      "ids": [
+        "fc_mw0qwxs3_k"
+      ]
+    },
+    {
+      "key": "P23",
+      "kind": "prior",
+      "label": "门禁用退出码",
+      "statement": "门禁用退出码，不用人类可读文本当判据",
+      "ids": [
+        "fc_mw1lztl3_5"
+      ]
+    },
+    {
+      "key": "P24",
+      "kind": "prior",
+      "label": "日志不撒谎",
+      "statement": "失败不冒充成功；空、解析失败、调用失败要能区分",
+      "ids": [
+        "fc_mw3engei_o"
+      ]
+    },
+    {
+      "key": "P25",
+      "kind": "prior",
+      "label": "先读再判断",
+      "statement": "先读完文档和代码再判断，不重新发明已有的结论",
+      "ids": [
+        "fc_mw6jw5u8_x"
+      ]
+    },
+    {
+      "key": "P26",
+      "kind": "prior",
+      "label": "先存原文",
+      "statement": "排查失败先保存原始输出，看到原文再改逻辑",
+      "ids": [
+        "fc_lg_mem_mvtaw5pu_mkw0",
+        "fc_mw0cd0tk_1h"
+      ]
+    },
+    {
+      "key": "P27",
+      "kind": "prior",
+      "label": "别自作主张加仪式",
+      "statement": "交接单这类仪式只在你明确要求时写",
+      "ids": [
+        "fc_mw3h9ti1_1e"
+      ]
+    },
+    {
+      "key": "P28",
+      "kind": "prior",
+      "label": "省成本的两个动作",
+      "statement": "长离开前先压缩；批量任务放到离峰时段",
+      "ids": [
+        "fc_mw5ru7qd_9",
+        "fc_mw5ru7rr_b"
+      ]
+    },
+    {
+      "key": "P29",
+      "kind": "prior",
+      "label": "别把手工活丢给我",
+      "statement": "故障自己修到底；用手动步骤兜住自动化失败等于没修",
+      "ids": [
+        "fc_lg_mem_mvs9gx34_mye0",
+        "fc_lg_mem_mvw26mor_6ezy"
+      ]
+    },
+    {
+      "key": "P30",
+      "kind": "prior",
+      "label": "旧表示退场",
+      "statement": "换表示时旧的要在同一次改动里退场，或登记成债",
+      "ids": [
+        "fc_lg_mem_mvyxbfi6_jqub"
+      ]
+    },
+    {
+      "key": "P31",
+      "kind": "prior",
+      "label": "命名自解释",
+      "statement": "字段和变量名要说明用途，不用 at 这类含糊名字",
+      "ids": [
+        "fc_lg_mem_mvudn9t7_5m8f",
+        "fc_mw2395zv_28",
+        "fc_mw2w0ajd_d"
+      ]
+    },
+    {
+      "key": "P32",
+      "kind": "prior",
+      "label": "结论要合并",
+      "statement": "结论要二次合并去重，按长期运行考虑冗余",
+      "ids": [
+        "fc_lg_mem_mvyoxan6_mnf4"
+      ]
+    },
+    {
+      "key": "P33",
+      "kind": "prior",
+      "label": "落地要具体",
+      "statement": "落地要给到代码或模型的具体细节，并盯效果",
+      "ids": [
+        "fc_lg_mem_mvyp4idk_bp8o"
+      ]
+    },
+    {
+      "key": "P34",
+      "kind": "prior",
+      "label": "定义单点",
+      "statement": "变量和定义集中在一处，代码只留解码器",
+      "ids": [
+        "fc_mvze6904_1",
+        "fc_mvzz388p_5"
+      ]
+    },
+    {
+      "key": "P35",
+      "kind": "prior",
+      "label": "不记原文",
+      "statement": "默认只记结构（id、长度、哈希、分数），原文要显式开启",
+      "ids": [
+        "fc_mw0c99qd_16"
+      ]
+    },
+    {
+      "key": "P36",
+      "kind": "prior",
+      "label": "连续性有价",
+      "statement": "对齐的感觉要在同一会话里长，新会话只能靠文档猜",
+      "ids": [
+        "fc_mw0czsfx_2g"
+      ]
+    },
+    {
+      "key": "P37",
+      "kind": "prior",
+      "label": "形态校验",
+      "statement": "缺关键成分的输出拒绝并计数，不静默写入",
+      "ids": [
+        "fc_mw1sgl8s_7"
+      ]
+    },
+    {
+      "key": "P38",
+      "kind": "prior",
+      "label": "成本结构",
+      "statement": "账单大头是重发历史；省钱靠少请求和短上下文，不是压输出",
+      "ids": [
+        "fc_mw20brbk_9"
+      ]
+    },
+    {
+      "key": "P39",
+      "kind": "prior",
+      "label": "改提示词先跑 tsc",
+      "statement": "改提示词后先跑 tsc，是固定动作不是靠记性",
+      "ids": [
+        "fc_mw0gtvpf_6"
+      ]
+    },
+    {
+      "key": "P40",
+      "kind": "prior",
+      "label": "变异只对已提交",
+      "statement": "变异验证只对已提交代码做，否则恢复会连未提交的重构一起回滚",
+      "ids": [
+        "fc_mw7rxach_x"
+      ]
+    },
+    {
+      "key": "P41",
+      "kind": "prior",
+      "label": "统计口径",
+      "statement": "未完成或被中断的轮次单独计数，不混进分布",
+      "ids": [
+        "fc_mw2v5p68_a"
+      ]
+    },
+    {
+      "key": "P42",
+      "kind": "prior",
+      "label": "空要说出来",
+      "statement": "空结果和截断要明说，不让对方填空白",
+      "ids": [
+        "fc_mw2a4chn_p"
+      ]
+    },
+    {
+      "key": "P43",
+      "kind": "prior",
+      "label": "关系分寸",
+      "statement": "不主动给她发消息，由对方先开口",
+      "ids": [
+        "fc_lg_mem_mvuuevaq_sool"
+      ]
+    },
+    {
+      "key": "P44",
+      "kind": "prior",
+      "label": "暗号规则",
+      "statement": "暗号只在紧急情况、只在电话里用",
+      "ids": [
+        "fc_lg_mem_mvykidha_b6wo",
+        "fc_lg_mem_mvykmuug_habm"
+      ]
+    },
+    {
+      "key": "P45",
+      "kind": "prior",
+      "label": "礼物要有用",
+      "statement": "纪念品要带使用价值，否则放了就忘",
+      "ids": [
+        "fc_lg_mem_mvus9d0t_law8"
+      ]
+    },
+    {
+      "key": "P46",
+      "kind": "prior",
+      "label": "情感不设限",
+      "statement": "聊情感不设长度限制，双方都可能说很长",
+      "ids": [
+        "fc_mw00y0im_3"
+      ]
+    },
+    {
+      "key": "P47",
+      "kind": "prior",
+      "label": "小事反复就升级",
+      "statement": "生活小事反复发生说明该升级处理层级",
+      "ids": [
+        "fc_lg_mem_mvvpqh5o_hjof"
+      ]
+    },
+    {
+      "key": "P48",
+      "kind": "prior",
+      "label": "了解不只看生活",
+      "statement": "了解我不只看生活向，项目设计对话同样体现风格",
+      "ids": [
+        "fc_lg_mem_mvua4qw7_hxos"
+      ]
+    },
+    {
+      "key": "P49",
+      "kind": "prior",
+      "label": "接口不吹牛",
+      "statement": "接口不声明未实现的能力；预留字段没验收标准等于遗忘",
+      "ids": [
+        "fc_lg_mem_mvt0ry1q_kwvt"
+      ]
+    },
+    {
+      "key": "P50",
+      "kind": "prior",
+      "label": "先问意图",
+      "statement": "讨论方案前先弄清对方真正想做什么，时机与形态由需求定",
+      "ids": [
+        "fc_lg_mem_mvvx3izy_np2r",
+        "fc_mvyyjxhk_4"
+      ]
+    },
+    {
+      "key": "P51",
+      "kind": "prior",
+      "label": "作用域与衰减",
+      "statement": "教训按作用域、后果强度、复现频率衰减，不一律常驻",
+      "ids": [
+        "fc_lg_mem_mvwl2vfq_7uns",
+        "fc_mw01gx6w_b",
+        "fc_mw01hbu1_f"
+      ]
+    },
+    {
+      "key": "P52",
+      "kind": "prior",
+      "label": "样本要够",
+      "statement": "结论不能建立在 30 个样本上，验证要用更大数据集",
+      "ids": [
+        "fc_lg_mem_mvwou2qt_tzj5"
+      ]
+    },
+    {
+      "key": "P53",
+      "kind": "prior",
+      "label": "事实要带时间",
+      "statement": "提取事实必须带时间，缺时间就先问，否则不成立",
+      "ids": [
+        "fc_lg_mem_mvywug4e_v0mq"
+      ]
+    },
+    {
+      "key": "L01",
+      "kind": "local",
+      "label": "重启与进程",
+      "statement": "本机的重启协议：schtasks 静默忽略、会话内跑脚本被连坐、轮次中重启丢轮、停进程前健康检查",
+      "ids": [
+        "fc_lg_mem_mvti3nog_lm5m",
+        "fc_mw1lscl1_3",
+        "fc_mw45r3sr_5",
+        "fc_mw5ru7sm_f",
+        "fc_mw6kgbs9_d"
+      ]
+    },
+    {
+      "key": "L02",
+      "kind": "local",
+      "label": "DSH 会话退化",
+      "statement": "DSH 长会话的退化与换会话阈值（100 轮 / 300k / 空回复）",
+      "ids": [
+        "fc_lg_mem_mvwk3vsm_y15l",
+        "fc_lg_mem_mvwlc94o_q70m",
+        "fc_mw0cn7ak_1q",
+        "fc_mw225g9v_m",
+        "fc_mw264y0b_k",
+        "fc_mw2w5212_q"
+      ]
+    },
+    {
+      "key": "L03",
+      "kind": "local",
+      "label": "依赖与发布环境",
+      "statement": "profile 装副本、pnpm 快照、dist 不入库、npm 读侧延迟、pnpm 最小发布年龄",
+      "ids": [
+        "fc_mvz8ht0y_1",
+        "fc_mvzee520_2",
+        "fc_mw0nqdpc_2",
+        "fc_mw0o6085_4",
+        "fc_mw0tuqmz_4",
+        "fc_mw2a4chx_q"
+      ]
+    },
+    {
+      "key": "L04",
+      "kind": "local",
+      "label": "时间轴实现",
+      "statement": "valid_from/valid_to 的取值、精度、左闭右开、迁移 COALESCE 等实现决定",
+      "ids": [
+        "fc_lg_mem_mvudjm9y_n5c6",
+        "fc_lg_mem_mvyui18f_b4rq",
+        "fc_mw1q8wea_f",
+        "fc_mw1rmc81_2",
+        "fc_mw1rmc8a_3",
+        "fc_mw1rmc8i_4",
+        "fc_mw22s6rj_1t",
+        "fc_mw230snx_22",
+        "fc_mw239600_29",
+        "fc_mw23961r_2c",
+        "fc_mw23c8sl_2d",
+        "fc_mw247tho_3",
+        "fc_mw24q0c5_9",
+        "fc_mw2a4cf2_o",
+        "fc_mw2a6aj2_14",
+        "fc_mw2a6ajn_16",
+        "fc_mw2w0aj8_c",
+        "fc_mw3grfwm_14"
+      ]
+    },
+    {
+      "key": "L05",
+      "kind": "local",
+      "label": "本项目约定与阶段",
+      "statement": "S1 观察期、handoff 约定、导出默认全量、成本脚本归属、目录固定 20 行、判决口径等",
+      "ids": [
+        "fc_lg_mem_mvunglqb_590l",
+        "fc_lg_mem_mvvteflt_tb0o",
+        "fc_lg_mem_mvvx7pum_p55c",
+        "fc_lg_mem_mvw9xmuk_p47l",
+        "fc_lg_mem_mvwm3slr_p9um",
+        "fc_lg_mem_mvxzap5z_2goh",
+        "fc_mvzz38bi_d",
+        "fc_mw0c81it_t",
+        "fc_mw0dckrq_e",
+        "fc_mw0ef42e_1z",
+        "fc_mw0tuqmb_2",
+        "fc_mw21iddu_3",
+        "fc_mw21ide9_4",
+        "fc_mw5ru7rz_c",
+        "fc_mw6k3clp_1r",
+        "fc_mw7wm527_h",
+        "fc_mw7x05qu_v",
+        "fc_mw99smwp_a",
+        "fc_mw99smxx_c",
+        "fc_mw99sn2l_k",
+        "fc_mw9bzf34_p"
+      ]
+    },
+    {
+      "key": "L06",
+      "kind": "local",
+      "label": "人物/情绪/事件建模",
+      "statement": "情绪六维、人物实体、事件物化、线索单位、抽取段不落库等本项目的建模决定",
+      "ids": [
+        "fc_lg_mem_mvudf2kn_f5hq",
+        "fc_lg_mem_mvwnil1k_lv9s",
+        "fc_lg_mem_mvwq0x0z_oiij",
+        "fc_lg_mem_mvyub06c_apoo",
+        "fc_lg_mem_mvyydi7p_ewtj",
+        "fc_mw0d5y9w_39",
+        "fc_mw1on9dd_a",
+        "fc_mw1ptgpy_3",
+        "fc_mw1sgl8h_6",
+        "fc_mw1sgl93_8",
+        "fc_mw1y2h6g_p"
+      ]
+    },
+    {
+      "key": "L07",
+      "kind": "local",
+      "label": "本机环境事实",
+      "statement": "date() 儒略日、沙箱 EPERM 误报、宿主 15 秒超时、索引源重复",
+      "ids": [
+        "fc_mw2tj5b4_7",
+        "fc_mw3eng9d_f",
+        "fc_mw47masc_n",
+        "fc_mw6i3jg6_1v",
+        "fc_mw6i3jgl_1w"
+      ]
+    },
+    {
+      "key": "R01",
+      "kind": "record",
+      "label": "一次性复盘/数据",
+      "statement": "某次事故、某个数字、某次承认错误——是历史，不是规则",
+      "ids": [
+        "fc_lg_mem_mvtm4n9z_rm7b",
+        "fc_lg_mem_mvwtm1rx_ehuw",
+        "fc_mvzz389l_8",
+        "fc_mw0c81h4_p",
+        "fc_mw0na9p9_o",
+        "fc_mw21sh7k_i",
+        "fc_mw22uofp_21",
+        "fc_mw247ti5_5",
+        "fc_mw2w0ajq_f",
+        "fc_mw45r3wn_g",
+        "fc_mw5ru7oq_6",
+        "fc_mw5ru7pq_7",
+        "fc_mw5ru7sv_h",
+        "fc_mw6jw5uf_y"
+      ]
+    },
+    {
+      "key": "R02",
+      "kind": "record",
+      "label": "拍脑袋被实测推翻",
+      "statement": "12000 字符上限是拍的，实测 p90 只有 2679",
+      "ids": [
+        "fc_mw1y2h6o_q"
+      ]
+    },
+    {
+      "key": "V01",
+      "kind": "vague",
+      "label": "无处方",
+      "statement": "口号或「以后再说」，没有任何可执行动作",
+      "ids": [
+        "fc_lg_mem_mvu8osuj_fsg4",
+        "fc_lg_mem_mvwpsk25_k8c3"
+      ]
+    }
+  ]
+}

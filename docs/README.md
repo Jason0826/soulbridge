@@ -26,6 +26,7 @@
 | 未来哪些决策可以考虑本地小模型 | [decision-points.md](decision-points.md)（参考，当前不做） |
 | 画图工具与可借鉴的工程做法 | [see-code-lessons.md](see-code-lessons.md)（参考，当前不做） |
 | Claude Code 的记忆怎么做的、哪些该抄、我们哪里更好 | [claude-code-memory-lessons.md](claude-code-memory-lessons.md)（参考，当前不改实现） |
+| 201 条规则里到底有几条倾向、证据够不够 | [experiments/2026-11-09-rule-compression.md](experiments/2026-11-09-rule-compression.md)（读数已出，准入线待拍板） |
 | [protocol.md](protocol.md) | 占位文件，只为不让旧链接 404；协议内容在 [spec/protocol.v0.md](spec/protocol.v0.md) |
 | 新会话从哪开始 | [state.md](state.md)（唯一现状态文档） |
 | 全系统审计与 review 方法 | [audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md) |
