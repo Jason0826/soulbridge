@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-08 22:25**（core 0.0.122 / plugin 0.0.133）
+最后核对：**2026-11-09 13:20**（core 0.0.122 / plugin 0.0.133）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -205,7 +205,9 @@
                docs/briefs/0027-time-axis.md（§八 读取方 / §九 实施 / §十 写入侧收口）
                packages/core/src/{time,retrieval,extract,prompts,sqlite,index}.ts
                D:\git-workspace\repos\dsh-plugin-soulbridge\index.js
-               目录判决：scripts/catalog-stats.mjs（300 行内，夹具四路验过）
+               目录判决：scripts/catalog-stats.mjs（273 行，`--sample` 调用抽样 / `--lines`
+               目录句抽样 10 高+10 低 recall_count；夹具六路验过：无 trace / total 相等 /
+               total 不等 / 坏 --lines exit 1 / 默认输出不变 / 真库自检 ✓）
                账单与判读：dsh-plugin-soulbridge\scripts\billing.mjs · docs\cost-visibility.md
 环境           固定端口 3080；会话内重启 = `schtasks /run /tn DshWebRestartOnce`（脱离进程树、
                90s 延迟）——**别在会话里直接跑脚本：脚本是被杀进程的子进程，会连坐**
@@ -234,11 +236,14 @@
          → 插件加「形态失误放回一次」（0.0.133），那 10 条已补投并全部重写成功
 验证     插件 155/155（+2）；变异三组各恰 1 红；补投 10 条后 193/193 有目录句、0 条形态病；
          棘轮插件 3826→3868（+42 记 history）
-没做完   0.0.133 待装机重启（CI 在跑）；0029 判决窗口还没正式开（3 天 / 60 轮 / 10 次自然调用）；
-         classify marker 按 id 记账；B1 常驻升级；C（date() 儒略日升 L1）；<related> 对照没量化
+没做完   0.0.133 已装机并重启（14:21:55Z apply 实测）；0029 判决窗口在跑（3 天 / 60 轮 /
+         10 次自然调用）；classify marker 按 id 记账；B1 常驻升级；C（date() 儒略日升 L1）；
+         <related> 对照没量化；探针调用打 source=probe 没实现
 在热什么 窗口从 0.0.133 首次注入那次 catalog 事件起算（目录内容变了，旧窗口再作废一次）；
-         探针调用打 source=probe、目录抽样要 10 高 + 10 低 recall_count——两件都还没实现
+         目录句抽样已去偏（catalog-stats --lines 20：10 高 + 10 低 recall_count，确定性排序）
 ```
+
+**2026-11-09 13:20 目录句抽样去偏（catalog-stats `--lines`）**：判0029 §五 的 20 条索引句样本，之前是「目录里能看到的 + 确定性随机」——**但目录本身只按 recall_count 显示前 20 条**，抽可见的就是抽高频，其余 176 条一次没进过人的视野。修法是 `catalog-stats.mjs --lines 20`：按 `recall_count` 降序（同分看 confidence、再看 id，确定性排序）取**高 10**（模型实际看到的）+ **低 10**（永远看不到的），每条带 `原句` 供对照判句。**口径自检**：有触发规则数必须等于最近一次 `catalog` 事件的 `total`，不等就打 ⚠ 并提示先对账——脚本里那份 `parseTrigger` 镜像会漂移，漂移要在抽样读进结论之前被看见，而不是被信任。**夹具六路验过**（无 trace 仍出抽样 / total 相等 ✓ / total 不等 ⚠ / 坏 `--lines` exit 1 / 默认输出与旧版逐行一致 / 真库 `规则 196 · 有触发 196 · 自检 ✓`），真库低桶样例 `fc_mw6intgv_2j`、`fc_mw1y2h6o_q` 均 rc=0——正是被抽样偏差藏住的那半。判决三件工具进度：抽样偏差 ✅ / `source=probe` 标记 ❌ / `<related>` 对照量化 ❌。
 
 **22:25 全量重写收口 + 误读放回（插件 0.0.133）**：**① 重写跑完**——21 批 199 条次（19 批正常 + 1 批被前缀闸门挡下 10 条 + 那 10 条补投 1 批），189 条规则全部有新句：索引句均值 **17.7 → 23.1 字**、最长 45、>30 字 22 条；**机器可查的形态病 7/189（4%）→ 0/193**（194 条规则里 193 条有句子，剩 1 条是新规则、由 catalog-backfill 拾起，属自愈路径）。**② 用户复判通过**——20 条（5 条旧 ✗ + 13 条确定性随机）「没什么太大问题」；上一轮被点名的 04/05/17 已改成自包含句，16 也在补投后换了句。**③ 对账抓到一个静默洞**——「全量」实际是 179 + 10：那批 10 行模型整批按「规则|」作答，`applyClassifications` 的形态闸门保留旧行并计 `index-skipped=10`，随后 `commitClassifyBatch` 把整批移出队列；而**重写过的行不属于「缺索引」**（missingIndex=0），`catalog-backfill` 永远不会再捡它——10 条带旧句留下，日志里只有一行 skipped，没有「还欠一句」的记录。这是 0.0.131 前缀闸门的第一个真实触发，它拦对了（没写坏），但**欠账没有下一个人接着管**。**④ 修法**：`applyClassifications` 把三类形态失误的 id 交回来（前缀被误读 / 行空 / 行被闸门拒绝），`requeueShapeMisses` 带 `misses` 计数把条目放回队头**一次**，第二次仍失败就丢弃并 `trace(classify-shape-dropped)`；**退场规则不放回**（`markRuleIndex` 返回 false = 再问也没有意义）。批次日志加 `shape-retry=<n>`——形态失误不再是沉默的减法。**⑤ 验证**：插件 155/155（+2），变异三组各恰 1 红（前缀误读不放回 / 上限 1→99 / 放回接线被删）；棘轮 3826→3868（+42 记 history，「bug 修复允许涨」）。**⑥ 两处流程事故，都记下来**：一是把 `.mjs` 测试文件交给 PowerShell `Get-Content`/`Set-Content` 往返改 —— 中文全变乱码（正是 rules 第 23 条「不用字符串替换改代码」的由来），`git checkout --` 重来、全程改用 edit 工具；二是补投那 10 条时用一次性脚本直接写 `pending-classify.json`，**绕过了队列的唯一写入器**（rules 第 41 条），虽然加了 mtime 守卫重试、结果正确，但这是例外而不是做法，可见化在提交说明里。
 
