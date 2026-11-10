@@ -137,6 +137,14 @@ supersedeFact(oldId, newId) 有 3 个业务调用点（index.ts:912 / 1022 / 122
 3. 每周跑 term-audit + health-check，本文的数字跟着更新；不更新就说明没 review
 ```
 
+## 七、修了但还没生效（别当成已完成）
+
+| 项 | 状态 | 差什么 |
+|---|---|---|
+| 离开点第五行「≥10 轮 且 >30 分钟」→ `trigger=stale` | 插件源码改完、156/156 绿、变异验红 | **没发版、没装机、没重启**——所以生产上还是四行；`apply() called (v0.0.134)` 之前一律按"没修"读 |
+
+登记在本文的理由：改完代码不等于生效，这条线的前四行就是这么饿着的（计划排好了，一个触发都没开）。
+
 ## 相关
 
 - 机器判据：[scripts/health-check.mjs](../scripts/health-check.mjs) · [scripts/term-audit.mjs](../scripts/term-audit.mjs)
