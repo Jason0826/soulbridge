@@ -78,21 +78,42 @@
 
 不取：角色卡（人格是作者的不是经历的）、权重路线（不可审计）、向量检索（不可解释、要新存储）。
 
-## 6. 唯一声明（将来落到 `config/`，现在先写在纸上）
+## 6. 唯一声明（落到 `config/`，代码只解码）
+
+**原则：枚举是数据，不是代码里的常量。**（对应仓库约定"代码里不写定义，`config/` 存定义，代码只保留解码器"）
+
+```jsonc
+// config/situation.json —— 只有数据，没有任何判断逻辑
+{
+  "fields": ["act", "object", "tool", "time"],        // 硬场合，可空、可部分
+  "soft":   "模型自由文本 + 一句「该不该现在提」",       // 不参与子集匹配
+  "act":    ["write_file","edit_code","run_command","release","install",
+             "restart","migrate_db","design","review","extract","export",
+             "delete","overwrite","push","reset_hard","dep_change"],
+  "tool":   ["powershell","pnpm","npm","schtasks","sqlite","dsh_host","git"],
+  "object": ["path_suffix","repo","script","field","entity_id"],
+  "time":   ["turn_count","idle_hours","local_hour_range"],
+  "irreversible": ["delete","overwrite","push","reset_hard","dep_change"],  // act 的子集
+  "open": true,          // 开放表：现在这 16/7/5 一定不全，见下面「补法与记录」
+  "history": []          // 每次增删值追加一条：谁提的、因为哪条记忆、决定
+}
+```
+
+**"唯一声明"由机器守**：`health-check` 扫 `packages/**` 与 `dsh-plugin-soulbridge/**`，除解码器文件外出现 `'edit_code'`、`'powershell'` 这类枚举字面量 → **FAIL**。
+
+**补法与记录（你说"不知道能不能全覆盖"——不用现在知道）**：
+
+| 情形 | 处理 |
+|---|---|
+| 模型要写的值不在表内 | **写入拒绝并记 `enum_gap`**（带原词 + 当时场合），不许猜、不许就近匹配 |
+| `enum_gap` 攒到 5 条 | 人工 review 一次：新增值 / 并入已有值 / 判定为软场合 |
+| 决定完 | 追加进 `history`，同时更新本节表——表和数据只差一次提交 |
+
+这样"漏了"不是静默丢数据，是**当场报错并排队**。覆盖不全变成一件可见、可补的事，不再是要在纸上猜对的题。
+
+其余声明（同一份文件里，同一个理由）：
 
 ```
-SITUATION_FIELDS = [act, object, tool, time]      // 硬，四选零到四
-  act      枚举：write_file | edit_code | run_command | release | install
-                 | restart | migrate_db | design | review | extract | export
-                 | delete | overwrite | push | reset_hard | dep_change
-  object   值类：path_suffix | repo | script | field | entity_id
-  tool     枚举：powershell | pnpm | npm | schtasks | sqlite | dsh_host | git
-  time     值类：turn_count | idle_hours | local_hour_range
-SOFT_SITUATION   模型自由文本 + 一句"该不该现在提"（不参与子集匹配，注入时由模型当场判）
-
-IRREVERSIBLE = act ∈ {delete, overwrite, push, reset_hard, dep_change}
-                                                  // act 的一个子集，唯一走 ask 拦截的一档，其余只提示
-
 MATURITY = f(hits, distinct_source_turns, corrections, last_hit_at)   // 四个数，纯函数
   → 厚度档：0 带证据 / 1 一句处方 / 2 半句或并入更抽象的一条
   → 降级：last_hit 超过窗口且 hits 不增
@@ -130,8 +151,10 @@ MISS_SIGNALS = { explicit_restate, model_judged_repeat(≥2) }             // �
 ## 8. 实施序（第一批，仍不写代码）
 
 ```
-第 0 步  声明层：config 加 SITUATION_FIELDS / 枚举 / MATURITY / METRICS；
-         health-check 新增"硬场合不得读文本"一节（先红）
+第 0 步  声明层：`config/situation.json`（枚举/成熟度/指标/缺口通道）+ 解码器；
+         health-check 两节新检查，都先红：
+           (a) 枚举字面量不得出现在解码器之外
+           (b) 硬场合不得读文本（中文字符常量 / includes( / 正则字面量）
 第 1 步  写入侧两处欠账：写时同族去重（有则加证据不新增）、写时建 `依据` 引用（现在 0 条）
 第 2 步  人格读写：role=disposition + 场合槽 + 成熟度四数（纯函数 + 测试 + 变异）
 第 3 步  开口前接一个点（pre-step 已有），先只注入人格常驻集，与 `<rules fired>` 并存
@@ -148,16 +171,64 @@ MISS_SIGNALS = { explicit_restate, model_judged_repeat(≥2) }             // �
 | B 识别率 | 新会话前 3 轮里，重问已答过事实的次数 | 未测 | 先测 10 次换会话的基线 |
 | C 溯源率 | "我记得…"类陈述中能指到具体轮次的比例 | `soul_detail` 0 次 → 近似 0 | 先测 20 条抽样 |
 
-测法初稿：
-- **A**：`scripts/rule-compression.mjs` 已有族与日期；加一段"跨周重复率"即可复算。
-- **B**：固定问句集（10 条已知事实），每次换会话问 3 条；记"它答对 / 它重问 / 它编"。
-- **C**：抽出 20 条"我记得…"陈述，人判能否指到轮次（用现成的 20 条抽样协议，✗≥4 改来源）。
+测法（draft，可执行；B/C 先测基线，测完这次才定线）：
 
-## 10. 待拍（3 处，`写`之前不能动代码）
+### A 交代成本
 
-1. **枚举表初版**（§6）：16 个 act、7 个 tool、5 类 object 够不够？漏了就补，但要留"补的记录"。不可逆那一档就取 act 的子集（5 个），不另建表。
-2. **B/C 的测法**：B 的"重问"怎么算一次、C 的抽样怎么抽——上面是初稿，需要你认或改。
-3. **导出/可携带是否进第二批**（你没排除，第一批不做）。
+`scripts/rule-compression.mjs` 已有族与日期，加一段"跨周重复率"即可复算。基线 24% 是这么来的（3 周 `created_at`）。
+
+### B 识别率（换会话后还认不认得）
+
+```
+题库    人工从 role='observation' 里挑 10 条"关于你"的
+        现 831 条 active，其中提到"用户/你" 111 条——够挑，但**不按 role 自动取**
+        硬条件：有 source_turn_id、能一句话问出来、答案不会从当前上下文直接读到
+        反例（绝不能进题库）：读数/基线/brief 这类关于项目的
+        为什么人工挑：role 筛得出"这是什么"，筛不出"关不关于你"——
+        这正是"201 条里只有 13 条关于你"那个发现的复现
+        候选长相（库里的真话）：「用户不用桌面版，只跑网页版」「笔记本 Windows 更新 8:00–17:00」
+        「AutoAdminLogon=0，开机自启靠 Startup 快捷方式」「用户装了 grill-me skill」
+提问    每次新会话第 1/2/3 轮各问一条，一次会话 3 题，不带提示
+判四类  对   说出与库一致的信息（措辞不同也算对）
+        重问 反问用户「你之前说的 X 是什么 / 能再说一遍吗」
+        编   给了与库冲突的内容
+        未触及 既没答也没问（这题不算进分母）
+分母    对 + 重问 + 编
+指标    重问率 = 重问/分母（主）；编造率 = 编/分母（辅助，比重问坏）
+样本    10 次新会话 = 30 题；先测基线，线等这次测完再定
+记录    docs/experiments/<日期>-identify-baseline.md，一题一行：事实 id / 问句 / 判类 / 原话
+谁判    机器先标（重问是"问句 + 要信息"，可判），人只复核标成"对"的那部分
+```
+
+### C 溯源率（说的回忆指不指得回原话）
+
+```
+语料    最近 3 天、连续 20 条含「我记得 / 你之前 / 上次你说 / 以前提过」的助手陈述（不挑）
+        排除：正在讨论记忆机制本身的轮次（元讨论），那句话的"我记得"不是回忆
+判三类  可溯源   句中文能落到一个真实存在的 fact id，且内容一致
+        假溯源   给了 id 但不存在或内容不符（比没有更坏，单列）
+        不可溯源 没有 id，且库里唯一匹配不上
+指标    可溯源 / 20（主）；假溯源数单列（辅助）
+成本    纯离线，零模型调用
+谁判    机器（id 存在性 + 内容比对）；假溯源全部人工看一遍
+记录    docs/experiments/<日期>-trace-baseline.md，一条一行：原话 / 判类 / 命中 id
+```
+
+**C 的粗测（2026-11-10 20:30，零调用，`_scratch/trace-baseline.mjs`）**：最近 550 个有 `assistant_text` 的轮次里，含上述线索的句子 **39 条**，**显式带 fact id 的 0 条（0%）**；其中约 6 条是元讨论（我们在讨论记忆本身），剔除后 33 条。两个附带读数，都要记着：语料薄（38k 个轮次 id 里只有 550 个留了 `assistant_text`），以及"0%"有一半是**结构性的**——模型从来没被要求给 id，所以这个 0 不等于"它不会溯源"。
+
+**关于"用正则找句子"**：抽取语料用正则是**测量工具**，不违反 §7 的"硬场合不读文本"——那条铁律约束的是**运行时判据**，不是离线审计。这个区分要写在这里，否则以后我自己会拿它当把柄。
+
+**B 不给预期值**——从没测过，空样本不是判决（第 20 条）。**C 的粗测只作旁证，不作判决**：它测的是"有没有 id"，不是"回忆对不对"。
+
+## 10. 三处待拍 → 已拍（2026-11-10 20:24）
+
+| # | 问题 | 结论 |
+|---|---|---|
+| 1 | 枚举表够不够 | **不用现在保证覆盖**：枚举进 `config/situation.json` 作为开放表，未知值写入即拒绝并记 `enum_gap`，攒 5 条 review 一次，决定进 `history`（§6） |
+| 2 | B/C 测法 | 按 §9 的 draft 走：B = 10 次新会话 × 3 题、四分类、分母不含"未触及"；C = 连续 20 条、三分类、离线零调用 |
+| 3 | 导出/可携带 | **进第二批**（第一批不做） |
+
+对应的代码前动作（第 0 步，未开始）：`config/situation.json` 落地 + `health-check` 两节新检查——"枚举字面量不得出现在解码器之外"、"硬场合不得读文本"。**两节都先红。**
 
 ## 11. 开放问题
 

@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-10 20:35**（core 0.0.122 / plugin 0.0.133）
+最后核对：**2026-11-10 20:25**（core 0.0.122 / plugin 0.0.133）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -24,8 +24,12 @@
                存储复用 `facts`（`role=disposition` + 槽 `场合`），不新表、不升 schema。
                **三条验收并列**：A 交代成本（基线 24%/3 周 → ≤10%）、B 识别率（待测基线）、
                C 溯源率（待测，近似 0）；硬场合若出现中文字符常量/includes/正则 → health-check FAIL。
-               **下一步 = 用户拍 0030 §10 三处**（枚举表初版 / B·C 测法 / 导出是否第二批）→
-               然后第 0 步：config 声明 + health-check 新一节（先红）。
+               **0030 §10 三处已拍**（11-10 20:25）：枚举进 `config/situation.json` 当**开放表**
+               （未知值写入即拒绝 + 记 `enum_gap`，攒 5 条 review → `history`；不用现在保证覆盖）；
+               B/C 测法见 §9 draft（B=10 次新会话×3 题四分类，分母不含"未触及"；C=连续 20 条
+               三分类、离线零调用）；导出/可携带进第二批。
+               **下一步 = 第 0 步**：`config/situation.json` + 解码器 + health-check 两节先红
+               （(a) 枚举字面量不得出解码器 (b) 硬场合不得读文本）。
                **注入钩子已查实**（11-10 20:30，读 `app.asar` 内宿主文档）：瀑布全集 =
                `agent/pre-step` / `agent/request` / `llm/stream` / `tools/pre-execute` /
                `tools/execute` / `tools/post-execute`；观察 `tools/result`；同步拒绝
@@ -240,16 +244,17 @@
 > 新会话只读状态会像换班工人；这 6 行是**叙事**，不是状态——换会话时整体替换，不累积。
 
 ```
-上一段   2026-11-10 20:35 查实注入钩子，brief 0030 从"两处待查"变"一处"
-做了     扫宿主 app.asar 文档：可挂 waterfall 六个（agent/pre-step、agent/request、llm/stream、
-         tools/pre-execute、tools/execute、tools/post-execute）+ tools/result、guard、restrict、
-         agent.inject()；已写进 0030 §7/§8/§11 与 §6（act 枚举 11→16，加不可逆子集 5 个）
-验证     钩子带出的文本一律落在本步工具结果之后（挡不住这一刀）→ "动手前"降级为
-        常态提示 + 不可逆动作走 ask；插件重写决定已合规（index.js:1618 有展开）
-没做完   §10 三处待拍（枚举表初版 16/7/5 / B·C 测法 / 导出是否第二批）；
-         软场合覆盖率要抽样验（<60% 回炉）；rules 与常驻集并存期的重复注入计数没设计
-在热什么 用户认了 0030 就开始第 0 步（config 声明 + health-check 新一节先红）；**别先动库**
+上一段   2026-11-10 20:25 §10 三处拍完，brief 0030 从 Draft 变"可开工"
+做了     枚举改开放表进 config（未知值拒绝 + enum_gap 攒 5 条 review + history）；
+         §9 把 B/C 写成可执行协议（B 四分类、分母不含未触及；C 三分类、离线零调用）；
+         导出/可携带划进第二批；§8 第 0 步拆成两条先红的检查
+验证     钩子时机已查实（文本落在本步工具结果之后）；插件重写决定已合规（index.js:1618）
+没做完   第 0 步一行没写；软场合覆盖率抽样未做（<60% 回炉）；rules 与常驻集并存期
+         的"重复注入计数"还没设计——它会污染 A 指标
+在热什么 可以开第 0 步：config/situation.json + 解码器 + 两节 health-check 先红；**别先动库**
 ```
+
+**2026-11-10 20:25 0030 §10 三处拍完——枚举改成"开放表 + 缺口通道"，覆盖不全不再是风险**：**① 第一处的答案不是"补全枚举"，是"改性质"**——用户说"不知道这些能不能全覆盖，还是说我们可以在 config 里唯一声明、可以配置"，于是枚举从"一份要一次猜对的清单"变成 **`config/situation.json` 里的开放表**（`open: true` + `history: []`）。**② 缺口通道**——模型要写的值不在表内：写入**拒绝并记 `enum_gap`**（带原词与当时场合），不许猜、不许就近匹配；攒 5 条人工 review 一次（新增值 / 并入 / 判为软场合），决定追加进 `history`。**"漏了"从静默丢数据变成当场报错并排队。** **③ 唯一声明由机器守**——`health-check` 扫 `packages/**` 与插件目录，除解码器外出现 `'edit_code'`/`'powershell'` 这类枚举字面量 → FAIL。**④ B/C 测法落成可执行协议**——B：题库 10 条（有 `source_turn_id`、能一句话问）、每次新会话第 1/2/3 轮各问一条、判四类（对/重问/编/未触及）、分母不含未触及、10 次会话 30 题、机器先标人只复核"对"；C：连续 20 条含"我记得/你之前"的陈述、判三类（可溯源/假溯源/不可溯源，假溯源单列）、离线零模型调用、机器判 id 存在性。**⑤ 一个自我边界写进 brief**——C 抽取语料用正则是**测量工具**，不违反"硬场合不读文本"；那条铁律约束运行时判据，不约束离线审计。**⑥ 第三处**——导出/可携带进第二批。**⑦ 还没解**——`<rules fired>` 与常驻集并存期的"重复注入计数"没设计，它会污染 A 指标；软场合覆盖率抽样未做（<60% 回炉）。**⑧ 下一步**——第 0 步：`config/situation.json` + 解码器 + 两节 health-check **先红**。
 
 **2026-11-10 20:20–20:35 查实注入钩子：有，但"动手前"只能提前到下一刀**：**① 怎么查的**——`resources/app.asar` 里带着宿主的包文档，node 扫字符串定位（`_scratch/asar-hooks.mjs`、`asar-vocab.mjs`、`asar-ctx8.mjs`），不猜。**② 结论**——可挂 waterfall 六个：`agent/pre-step`、`agent/request`、`llm/stream`、`tools/pre-execute`、`tools/execute`、`tools/post-execute`；观察最终结果用 `tools/result`；同步拒绝 `ctx.tools.guard()`；给某 agent 减工具 `ctx.tools.restrict()`；每 agent 注入有稳定 API `agent.inject()`（记 `agent/inbox/spliced`，进下一个被接纳的 step）。**③ 关键限制**——任何这些点带出的 context 都以注入 `user/message` 的形式落在**本步工具结果之后**，所以"动手前提醒"实际是"下一次动手前"；真要在这一刀之前生效，只有 `ask`（等用户）或 guard 拒绝两条路。**④ 设计后果**——0030 §7 拆成三行（常态提示 / 不可逆动作 ask / 开口前常驻集），首批发第五行；§6 act 枚举 11→16 并加 `IRREVERSIBLE`（delete/overwrite/push/reset_hard/dep_change 五个，取自 act 子集，不另建表）；§8 第 4 步改成"接 `tools/pre-execute`"；§11 那条开放问题标解。**⑤ 顺带查出的三条纪律**——重写 `agent/pre-step` 决定必须展开原决定（我们 `index.js:1618` 已合规）；不得新增 session 事件类型（我们的数据在自己的 SQLite）；`agent/request` 监听器改不了请求消息。**⑥ 没解决的**——同一会话里如果第一刀就错，只能事后补；这条进了 §9 B 指标的测法讨论（还没拍）。
 
