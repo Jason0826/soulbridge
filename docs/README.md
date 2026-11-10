@@ -29,6 +29,7 @@
 | 201 条规则里到底有几条倾向、证据够不够 | [experiments/2026-11-09-rule-compression.md](experiments/2026-11-09-rule-compression.md)（读数已出，准入线待拍板） |
 | [protocol.md](protocol.md) | 占位文件，只为不让旧链接 404；协议内容在 [spec/protocol.v0.md](spec/protocol.v0.md) |
 | 新会话从哪开始 | [state.md](state.md)（唯一现状态文档） |
+| 一个词到底什么意思、它的声明在哪 | [glossary.md](glossary.md)（改 `config/` 值域前必读） |
 | 全系统审计与 review 方法 | [audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md) |
 | **一次交付要走哪十步** | [process.md](process.md)（规范；每步都有判定方式） |
 | **名词/变量声明在哪** | [declarations.json](declarations.json)（唯一声明登记，`health-check` 第 8 节判定） |

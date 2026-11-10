@@ -124,6 +124,8 @@ MISS_SIGNALS = { explicit_restate, model_judged_repeat(≥2) }             // �
 
 **存储**：复用 `facts`（`role='disposition'`）+ 槽 `场合`（结构化 JSON）、`目录句`、`依据`。不新表、不升 schema——读写按 role 过滤是加法。**理由**：facts 已经有 supersede、时间轴、来源轮次、证据链，新表会重建一遍这些语义。
 
+> **一条前置约束**（2026-11-10 术语体检后补）：`role` 是闭集，声明在 `config/domains.ts` 的 `FACT_ROLES`（现 6 值）。新增 `disposition` **必须加进那份声明**，不许在 `config/situation.json` 里再写一遍——同一个值只能有一个家。同理，`场合` 的字段枚举进 `situation.json`，`role` 的值进 `domains.ts`，两份文件不互相复述。
+
 ## 7. 机制（四条，缺一条就退回原样）
 
 **① 注入按"点"，触发按"场合"。**
