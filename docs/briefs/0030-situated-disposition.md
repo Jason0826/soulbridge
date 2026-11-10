@@ -84,10 +84,14 @@
 SITUATION_FIELDS = [act, object, tool, time]      // 硬，四选零到四
   act      枚举：write_file | edit_code | run_command | release | install
                  | restart | migrate_db | design | review | extract | export
+                 | delete | overwrite | push | reset_hard | dep_change
   object   值类：path_suffix | repo | script | field | entity_id
   tool     枚举：powershell | pnpm | npm | schtasks | sqlite | dsh_host | git
   time     值类：turn_count | idle_hours | local_hour_range
 SOFT_SITUATION   模型自由文本 + 一句"该不该现在提"（不参与子集匹配，注入时由模型当场判）
+
+IRREVERSIBLE = act ∈ {delete, overwrite, push, reset_hard, dep_change}
+                                                  // act 的一个子集，唯一走 ask 拦截的一档，其余只提示
 
 MATURITY = f(hits, distinct_source_turns, corrections, last_hit_at)   // 四个数，纯函数
   → 厚度档：0 带证据 / 1 一句处方 / 2 半句或并入更抽象的一条
@@ -107,7 +111,17 @@ MISS_SIGNALS = { explicit_restate, model_judged_repeat(≥2) }             // �
 | 注入点 | 取什么 | 判据 | 失败长什么样 |
 |---|---|---|---|
 | 开口前（每轮） | 关于你（无法条件化的倾向）+ 未闭合的事 | 常驻集，按成熟度控厚度 | 全是"边界"没有"在意"，读起来像说明书 |
-| 动手前（工具调用前） | 当前动作命中的限制性倾向 | 子集匹配（声明 ⊆ 当前） | 场合写太窄 → 漏；太宽 → 墙纸 |
+| 动手前（工具调用时） | 当前动作命中的限制性倾向 | 子集匹配（声明 ⊆ 当前） | 场合写太窄 → 漏；太宽 → 墙纸 |
+
+**"动手前"到底能提前多少**（已查实，见 §11）：宿主有 `tools/pre-execute`、`tools/execute`、`tools/post-execute` 三个 waterfall，`pre-execute` 看得到工具名与参数，还能 `ask`（同步等用户）。但**从它带出的文本落在本步工具结果之后**，模型是在**下一次动手前**读到。所以：
+
+| 想要的效果 | 能用什么 | 代价 |
+|---|---|---|
+| 同会话里第二刀起被提醒（主用） | `pre-execute` 带 context | 零打断；第一刀拦不住 |
+| 第一刀就要拦下 | `pre-execute` 返回 `ask` / `ctx.tools.guard()` | 打断一次、可能多耗一轮 |
+| 动手前就说 | `agent/pre-step` 常驻集 | 不知道要动什么，只能按会话状态猜 |
+
+第一批按第一行做；第二行只留给不可逆动作（删、覆写、`git push`），清单进 §6 枚举。
 
 **② 厚度随成熟度呼吸**（不是随"N 条配额"）。新领域先厚，熟了自然薄；熟到极致并入更抽象的一条。
 **③ 冲突分场合，不覆盖。** 同场合真矛盾才取代，旧条留历史（可 `soul_detail`）。
@@ -121,7 +135,7 @@ MISS_SIGNALS = { explicit_restate, model_judged_repeat(≥2) }             // �
 第 1 步  写入侧两处欠账：写时同族去重（有则加证据不新增）、写时建 `依据` 引用（现在 0 条）
 第 2 步  人格读写：role=disposition + 场合槽 + 成熟度四数（纯函数 + 测试 + 变异）
 第 3 步  开口前接一个点（pre-step 已有），先只注入人格常驻集，与 `<rules fired>` 并存
-第 4 步  动手前接一个点（**待查**：DSH 有没有工具调用前的事件；见 §10）
+第 4 步  动手前接一个点：`tools/pre-execute`（已确认存在），文本落在本步结果之后
 第 5 步  离开点抽取同时产"倾向修改建议"（同一次调用，不新开）
 第 6 步  出三个数的 stats 脚本（A 有基线可直接判；B/C 先测基线）
 ```
@@ -141,13 +155,16 @@ MISS_SIGNALS = { explicit_restate, model_judged_repeat(≥2) }             // �
 
 ## 10. 待拍（3 处，`写`之前不能动代码）
 
-1. **枚举表初版**（§6）：11 个 act、7 个 tool、5 类 object 够不够？漏了就补，但要留"补的记录"。
+1. **枚举表初版**（§6）：16 个 act、7 个 tool、5 类 object 够不够？漏了就补，但要留"补的记录"。不可逆那一档就取 act 的子集（5 个），不另建表。
 2. **B/C 的测法**：B 的"重问"怎么算一次、C 的抽样怎么抽——上面是初稿，需要你认或改。
 3. **导出/可携带是否进第二批**（你没排除，第一批不做）。
 
 ## 11. 开放问题
 
-- **DSH 有没有"工具调用前"的钩子**：现在插件只挂 `agent/pre-step` 与 `session/event`。若没有 pre-tool 钩子，动手前要么退化成"上一步结束时预告"，要么改成"调用后立刻补一句"（对本次无救）。
+- ~~**DSH 有没有"工具调用前"的钩子**~~ **已查实（2026-11-10，读 `app.asar` 内宿主文档）**：有，而且是三个。可挂的 waterfall 全集 = `agent/pre-step`、`agent/request`、`llm/stream`、`tools/pre-execute`、`tools/execute`、`tools/post-execute`；观察结果用 `tools/result`；同步拒绝用 `ctx.tools.guard()`；给某个 agent 减工具用 `ctx.tools.restrict()`；每 agent 注入有稳定 API `agent.inject()`（记 `agent/inbox/spliced`，进下一个被接纳的 step）。
+  - **限制**：这些点带出的文本一律以注入 `user/message` 的形式落在**本步工具结果之后**——挡不住"这一刀"，只能影响"下一刀"。真要挡，只能 `ask`（等用户）或 guard 拒绝。
+  - **顺带核对**：重写 `agent/pre-step` 决定必须展开原决定（`{...decision, messages}`），否则丢 `startsRequestSeries` 一类字段；我们插件已是对的（`index.js:1618`）。
+  - **另一个约束**：不得新增 session 事件类型；`plugin:` 记录只给 DSH 实验包。我们的数据在自己的 SQLite 里，本来就不碰这条。
 - **压缩可观测**：已解——`compaction/start` / `compaction/end` 在事件流里（账本已在用），离开点不止会话结束一个。
 - **软场合占多数怎么办**：如果四硬字段表达不了大多数记忆，说明字段集错了；判定线 = 抽样 20 条，硬场合覆盖率 <60% 就回炉。
 - **底层一致性**：`<rules fired>` 与常驻集并存期间，同一条原则可能被两处注入——需要一条"重复注入计数"，否则 A 指标会被自己污染。
