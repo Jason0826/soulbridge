@@ -75,6 +75,7 @@
 | **行为影响：习惯怎么变成主动动作（触发器 + cost-gate + 遵守率）** | [briefs/0018](briefs/0018-behaviour-influence.md) |
 | **事实的时间与有效期（valid_from / valid_to）** | [briefs/0027](briefs/0027-time-axis.md) |
 | **按需取数：先理解意图，再决定取什么（目录 + 正文 + 动作）** | [briefs/0029](briefs/0029-retrieval-on-demand.md) |
+| **人格层重做：场合 × 倾向（新主干，三条并列验收）** | [briefs/0030](briefs/0030-situated-disposition.md) |
 | 归纳（按关闭线索，两阶段） | [briefs/0016](briefs/0016-extraction-consolidation.md) |
 | 线索（跨中断的话题） | [briefs/0017](briefs/0017-topic-threads.md) |
 
