@@ -271,9 +271,14 @@
       "date": "2026-11-11",
       "delta": 12,
       "reason": "判据 3 观测：commitDrafts 返回 actions（模型合并意图计数 add/supersede/update/noop，写入前计、降级不丢），插件 extract done 加 action= 行 + trace actions（core +12：types +8 契约注释、index +4 计数；插件 +8）。观测设施按 0026 先例允许涨；意图与结果分开记（幽灵目标算 supersede 意图、降级进 skipped）。"
+    },
+    {
+      "date": "2026-11-11",
+      "delta": 3,
+      "reason": "读书实验 QA：prompts.ts 的 renderKnownFacts / renderKnownEntities 由私有改为导出（净 +3 行 = 3 行注释，说明为什么导出——问答侧渲染必须与抽取提示词逐字节同格式，否则实验测的是生产不用的格式；两个 export 关键字不占行）。消费方 scripts/book-qa.mjs 用它渲染候选池；tsc 0、30 题解析验满拒跑。实验设施按 0026 先例允许涨。"
     }
   ],
-  "coreLines": 9502,
+  "coreLines": 9505,
   "pluginLines": 3912,
   "files": {
     "analyze.ts": 255,
@@ -295,7 +300,7 @@
     "portable.ts": 115,
     "profile-prompt.ts": 119,
     "prompts.generated.ts": 15,
-    "prompts.ts": 468,
+    "prompts.ts": 471,
     "reflect.ts": 417,
     "retrieval.ts": 121,
     "roles.ts": 28,
