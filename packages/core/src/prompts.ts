@@ -94,7 +94,10 @@ function isoDate(at: number): string {
   return `${d.getFullYear()}-${month}-${day}`;
 }
 
-function renderKnownEntities(entities: KnownEntityPrompt[]): string {
+// Exported for the book-recall QA scripts: the question side must render the
+// candidate block byte-identically to this prompt, or the experiment measures
+// a format that production never uses.
+export function renderKnownEntities(entities: KnownEntityPrompt[]): string {
   if (entities.length === 0) return '<known-entities>（空）</known-entities>';
   const lines = entities.map((e) => {
     const aliases = e.aliases?.length ? `（别名：${e.aliases.join('、')}）` : '';
@@ -104,7 +107,7 @@ function renderKnownEntities(entities: KnownEntityPrompt[]): string {
   return ['<known-entities>', ...lines, '</known-entities>'].join('\n');
 }
 
-function renderKnownFacts(facts: KnownFactPrompt[]): string {
+export function renderKnownFacts(facts: KnownFactPrompt[]): string {
   if (facts.length === 0) return '<known-facts>（空）</known-facts>';
   // Rendered as given: the caller budgets the candidate set (core index.ts
   // EXTRACTION_FACT_BUDGET_CHARS). The slices that used to live here were dead — the

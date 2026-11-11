@@ -21,6 +21,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { openSqlite } from '../packages/core/src/sqlite.ts';
 import { Soul } from '../packages/core/src/index.ts';
+import { createLlm } from './book-llm.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -81,54 +82,9 @@ if (dryRun) {
   process.exit(0);
 }
 
-/* ---------------- model: DSH's own credential file, env overrides ---------------- */
+/* ---------------- model: shared with the QA/judge scripts (book-llm.mjs) ---------------- */
 
-function readApiKey() {
-  if (process.env.BOOK_LLM_KEY) return process.env.BOOK_LLM_KEY;
-  const candidates = [
-    process.env.DSH_CREDENTIALS,
-    'D:/DSH/home/.credentials.yaml',
-    join(homedir(), '.dsh', 'home', '.credentials.yaml'),
-    join(homedir(), '.soulbridge', '.credentials.yaml'),
-  ].filter(Boolean);
-  for (const candidate of candidates) {
-    try {
-      const match = readFileSync(candidate, 'utf8').match(/^\s*DEEPSEEK_API_KEY:\s*(\S+)\s*$/m);
-      if (match) return { key: match[1], from: candidate };
-    } catch {
-      // next candidate; the error below lists what was tried
-    }
-  }
-  console.error(`no API key: set BOOK_LLM_KEY, or one of these credential files to exist:\n  ${candidates.join('\n  ')}`);
-  process.exit(2);
-}
-
-const keySource = readApiKey();
-const API_KEY = typeof keySource === 'string' ? keySource : keySource.key;
-const API_URL = process.env.BOOK_LLM_URL ?? 'https://api.deepseek.com';
-const MODEL = process.env.BOOK_LLM_MODEL ?? 'deepseek-chat';
-
-async function callModel(prompt) {
-  let lastError;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      const response = await fetch(`${API_URL.replace(/\/$/, '')}/chat/completions`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${API_KEY}` },
-        body: JSON.stringify({ model: MODEL, temperature: 0, messages: [{ role: 'user', content: prompt }] }),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status} ${(await response.text()).slice(0, 160)}`);
-      const payload = await response.json();
-      const text = payload.choices?.[0]?.message?.content;
-      if (!text) throw new Error('empty completion');
-      return text;
-    } catch (error) {
-      lastError = error;
-      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
-    }
-  }
-  throw lastError;
-}
+const callModel = createLlm();
 
 /* ---------------- feed ---------------- */
 
@@ -143,7 +99,7 @@ soul.onLlmRaw = (raw) => {
   appendFileSync(join(home, 'book-feed-raw.log'), `### segment ${currentSegment}\n${raw}\n`, 'utf8');
 };
 
-console.log(`feeding ${segments.length} segments → soul=${soulId} db=${home}/soul.db model=${MODEL} (key from ${typeof keySource === 'string' ? 'env' : keySource.from})`);
+console.log(`feeding ${segments.length} segments → soul=${soulId} db=${home}/soul.db ${callModel.info}`);
 
 const totals = { facts: 0, entities: 0, actions: { add: 0, supersede: 0, update: 0, noop: 0 }, skipped: 0 };
 const failed = [];
