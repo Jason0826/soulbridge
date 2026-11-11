@@ -29,6 +29,7 @@
 | 201 条规则里到底有几条倾向、证据够不够 | [experiments/2026-11-09-rule-compression.md](experiments/2026-11-09-rule-compression.md)（读数已出，准入线待拍板） |
 | [protocol.md](protocol.md) | 占位文件，只为不让旧链接 404；协议内容在 [spec/protocol.v0.md](spec/protocol.v0.md) |
 | 新会话从哪开始 | [state.md](state.md)（唯一现状态文档） |
+| state.md 里超过一周的旧条目去哪了 | [state-archive/](state-archive/)（归档不删除，规则见「维护规则」4） |
 | 一个词到底什么意思、它的声明在哪 | [glossary.md](glossary.md)（改 `config/` 值域前必读） |
 | 现在欠着什么、下一步该先还哪笔 | [debt.md](debt.md)（做决定前先看） |
 | 全系统审计与 review 方法 | [audit/2026-11-02-whole-system.md](audit/2026-11-02-whole-system.md) |
@@ -109,3 +110,4 @@
 1. 新增文档必须能回答"谁读、什么时候读"。答不上来就不加。
 2. 同一事实出现第二份时，删掉弱的那份，只留链接。
 3. 改完文档跑一次 `node scripts/health-check.mjs`：它会查编号冲突、版本表一致性、声明了但没有写入的字段。
+4. **state.md 只留最近 7 天的日期条目**：它是每次必读的热文档，只追加会无限长（11-11 已 163KB/711 行）。超期条目移进 `state-archive/YYYY-MM.md`——归档不删除（grep 仍能找到），衰减的只是"被想起的概率"；移之前先上浮：仍为真的事实先进接手须知或固定章节。执行 `node scripts/archive-state.mjs`（`--dry-run` 先看），`health-check` 对超期未归档报 WARN。

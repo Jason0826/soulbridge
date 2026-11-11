@@ -281,6 +281,27 @@ if (!existsSync(readmePath)) {
   else add('PASS', '文档', `顶层文档均已进索引（${topLevelDocs.length} 份）`);
 }
 
+// ---------- 4.6.2 状态簿瘦身：日期条目超过 7 天必须归档 ----------
+// state.md 是每次必读的热文档，只追加不删会无限长（11-11 已 163KB / 711 行）。
+// 归档 = 移进 docs/state-archive/，一个字不删；这条只拦"该移没移"（规则 26：一条规则一个检查）。
+// 无日期的旧尾巴随它后面那条日期条目一起走（块边界规则，archive-state.mjs 同口径）。
+const STATE_KEEP_DAYS = 7;
+if (existsSync(handoffPath)) {
+  const staleCutoff = new Date(Date.now() - STATE_KEEP_DAYS * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const dated = [...readFileSync(handoffPath, 'utf8').matchAll(/^\*\*(\d{4}-\d{2}-\d{2})/gm)].map((m) => m[1]);
+  const overdue = dated.filter((date) => date < staleCutoff);
+  if (overdue.length > 0) {
+    add(
+      'WARN',
+      '文档',
+      `state.md 有 ${overdue.length} 条超过 ${STATE_KEEP_DAYS} 天的日期条目未归档（最早 ${overdue.sort()[0]}）`,
+      '跑 node scripts/archive-state.mjs（先 --dry-run；移之前把仍为真的事实上浮到接手须知/固定章节）',
+    );
+  } else {
+    add('PASS', '文档', `state.md 日期条目都在 ${STATE_KEEP_DAYS} 天内（${dated.length} 条）`);
+  }
+}
+
 // ---------- 4.6.1 替换事故的痕迹 ----------
 // 两次真实事故：把 `` `n `` 当成换行写进了文档（一次让整节挤成一行，一次把 `node` 切成了 ode）。
 // 这类损坏在 diff 里看着像正常修改，读起来才发现句子断了，所以扫全部文档，不只扫 diff。

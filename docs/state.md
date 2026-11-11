@@ -297,6 +297,8 @@
          然后做去重动作计数；**别在抽取跑不起来时改命名**
 ```
 
+> 日期条目只留最近 7 天，更早的在 [state-archive/2026-11.md](state-archive/2026-11.md)（规则见 docs/README）。
+
 **2026-11-11 10:20 判据 3 第一步发版装机（core 0.0.123 / 插件 0.0.135，09:35:02 生效）**：**① 按接手须知①走完整链**——review 两笔业务提交（7d06471 + e8929db，diff 逐行看过：core 四层取候选+预算记账、插件传 `text`+`pool=` 进日志）→ 改动前基线 core 338/338、插件 156/156、tsc 0、health-check **0 FAIL / 18 WARN / 25 PASS**（review 门 = WARN 3 笔，< FAIL 6 笔，不拦重启）→ bump（插件 `package.json` + lock **一起提交**，5efa2fa 教训）→ tag 双推 → **CI 双绿**（release + ci 各自跑过）→ npm 约 2 分钟内 `npm view` 可读。**② 验产物不验源码**——`npm view dist.tarball` 下包解包：core `index.js` 有 `EXTRACTION_FACT_BUDGET_CHARS`、插件 `index.js` 有 `poolDropped` ✓（CI 绿 ≠ 发的是自己这版，11-06 踩过）。**③ 装机**——profile `package.json` 两版本 + `pnpm-workspace.yaml` 排除项各追加（配置文件用 edit 工具，不过 PowerShell）→ `corepack prepare pnpm@11` → `pnpm install`（+0.0.135 / +0.0.123）→ `verify-installed <web>` **6 PASS**。**④ 重启**——`health-check --gate=review` 绿 → `schtasks /run /tn DshWebRestartOnce` → `09:33:03 waiting 90s` → `09:34:34 gate: ok` → `09:35:05 ready`（token 已换，`DSH-Web.url` 新链接）→ `01:35:02Z apply() called (v0.0.135)` + `bundle check: present (…\profiles\web)`。**⑤ 观察点未到**——`pool=` 只在 segment flush 时打印；判定口径：**e/t/s/r 全 0 = 插件没传 text、四层退化成地板层**（那就是发版没解决问题，按没修算）。**⑥ 本会话只做发版，一行业务代码没动**；state.md 瘦身规则（用户提出：163KB/737 行、日期条目只增不删、两个过期快照还在）待拍。
 
 **2026-11-11 08:20 判据 3 第一步：`<known-facts>` 不再按固定 limit 取（core 源码，未发版）**：**① 由来**——用户问"现在的去重逻辑是怎样的"，接着"为什么要固定 limit"，再问"按字符数是不是也有问题"。**② 查到的事实**——`limit: 12` 是 11-01 提交 `a849418` 里一个没有注释、没有推导的字面量；同一件事有三个数在管：`index.ts` 取 12、`prompts.ts` 渲染 `slice(0,20)`、`commitDrafts` 去重比 50 条——后两个是**死代码**（12 < 20、实体 20 < 30）。**③ 为什么行数不是预算**——1379 条 active，长度 p10=24 / p50=53 / p90=86 / **最长 18205**（一条微信聊天记录被整段写成了一条事实）；12 行等于 750..18000 字符。**④ 更好的方案（不是"改成 30"）**——选得对，再谈停：`extractionFactCandidates` 四层 = 实体（本文点名的，按组）/ 线索（上一轮所属）/ **BM25 词面相近**（char bigram；相对阈值 0.35×最高分，因为任何共享二字组都 >0 分，纯按条数一定填满）/ 最新 12 条**只在前面都薄时**兜底；停 = 字符预算 2400；截断**成组完整**（半截会让"这两条矛盾"变成"这里什么都没有"）；`chosen/chars/byTier/droppedGroups` 回传 trace 与日志（`pool=32(1478ch e0/t0/s32/r0) poolDropped=0`）。**⑤ 验收（真实库只读，机器跑）**——「发布那事怎么样了」→ 池子 32 条里 **15 条**讲发布/版本；「插件发版到哪一步了」→ 12 条里 5 条；**旧契约最新 12 条里只有 1 条**。**⑥ 诚实记账**：42 条发布状态只进来 15 条，**没全收敛**；实体层实测 **0**（那批事实大多没有实体槽，`fact_slots.entity_id` 覆盖 26%），真正起作用的是 BM25；原设计写的"时间当筛子"实际没用上（`valid_from` unknown 占 42%，只用于排序）。**⑦ 验证**——core **338/338**（+5：主体优先 / 成组不腰斩 / 记账自洽 / 无点名走地板且封顶 / 单组超预算仍要给），变异 2 组各恰 1 红；`tsc --noEmit` 0 错；插件 156/156（新字段可选，装着的 core 0.0.122 没有它也不炸）；棘轮 core +152 已记 history。**⑧ 又踩一次 PowerShell**——`Get-Content -Raw` 不带 `-Encoding` 在本机按 GBK 解码 UTF-8 文件，`Set-Content -Encoding UTF8` 再把乱码写回，**319 行损坏**；GBK 反编码只救回一部分（3616 个替换字符），最后 `git checkout` 还原重做。教训升级：**中文文档一个字都不要过 PowerShell**。
@@ -536,38 +538,10 @@ one`/`superseded` | "候选不生效"**无处表达** | ❌ |
 | 23 | 老 `memories` 退场 | **写入路径已删**；16 条迁移成 facts 并标 superseded | active 0 / superseded 16 | ✅ done |
 | 24 | 冻结层清理 | `turn_pairs` **97 行、0 写者** | 无写入、只有迁移在读 | ⚠️ |
 
-## 三·零、2026-11-03 12:50 现状快照
+> （本节已归档 → [state-archive/2026-11.md](state-archive/2026-11.md)）
 
-```
-轮次 304 · 步骤 1650
-事实 223（世界层 11 / 有日期 4 / 结论 5 / 被取代 47）
-实体 22 · 缺口 11 · 情绪样本 590
-线索 159（closed 153 / open 6；1 轮 136 条，≥2 轮 11 条）
-老 memories：active 0，16 条已迁移成事实并标 superseded
-队列：抽取 0 · 分类 0 · 画像 1 · 归纳 0
-```
+> （本节已归档 → [state-archive/2026-11.md](state-archive/2026-11.md)）
 
-## 三·零之二、2026-11-04 20:00 现状快照（今天所有改动之后）
-
-```
-轮次 407 · 事实 819（active 702 / candidate 61 / retracted 56）
-角色：observation 466 · judgment 112 · rule 84 · lesson 81 · profile 57 · promise 19
-结论 21 · 线索 207（closed 205 / open 2）· 缺口 86 开
-实体 96：thing 90 · person 4 · place 1 · self 1
-带来源轮 625/819（76%）· 有 valid_until 270
-情绪样本 699，非零 17（2.4%）
-注入：408 次，平均 7.9 条 id/轮，其中 handoff 14 次
-`soul_recall` 被模型调用次数：0
-```
-
-**这张表读出来的三件事**：① 数量级够（2 条事实/轮），可追溯 76%；② 世界层仍薄（person 4、place 1）；③ **模型从不主动 `recall`**——检索这条能力目前只在注入侧被用到，主动查询是零。
-
-管线（一条）：`turn → 抽取队列 → extract（唯一 prompt）→ commitDrafts（标注器）→ facts → 归纳按线索 → 结论 → 画像按维度合并`
-
-正在验收的实验（ADR 0034）：归属默认继续。部署 0.0.98 之后尚无抽取样本，
-
-node scripts/attribution-stats.mjs` 会在归属 ≥20 次时给第一个判决。
-现象记录：今早那批历史回填让世界层从 1 涨到 11、有日期从 0 涨到 4——事实开始带时间了。
 ## 三·一、下次从这里继续（未完成，别重开）
 
 换话题/换会话前先读这一节，**它比记忆可靠**。
