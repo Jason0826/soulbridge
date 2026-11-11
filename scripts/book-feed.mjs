@@ -16,7 +16,7 @@
  * 护栏：soulId 必须 book- 开头才准写——这个脚本和生产共用 soul.db，
  * 手滑写进 xiaoling 的真实记忆是不可逆污染，所以挡在开库之前。
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, appendFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { openSqlite } from '../packages/core/src/sqlite.ts';
@@ -37,6 +37,7 @@ if (!soulId.startsWith('book-')) {
 const userId = 'local';
 const filePath = arg('file', null);
 const segmentChars = Number(arg('segment', '1000'));
+const bookTitle = arg('title', '阿Q正传');
 const limit = Number(arg('limit', 'Infinity'));
 const from = Number(arg('from', '1'));
 const dryRun = has('dry-run');
@@ -135,6 +136,12 @@ const home = process.env.SOULBRIDGE_HOME ?? join(homedir(), '.soulbridge');
 const store = openSqlite(join(home, 'soul.db'));
 const soul = new Soul({ store, soulId, userId });
 const sessionId = soulId;
+// Raw replies are the only way to tell "the model said 无" from "the parse ate it" —
+// diagnosing the first feed cost a separate probe for lack of this line.
+let currentSegment = 0;
+soul.onLlmRaw = (raw) => {
+  appendFileSync(join(home, 'book-feed-raw.log'), `### segment ${currentSegment}\n${raw}\n`, 'utf8');
+};
 
 console.log(`feeding ${segments.length} segments → soul=${soulId} db=${home}/soul.db model=${MODEL} (key from ${typeof keySource === 'string' ? 'env' : keySource.from})`);
 
@@ -145,13 +152,20 @@ let fed = 0;
 for (let index = from - 1; index < segments.length; index += 1) {
   if (fed >= limit) break;
   const turnNo = index + 1;
-  // Resume story: a segment whose turn exists was committed; a failed one left
-  // no turn (extract runs before putTurnPair), so re-running redoes exactly it.
+  // Resume story: a turn is written after extract but before commit, so a segment
+  // that crashes inside commitDrafts leaves a fact-less turn. The `failed` list
+  // (exit 1) is what tells you to clean those turns — _scratch/book-cleanup.mjs —
+  // before re-running; skipping here is what makes a normal re-run cheap.
   if (store.turnByTurnNo?.(sessionId, turnNo)) {
     console.log(`segment ${turnNo}/${segments.length} skipped (already fed)`);
     continue;
   }
-  const text = segments[index];
+  const segment = segments[index];
+  // The production prompt assumes conversation ("只从对话里抽取"): the first feed
+  // (11-11) came back 无 on 19/25 raw-novel segments. A user pasting a book says
+  // "记下这段" — the harness says the same, so the prompt itself stays untouched.
+  const text = `下面这段《${bookTitle}》的原文，把里面关于人物和事件的事实抽取出来：\n\n${segment}`;
+  currentSegment = turnNo;
   const started = Date.now();
   try {
     const context = soul.extractionContext(20, { text });
@@ -168,7 +182,7 @@ for (let index = from - 1; index < segments.length; index += 1) {
       `extract done: by=${draft.by} reason=${draft.reason ?? '-'} entities=${result.entities.length} facts=${result.facts.length}` +
         ` gaps=${result.gaps.length} skipped=${result.skipped.length}` +
         ` ms=${Date.now() - started} segment=${turnNo}/${segments.length}` +
-        (pool ? ` pool=${pool.chosen}(${pool.chars}ch e${pool.byTier.entity}/t${pool.byTier.thread}/s${pool.byTier.similar}/r${pool.byTier.recent}) poolDropped=${pool.droppedGroups.length}` : '') +
+        (pool ? ` pool=${pool.chosen}(${pool.chars}ch e${pool.byTier.entity}/t${pool.byTier.thread}/s${pool.byTier.similar}/r${pool.byTier.recent}) poolDropped=${pool.droppedGroups.length}${pool.droppedGroups.length ? `:${pool.droppedGroups.map((d) => d.group).slice(0, 3).join(',')}` : ''}` : '') +
         (acts ? ` action=add${acts.add}/sup${acts.supersede}/upd${acts.update}/noop${acts.noop}` : ''),
     );
     fed += 1;
