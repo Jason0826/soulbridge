@@ -13,8 +13,9 @@
  * 模型来源：DSH 自己的凭据文件（用户已配过），env 可覆盖——
  *   BOOK_LLM_KEY / BOOK_LLM_URL / BOOK_LLM_MODEL / DSH_CREDENTIALS
  *
- * 护栏：soulId 必须 book- 开头才准写——这个脚本和生产共用 soul.db，
- * 手滑写进 xiaoling 的真实记忆是不可逆污染，所以挡在开库之前。
+ * 护栏（两道，都挡在开库之前）：soulId 必须 book- 开头；库必须是 harness.db——
+ * 11-11 起实验数据与生产物理隔离（harness-db.mjs 拒绝 soul.db），
+ * 当天生产抽取撞的就是实验实体留在共享 id 空间里的同名行。
  */
 import { readFileSync, appendFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -22,6 +23,7 @@ import { join } from 'node:path';
 import { openSqlite } from '../packages/core/src/sqlite.ts';
 import { Soul } from '../packages/core/src/index.ts';
 import { createLlm } from './book-llm.mjs';
+import { resolveHarnessDb } from './harness-db.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -32,9 +34,10 @@ const has = (name) => argv.includes(`--${name}`);
 
 const soulId = arg('soul', 'book-ahq');
 if (!soulId.startsWith('book-')) {
-  console.error(`refused: soulId "${soulId}" must start with "book-" (this script shares soul.db with production)`);
+  console.error(`refused: soulId "${soulId}" must start with "book-"`);
   process.exit(2);
 }
+const dbPath = resolveHarnessDb(arg('db', null));
 const userId = 'local';
 const filePath = arg('file', null);
 const segmentChars = Number(arg('segment', '1000'));
@@ -68,7 +71,7 @@ function segmentBook(raw, target) {
 }
 
 if (!filePath) {
-  console.error('usage: node scripts/book-feed.mjs --file <txt> [--soul book-ahq] [--dry-run] [--segment 1000] [--limit N] [--from N]');
+  console.error('usage: node scripts/book-feed.mjs --file <txt> [--soul book-ahq] [--db <path>] [--dry-run] [--segment 1000] [--limit N] [--from N]');
   process.exit(2);
 }
 const raw = readFileSync(filePath, 'utf8');
@@ -89,7 +92,7 @@ const callModel = createLlm();
 /* ---------------- feed ---------------- */
 
 const home = process.env.SOULBRIDGE_HOME ?? join(homedir(), '.soulbridge');
-const store = openSqlite(join(home, 'soul.db'));
+const store = openSqlite(dbPath);
 const soul = new Soul({ store, soulId, userId });
 const sessionId = soulId;
 // Raw replies are the only way to tell "the model said 无" from "the parse ate it" —
@@ -99,7 +102,7 @@ soul.onLlmRaw = (raw) => {
   appendFileSync(join(home, 'book-feed-raw.log'), `### segment ${currentSegment}\n${raw}\n`, 'utf8');
 };
 
-console.log(`feeding ${segments.length} segments → soul=${soulId} db=${home}/soul.db ${callModel.info}`);
+console.log(`feeding ${segments.length} segments → soul=${soulId} db=${dbPath} ${callModel.info}`);
 
 const totals = { facts: 0, entities: 0, actions: { add: 0, supersede: 0, update: 0, noop: 0 }, skipped: 0 };
 const failed = [];

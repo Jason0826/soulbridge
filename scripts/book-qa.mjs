@@ -10,15 +10,19 @@
  * 「检索没取到」和「取到了没答上」。
  *
  * 题库从真值表 md 解析（一件事一个表示：改题只改真值表）。
+ *
+ * 库：与 book-feed 同一 harness.db（11-11 起与生产隔离，harness-db.mjs 拒绝 soul.db）。
+ * 书要先喂进来才有候选池——11-11 的池子在隔离前已清出生产库，答案与候选池
+ * 的存档是 docs/experiments/…-book-qa-answers.jsonl。
  */
 import { readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openSqlite } from '../packages/core/src/sqlite.ts';
 import { Soul } from '../packages/core/src/index.ts';
 import { renderKnownEntities, renderKnownFacts } from '../packages/core/src/prompts.ts';
 import { createLlm } from './book-llm.mjs';
+import { resolveHarnessDb } from './harness-db.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const TRUTH = join(here, '..', 'docs', 'experiments', '2026-11-11-book-recall-truth.md');
@@ -29,6 +33,7 @@ const arg = (name, fallback) => {
   return at >= 0 && argv[at + 1] !== undefined ? argv[at + 1] : fallback;
 };
 const soulId = arg('soul', 'book-ahq');
+const dbPath = resolveHarnessDb(arg('db', null));
 const outPath = resolve(arg('out', join(here, '..', 'docs', 'experiments', '2026-11-11-book-qa-answers.jsonl')));
 const only = arg('only', null) ? new Set(arg('only', '').split(',')) : null;
 
@@ -50,11 +55,11 @@ function loadQuestions() {
 }
 
 const questions = loadQuestions().filter((q) => !only || only.has(q.id));
-const store = openSqlite(join(process.env.SOULBRIDGE_HOME ?? join(homedir(), '.soulbridge'), 'soul.db'));
+const store = openSqlite(dbPath);
 const soul = new Soul({ store, soulId, userId: 'local' });
 const llm = createLlm();
 
-console.log(`qa: ${questions.length} questions → soul=${soulId} ${llm.info}`);
+console.log(`qa: ${questions.length} questions → soul=${soulId} db=${dbPath} ${llm.info}`);
 const lines = [];
 for (const q of questions) {
   const started = Date.now();
