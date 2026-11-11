@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-11 22:15**（core 0.0.124 / plugin 0.0.136 已生效；合成实验读侧 PASS 收窗 + 断言③污染归因 + soul_detail 根因——见 22:15 条目）
+最后核对：**2026-11-11 23:15**（core 0.0.124 / plugin **0.0.137** 已装机（verify-installed 6 PASS），运行层待重启生效；soul_detail 全局故障修复——见 23:15 条目）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -37,11 +37,12 @@
                 （R2 对孙砚秋 / R3 对秋分后第三天+乌糯；G1 注入块带合成实体；偏离三处申报：
                 R1 被问到不判、R4 没问、断言③ FAIL = 污染归因（实验题面 threads + 本会话粘贴
                 被抽的 1 事实），窗口泄漏 0）；写侧 W1/W2 FAIL 四层归因到模型判断层（21:05 ⑥）。
-                **窗口冻结解除 → ② soul_detail 全局故障已定位待修**：插件 `index.js:3547`
-                返回 undefined 键（源头 `sqlite.ts:1937` NULL→undefined / `index.ts:1655`
-                turn:undefined）过不了 lossless JSON，触发面 = 无 valid_from_text 或无 turn
-                的事实（时好时坏）；修法 = 剔 undefined + 补输出校验测试——动手前先和用户
-                开发会话对撞。
+                **窗口冻结解除 → ② soul_detail 全局故障已修复（11-11 23:15，插件 0.0.137
+                已装机）**：三层链（`sqlite.ts:1937` NULL→undefined / `index.ts:1655`
+                turn:undefined / `index.js` 原样返回）→ harness 拒 `value is not lossless
+                JSON`；修 = `omitUndefined()` 剔 undefined 键 + `test/soul-detail.test.mjs`
+                3 条（先红两层：单测 + 现场对 `fc_mwc8lttk_2h` 复现同错；变异恰 2 红，
+                160/160）；**剩重启 + `apply() called (v0.0.137)` + 现场复调 = 最后一步**。
                 ② 债重排（20:02 用户拍**单 soul 是产品范围**）：**贴长文 = #1**（用户确认"有时贴文章
                 取其精华"，修法先例 = 信封）；实体 id → 改判**测试库隔离，已上线**（`8b6cde1`，
                 拒绝检查红测过，不改 schema——重开条件：可携带批重要求单文件多 soul）；最大组 #3 待拍。
@@ -309,27 +310,25 @@
 > 新会话只读状态会像换班工人；这 6 行是**叙事**，不是状态——换会话时整体替换，不累积。
 
 ```
-上一段   2026-11-11 21:05 – 22:15 会话（接上一段）：读侧开窗 → 判分 → 收窗 + soul_detail 根因
-做了     ① 方案 A 开窗：锚词断言 11 词全 0 → inject 踩坑（COMMIT 后写 ids 清单 ENOENT =
-            半截状态）→ 按源侧 id 撤回（17/7/3 恰好全撤）→ 根因修复 mkdir 前置（8457216）
-            → 绿跑 56 行、真基线 1543/184/590、清单落 _scratch/
-         ② 实验会话三题实为 R1+R2+R3（用户按 1/2/3 复制，R4 没问）：子代理对冻结 §3.3 判分
-            → R2 对、R3 对、R1 按 A 不判（偏离申报）→ **R 判定线 PASS**；G1 PASS（首注入
-            <about>/<about-now> 块带合成实体；soul_recall 主动召回 4 次全命中——双通道送达）
-         ③ 收窗：cleanup ①②②b PASS（56 行清零、1557/185/595 ≥ 基线、无外部引用，清单销毁）；
-            断言③ FAIL 按 §7 申报 + 归因 = threads 2（实验题面）+ facts 1（本会话粘贴轨迹
-            被抽，fc_mwc6t3kx_22），**窗口泄漏 0**；q-anchor-pollution 补"清单缺失=窗口空"语义
-         ④ soul_detail 全局故障（本会话复现同错）根因三层链：sqlite.ts:1937 NULL→undefined +
-            index.ts:1655 turn:undefined → 插件 index.js:3547 原样返回 → lossless JSON 拒；
-            窗口期未修（冻结 + 用户另一会话在开发）
-验证     判分子代理只读两文件未改动；清单/断言/归因脚本全有退出码；health-check 后提交推送
-没做完   soul_detail 修复（现可动手，先对撞开发会话）；污染 4 行处置待拍（留 / 按 session 清）；
-         贴长文修法未动（#1）；最大组修法待拍；调召回 A/B 未做；拆段与改名仍别动
-在热什么 42 条件写侧债已有受控证据 + 分层归因；soul_detail 修 + 测试；本条提交后 compact 安全；
-         **别在对话里复述合成故事内容**（本会话粘贴已造成 1 条事实污染，题面也别经我手）
+上一段   2026-11-11 22:15 – 23:15 会话：接手须知下一步 = soul_detail 修复，已做到装机
+做了     ① 对撞通过（用户确认开发会话已结束，两仓库干净同步）→ 先红两层：新单测 3 条
+            （走 apply() 注册路径）+ 现场用旧插件对真实事实 fc_mwc8lttk_2h 复现同错
+         ② 修 = 插件 omitUndefined 剔 undefined 键（core 不动，另两个工具扫过无同款）；
+            变异（剔除改原样返回）恰 2 红；160/160（原 157 + 新 3）
+         ③ 发布 fd1df5f → main CI 绿（run 46）→ tag v0.0.137 → npm 产物解包验
+            omitUndefined 在 → profile 两配置 edit 改 + pnpm install →
+            verify-installed 6 PASS（core 0.0.124 / plugin 0.0.137）
+验证     修复前现场红（value is not lossless JSON）+ 单测先红后绿 + 变异恰红 + 产物/装机双验
+没做完   重启（schtasks DshWebRestartOnce，90 秒窗口）+ apply() v0.0.137 + 现场复调
+            fc_mwc8lttk_2h（重启会杀进行中实施轮，fc_mw5ru7sm_f，见 23:15 条目⑦）；
+         污染 4 行处置待拍；贴长文修法未动（#1）；最大组修法待拍；调召回 A/B 未做
+在热什么 装机已换 0.0.137、运行层还是旧代码直到重启；重启后本条与 23:15 条目⑦要闭环；
+         **别在对话里复述合成故事内容**（曾造成 1 条事实污染，题面也别经我手）
 ```
 
 > 日期条目只留最近 7 天，更早的在 [state-archive/2026-11.md](state-archive/2026-11.md)（规则见 docs/README）。
+
+**2026-11-11 23:15 soul_detail 全局故障修复上线（插件 0.0.137，已装机、重启待触发）**：**① 对撞**——用户确认开发会话已结束（上一段的"另一会话在开发"不再成立），两仓库工作树干净、与 origin 同步。**② 先红两层**——新单测 `test/soul-detail.test.mjs` 3 条（走 `apply()` 注册的生产路径，判据 = `deepStrictEqual(JSON.parse(JSON.stringify(out)), out)` 逐键相等）：触发面事实（有 epoch 无 text 无轮次）的输出挂着 `validFromText/validTo/userText/assistantText: undefined` 键，JSON 往返丢键对不上；**现场复现**：装着的旧插件（0.0.136）对真实事实 `fc_mwc8lttk_2h` 调 `soul_detail` → `value is not lossless JSON`，与实验会话同错。**③ 修**——插件新增 `omitUndefined()`：**缺键是合法 JSON，键上挂着 undefined 不是**（harness `pipeline.ts` 的 `snapshotJsonValue` 取不到 JSON 形式就整条拒）；只动 `soul_detail` 一个工具的返回，core 不动，另两个工具扫过无同款 undefined。**④ 变异**——剔除改原样返回 → 恰 2 红（触发面/好路径，失败路径本就干净）；恢复后 **160/160**（原 157 + 新 3）。**⑤ 发布链**——`fd1df5f` → main CI 绿（run 46）→ tag `v0.0.137` → npm 产物解包验 `omitUndefined` 在、version 0.0.137（验产物不验源码）。**⑥ 装机**——profile 两配置文件走 edit（package.json 0.0.137 + pnpm-workspace.yaml exclude 追加）→ pnpm install +1 → `verify-installed` **6 PASS / exit 0**（core 0.0.124 / plugin 0.0.137）。**⑦ 没做完（重启后闭环）**——`schtasks /run /tn DshWebRestartOnce`（90 秒窗口）→ `apply() called (v0.0.137)` → 对 `fc_mwc8lttk_2h` 现场复调（修复前红 → 修复后应绿）；**重启会杀进行中的实施轮**（fc_mw5ru7sm_f），所以本轮先提交文档再触发重启。
 
 **2026-11-11 22:15 读侧窗口跑完（方案 A）→ R 线 PASS + 收窗 ①②②b PASS / ③ FAIL 归因；soul_detail 根因**：**① 开窗事故与修复**——inject 从 soulbridge 目录跑，ids 清单默认 `cwd/_scratch` 且目录不存在，COMMIT 后 ENOENT = "56 行已入库、无清单"半截状态；处置 = 按源侧同过滤取 id 撤回（前查清单行全在 + 无外部行引用合成实体 → 删 17/7/3 恰好全撤）+ 根因修复（mkdir 前置到开事务之前，**`8457216`**）+ 绿跑（56 行、真基线 facts=1543/entities=184/turns=590、清单落 `_scratch/`）。**② 开窗**——第 0 步锚词断言 11 词全 0 PASS 后注入；实验会话首轮一次问 3 题，**实为 R1+R2+R3**（用户按 1/2/3 编号复制，R4 没问）。**③ 判分**——子代理只读真值表 §3.3 + `_scratch/window-answers.txt`（题面不进本会话）：映射 1=渡口+标记石→R1、2=村长→R2、3=尝新祭→R3；**R2 对**（孙砚秋、无相反陈述）、**R3 对**（秋分后第三天 + 乌糯双键全中）；R1 按 A 不判（**偏离申报：R1 被问到**）、R4 没问（R3/R4 合并线由 R3 承担）→ **冻结通过线 R2 必对 ✓ / R3/R4 ≥1 ✓ → PASS**；**G1 PASS**（首注入 `<about>`/`<about-now>` 块带合成实体，按块归因插件通道；同轨迹 `soul_recall` 主动召回 4 次全命中——送达 = 注入 + 主动召回双通道）。**④ 收窗**——cleanup PASS（清单 56 行归零 / xiaoling 1557/185/595 ≥ 基线 / ②b 无清单外行引用合成实体，清单销毁）；**断言③ FAIL（6 处）按 §7 停手申报 + 归因**：threads 3→2（实验会话题面进 host——问锚词问题必然留锚词 thread，host 中途还合并/关了 1 条）+ facts 1（`fc_mwc6t3kx_22`，源 turn = 本会话粘贴的轨迹、session-fc1810b5 = 本会话聊天被抽）；**窗口泄漏 = 0**（清单行全清；`q-anchor-pollution.mjs` 补"清单缺失 = 窗口空"语义供复用）。污染 4 行处置（留 / 按 session 清）待拍。**⑤ 过程混淆（申报）**——实验会话 `soul_detail` 连挂 4 次，模型仅凭 `soul_recall` 一句话条目作答（自述"够答"）；R2/R3 判分只看内容不受影响，"详情通道不可用"记为窗口环境事实。**⑥ soul_detail 全局故障根因**——本会话用无锚词旧事实复现同错后定位，三层链：`sqlite.ts:1937` NULL→undefined（valid_from_text）+ `index.ts:1655` 无 turn → `turn: undefined` → 插件 `index.js:3547-3555` 原样返回 undefined 键 → harness lossless JSON 校验拒（`value is not lossless JSON`）；触发面 = **无 valid_from_text 或无 turn 的事实**（date() 类放的日期大多只有 epoch → 必挂；有 text 形式的能过 → 时好时坏）；修法 = 返回时剔 undefined + 补"输出过 lossless 校验"测试（规则 26）；窗口期未动（实验冻结 + 用户另一会话在开发），收窗后可动手。
 

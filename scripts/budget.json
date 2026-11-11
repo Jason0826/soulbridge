@@ -276,10 +276,15 @@
       "date": "2026-11-11",
       "delta": 3,
       "reason": "读书实验 QA：prompts.ts 的 renderKnownFacts / renderKnownEntities 由私有改为导出（净 +3 行 = 3 行注释，说明为什么导出——问答侧渲染必须与抽取提示词逐字节同格式，否则实验测的是生产不用的格式；两个 export 关键字不占行）。消费方 scripts/book-qa.mjs 用它渲染候选池；tsc 0、30 题解析验满拒跑。实验设施按 0026 先例允许涨。"
+    },
+    {
+      "date": "2026-11-11",
+      "delta": 14,
+      "reason": "soul_detail 全局故障修复（插件 0.0.137）：工具结果带 undefined 键过不了 harness 的 lossless JSON（触发面 = 无 valid_from_text 或无 turn 的事实，实验会话连挂 4 次，现场对 fc_mwc8lttk_2h 复现同错）。新增 omitUndefined 剔键 + 返回处接线（净 +14：7 行注释写清「缺键合法、undefined 不合法」、函数本体 3 行、返回处 3 行接线注释与改写）。bug 修复允许涨；3 条测试在 test/ 不计预算，变异恰 2 红、160/160。"
     }
   ],
   "coreLines": 9505,
-  "pluginLines": 3912,
+  "pluginLines": 3926,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
