@@ -123,7 +123,7 @@ import type { RetrievalPlan } from './retrieval.ts';
 import { gateConclusion, conclusionSlots, isDerivedProfileLine, PROFILE_DIMENSIONS } from './consolidate.ts';
 import { buildContext } from './context.ts';
 import { reflect, ruleExtract, nextEmotion } from './reflect.ts';
-import { rank, tokenize } from './scoring.ts';
+import { bm25, buildCorpusStats, rank, tokenize } from './scoring.ts';
 import { analyzeAffect, emptyAffect, lexiconAnalyzer } from './affect/analyze.ts';
 import { extractByRules, extractThreadWithModel, extractWithModel } from './extract.ts';
 import type { ExtractionContext } from './extract.ts';
@@ -526,7 +526,10 @@ export class Soul {
   }
 
   /** The slice of the store the extractor is allowed to know about. */
-  extractionContext(limit = 20, options: { turnNo?: number; sessionId?: string } = {}): ExtractionContext {
+  extractionContext(
+    limit = 20,
+    options: { turnNo?: number; sessionId?: string; text?: string } = {},
+  ): ExtractionContext {
     const entities = this.store
       .findEntities({ soulId: this.soulId, userId: this.userId, limit })
       .map((e) => ({
@@ -535,9 +538,7 @@ export class Soul {
         aliases: e.aliases,
         relation: typeof e.attrs.relation === 'string' ? e.attrs.relation : undefined,
       }));
-    const facts = this.store
-      .facts({ soulId: this.soulId, userId: this.userId, limit: 12 })
-      .map((f) => ({ id: f.id, statement: f.statement, validFromText: f.validFromText }));
+    const { facts, factCandidates } = this.extractionFactCandidates(options);
     // Candidate threads, most recently used first. "How many turns ago" is what
     // lets the model tell "just now" from "a while back" without counting. Each
     // candidate also carries its last lines: a label cannot answer "does this turn
@@ -566,7 +567,121 @@ export class Soul {
       options.sessionId !== undefined && options.turnNo !== undefined
         ? (this.store.previousTurnText(options.sessionId, options.turnNo) ?? undefined)
         : undefined;
-    return { entities, facts, threads, previousUserText };
+    return { entities, facts, threads, previousUserText, factCandidates };
+  }
+
+  /**
+   * Which old facts the extractor is shown, and why.
+   *
+   * `<known-facts>` answers exactly one question — "is this sentence already known?" —
+   * so the candidates are the facts about the same thing, never simply the newest rows:
+   * the entities this text names, the thread it continues, then what reads like it
+   * (BM25 over character bigrams), and the newest rows only as a floor when those came
+   * back thin. The stop rule is a character budget, not a row count; truncation keeps a
+   * group whole, because half of one subject's facts turns "these two disagree" into
+   * "nothing here". See EXTRACTION_FACT_BUDGET_CHARS for why characters.
+   */
+  extractionFactCandidates(options: { turnNo?: number; sessionId?: string; text?: string } = {}): {
+    facts: ExtractionContext['facts'];
+    factCandidates: NonNullable<ExtractionContext['factCandidates']>;
+  } {
+    const active = this.store
+      .facts({ soulId: this.soulId, userId: this.userId, limit: 100_000 })
+      .filter(isActive);
+    const text = (options.text ?? '').trim();
+    const groups: Array<{ key: string; tier: number; facts: Fact[] }> = [];
+
+    // Tier 0: one group per named entity, so truncation can drop a subject without
+    // splitting it.
+    if (text) {
+      for (const entity of this.store.findEntities({ soulId: this.soulId, userId: this.userId, limit: 500 })) {
+        const names = [entity.name, ...(entity.aliases ?? [])].filter((name) => name.trim().length >= 2);
+        if (!names.some((name) => text.includes(name))) continue;
+        const ofEntity = this.store
+          .facts({ soulId: this.soulId, userId: this.userId, entityId: entity.id, limit: 200 })
+          .filter(isActive);
+        if (ofEntity.length > 0) groups.push({ key: `entity:${entity.name}`, tier: 0, facts: ofEntity });
+      }
+    }
+
+    // Tier 1: the thread the previous turn belonged to — the topic being continued.
+    const threadId =
+      options.sessionId !== undefined && options.turnNo !== undefined
+        ? this.threadBefore(options.sessionId, options.turnNo)
+        : null;
+    if (threadId) {
+      const turnIds = this.store.threadTurns(threadId).map((turn) => turn.id);
+      const ofThread = this.store.factsByTurns(turnIds).filter(isActive);
+      if (ofThread.length > 0) groups.push({ key: 'thread', tier: 1, facts: ofThread });
+    }
+
+    // Tier 2: lexical look-alikes. BM25 rather than shared substrings because length
+    // normalisation is what keeps one 18k-character row from "matching" everything.
+    if (text) {
+      const picked = new Set(groups.flatMap((group) => group.facts.map((fact) => fact.id)));
+      const pool = active.filter((fact) => !picked.has(fact.id));
+      if (pool.length > 0) {
+        const query = tokenize(text);
+        const docs = pool.map((fact) => tokenize(fact.statement));
+        const stats = buildCorpusStats(docs);
+        const scored = pool
+          .map((fact, at) => ({ fact, score: bm25(query, docs[at] as string[], stats) }))
+          .filter((entry) => entry.score > 0)
+          .sort((left, right) => right.score - left.score || right.fact.createdAt - left.fact.createdAt);
+        // Relative cut-off, not just a count: "发布那事" should fill the set with the
+        // release cluster, while "今天天气不错" should bring almost nothing (any shared
+        // bigram scores above zero, so an absolute count would always return its cap).
+        const best = scored[0]?.score ?? 0;
+        const strong = scored.filter((entry) => entry.score >= best * EXTRACTION_SIMILAR_FLOOR_RATIO);
+        for (const entry of strong.slice(0, EXTRACTION_SIMILAR_FACTS)) {
+          groups.push({ key: `similar:${entry.fact.id}`, tier: 2, facts: [entry.fact] });
+        }
+      }
+    }
+
+    // Tier 3: the floor. The old `limit: 12` survives only here, and only when the
+    // subject-driven tiers came back thin: when the text clearly matched something,
+    // recent-but-unrelated rows would spend the budget on noise.
+    const named = new Set(groups.flatMap((group) => group.facts.map((fact) => fact.id)));
+    const specific = groups.filter((group) => group.tier < 3).reduce((sum, group) => sum + group.facts.length, 0);
+    if (specific < EXTRACTION_RECENT_FACTS) {
+      const recent = active
+        .filter((fact) => !named.has(fact.id))
+        .sort((left, right) => right.createdAt - left.createdAt)
+        .slice(0, EXTRACTION_RECENT_FACTS - specific);
+      if (recent.length > 0) groups.push({ key: 'recent', tier: 3, facts: recent });
+    }
+
+    const chosen: Fact[] = [];
+    const taken = new Set<string>();
+    const droppedGroups: Array<{ group: string; facts: number }> = [];
+    const byTier = { entity: 0, thread: 0, similar: 0, recent: 0 };
+    let chars = 0;
+    for (const group of groups.sort((left, right) => left.tier - right.tier)) {
+      // Tiers overlap on purpose (one row can be both the entity's and the thread's);
+      // the prompt must still see it once.
+      const fresh = group.facts.filter((fact) => !taken.has(fact.id));
+      if (fresh.length === 0) continue;
+      const cost = fresh.reduce((sum, fact) => sum + fact.statement.length, 0);
+      // The first group is taken even when oversized: an empty candidate set is not
+      // "no duplicates", it is "the model was not allowed to look".
+      if (chosen.length > 0 && chars + cost > EXTRACTION_FACT_BUDGET_CHARS) {
+        droppedGroups.push({ group: group.key, facts: fresh.length });
+        continue;
+      }
+      for (const fact of fresh) {
+        chosen.push(fact);
+        taken.add(fact.id);
+      }
+      chars += cost;
+      const tier = group.tier === 0 ? 'entity' : group.tier === 1 ? 'thread' : group.tier === 2 ? 'similar' : 'recent';
+      byTier[tier] += fresh.length;
+    }
+
+    return {
+      facts: chosen.map((fact) => ({ id: fact.id, statement: fact.statement, validFromText: fact.validFromText })),
+      factCandidates: { chosen: chosen.length, chars, droppedGroups, byTier },
+    };
   }
 
   /**
@@ -1795,6 +1910,28 @@ export class Soul {
 
 /** Shortest shared character run that means "the same statement" (RFC 0005). */
 const MIN_SHARED_RUN = 4;
+
+/**
+ * Budget for the `<known-facts>` candidate set, in characters of statement text.
+ *
+ * Not a row count: statements in this store run 24..18,205 characters, so a row count
+ * is not a budget at all. 2400 characters ≈ 30 median facts (p50 = 53), which is
+ * enough that "the same thing said three days ago" can be in the set and small enough
+ * to stay a rounding error in a 5331-character prompt. Characters stand in for tokens
+ * (1 CJK char ≈ 0.6–1 token) because no tokenizer ships here: it is a stop rule, and
+ * the tiered selection above is what decides which rows deserve the room.
+ */
+export const EXTRACTION_FACT_BUDGET_CHARS = 2400;
+/** How many BM25 look-alikes may enter when the entity/thread tiers are thin. */
+export const EXTRACTION_SIMILAR_FACTS = 60;
+/**
+ * A look-alike is kept only when it scores at least this fraction of the best one.
+ * Any shared character bigram scores above zero, so an absolute count alone would
+ * always return its cap — a generic sentence would fill the pool with noise.
+ */
+export const EXTRACTION_SIMILAR_FLOOR_RATIO = 0.35;
+/** The floor tier: newest rows, only when nothing in the text named a subject. */
+export const EXTRACTION_RECENT_FACTS = 12;
 
 function sharesRun(a: string, b: string, minRun: number): boolean {
   const left = a.trim();

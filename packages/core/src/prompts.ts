@@ -96,7 +96,7 @@ function isoDate(at: number): string {
 
 function renderKnownEntities(entities: KnownEntityPrompt[]): string {
   if (entities.length === 0) return '<known-entities>（空）</known-entities>';
-  const lines = entities.slice(0, 30).map((e) => {
+  const lines = entities.map((e) => {
     const aliases = e.aliases?.length ? `（别名：${e.aliases.join('、')}）` : '';
     const relation = e.relation ? `，${e.relation}` : '';
     return `  - ${e.name}${aliases}${relation}`;
@@ -106,7 +106,11 @@ function renderKnownEntities(entities: KnownEntityPrompt[]): string {
 
 function renderKnownFacts(facts: KnownFactPrompt[]): string {
   if (facts.length === 0) return '<known-facts>（空）</known-facts>';
-  const lines = facts.slice(0, 20).map((f) => `  - [${f.id}] ${f.statement}${f.validFromText ? `（${f.validFromText}）` : ''}`);
+  // Rendered as given: the caller budgets the candidate set (core index.ts
+  // EXTRACTION_FACT_BUDGET_CHARS). The slices that used to live here were dead — the
+  // caller already passed fewer rows than they allowed — and two places deciding the
+  // same size is how the limit drifted in the first place.
+  const lines = facts.map((f) => `  - [${f.id}] ${f.statement}${f.validFromText ? `（${f.validFromText}）` : ''}`);
   return ['<known-facts>', ...lines, '</known-facts>'].join('\n');
 }
 

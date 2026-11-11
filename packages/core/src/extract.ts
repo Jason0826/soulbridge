@@ -269,6 +269,17 @@ interface ModelParseResult {
 export interface ExtractionContext {
   entities: Array<{ id: string; name: string; aliases?: string[]; relation?: string }>;
   facts: Array<{ id: string; statement: string; validFromText?: string }>;
+  /**
+   * How `facts` was chosen and what the budget forced out. The set is a candidate pool
+   * for one judgement, so "how many rows, from which tier, and what was dropped" is
+   * the only way to tell a thin pool from an empty one (rules 18/20).
+   */
+  factCandidates?: {
+    chosen: number;
+    chars: number;
+    droppedGroups: Array<{ group: string; facts: number }>;
+    byTier: { entity: number; thread: number; similar: number; recent: number };
+  };
   previousUserText?: string;
   /** Open threads, for attribution (labels plus their last lines, ADR 0034). */
   threads?: Array<{
