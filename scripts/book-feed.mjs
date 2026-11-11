@@ -1,0 +1,189 @@
+#!/usr/bin/env node
+/**
+ * 读书实验 · 写入侧喂料（brief 0015 §9 第 3 步）。
+ *
+ *   node scripts/book-feed.mjs --file book.txt [--soul book-ahq] [--dry-run]
+ *                              [--segment 1000] [--limit N] [--from N]
+ *
+ * 书不是对话，生产的 segment flush 不会为它触发；这个脚本替它触发同一条路：
+ * 切段 → soul.extract（与生产同提示词、同闸门）→ commitDrafts 落库，
+ * 每段打一行和生产同格式的 `extract done: … pool=… action=…`，
+ * 辨别样本（同一事实跨章再现时模型 sup 还是 add）就攒在这里面。
+ *
+ * 模型来源：DSH 自己的凭据文件（用户已配过），env 可覆盖——
+ *   BOOK_LLM_KEY / BOOK_LLM_URL / BOOK_LLM_MODEL / DSH_CREDENTIALS
+ *
+ * 护栏：soulId 必须 book- 开头才准写——这个脚本和生产共用 soul.db，
+ * 手滑写进 xiaoling 的真实记忆是不可逆污染，所以挡在开库之前。
+ */
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { openSqlite } from '../packages/core/src/sqlite.ts';
+import { Soul } from '../packages/core/src/index.ts';
+
+const argv = process.argv.slice(2);
+const arg = (name, fallback) => {
+  const at = argv.indexOf(`--${name}`);
+  return at >= 0 && argv[at + 1] !== undefined ? argv[at + 1] : fallback;
+};
+const has = (name) => argv.includes(`--${name}`);
+
+const soulId = arg('soul', 'book-ahq');
+if (!soulId.startsWith('book-')) {
+  console.error(`refused: soulId "${soulId}" must start with "book-" (this script shares soul.db with production)`);
+  process.exit(2);
+}
+const userId = 'local';
+const filePath = arg('file', null);
+const segmentChars = Number(arg('segment', '1000'));
+const limit = Number(arg('limit', 'Infinity'));
+const from = Number(arg('from', '1'));
+const dryRun = has('dry-run');
+
+/* ---------------- segmentation: whole paragraphs only (AGENTS 17) ---------------- */
+
+function segmentBook(raw, target) {
+  const paragraphs = raw
+    .replace(/\r\n/g, '\n')
+    .split(/\n\s*\n+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const segments = [];
+  let current = '';
+  for (const paragraph of paragraphs) {
+    // A paragraph longer than the target stays whole: cutting mid-paragraph
+    // hands the model half a scene and makes "what came before" unreadable.
+    if (current && current.length + paragraph.length + 2 > target) {
+      segments.push(current);
+      current = paragraph;
+    } else {
+      current = current ? `${current}\n\n${paragraph}` : paragraph;
+    }
+  }
+  if (current) segments.push(current);
+  return segments;
+}
+
+if (!filePath) {
+  console.error('usage: node scripts/book-feed.mjs --file <txt> [--soul book-ahq] [--dry-run] [--segment 1000] [--limit N] [--from N]');
+  process.exit(2);
+}
+const raw = readFileSync(filePath, 'utf8');
+const segments = segmentBook(raw, segmentChars);
+
+if (dryRun) {
+  console.log(`dry-run: ${segments.length} segments, ${raw.length} chars total (target ${segmentChars}/段)`);
+  segments.forEach((segment, index) => {
+    console.log(`  #${index + 1}  ${String(segment.length).padStart(5)} chars  ${segment.slice(0, 36).replace(/\n/g, ' ')}…`);
+  });
+  process.exit(0);
+}
+
+/* ---------------- model: DSH's own credential file, env overrides ---------------- */
+
+function readApiKey() {
+  if (process.env.BOOK_LLM_KEY) return process.env.BOOK_LLM_KEY;
+  const candidates = [
+    process.env.DSH_CREDENTIALS,
+    'D:/DSH/home/.credentials.yaml',
+    join(homedir(), '.dsh', 'home', '.credentials.yaml'),
+    join(homedir(), '.soulbridge', '.credentials.yaml'),
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      const match = readFileSync(candidate, 'utf8').match(/^\s*DEEPSEEK_API_KEY:\s*(\S+)\s*$/m);
+      if (match) return { key: match[1], from: candidate };
+    } catch {
+      // next candidate; the error below lists what was tried
+    }
+  }
+  console.error(`no API key: set BOOK_LLM_KEY, or one of these credential files to exist:\n  ${candidates.join('\n  ')}`);
+  process.exit(2);
+}
+
+const keySource = readApiKey();
+const API_KEY = typeof keySource === 'string' ? keySource : keySource.key;
+const API_URL = process.env.BOOK_LLM_URL ?? 'https://api.deepseek.com';
+const MODEL = process.env.BOOK_LLM_MODEL ?? 'deepseek-chat';
+
+async function callModel(prompt) {
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(`${API_URL.replace(/\/$/, '')}/chat/completions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${API_KEY}` },
+        body: JSON.stringify({ model: MODEL, temperature: 0, messages: [{ role: 'user', content: prompt }] }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status} ${(await response.text()).slice(0, 160)}`);
+      const payload = await response.json();
+      const text = payload.choices?.[0]?.message?.content;
+      if (!text) throw new Error('empty completion');
+      return text;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
+/* ---------------- feed ---------------- */
+
+const home = process.env.SOULBRIDGE_HOME ?? join(homedir(), '.soulbridge');
+const store = openSqlite(join(home, 'soul.db'));
+const soul = new Soul({ store, soulId, userId });
+const sessionId = soulId;
+
+console.log(`feeding ${segments.length} segments → soul=${soulId} db=${home}/soul.db model=${MODEL} (key from ${typeof keySource === 'string' ? 'env' : keySource.from})`);
+
+const totals = { facts: 0, entities: 0, actions: { add: 0, supersede: 0, update: 0, noop: 0 }, skipped: 0 };
+const failed = [];
+let fed = 0;
+
+for (let index = from - 1; index < segments.length; index += 1) {
+  if (fed >= limit) break;
+  const turnNo = index + 1;
+  // Resume story: a segment whose turn exists was committed; a failed one left
+  // no turn (extract runs before putTurnPair), so re-running redoes exactly it.
+  if (store.turnByTurnNo?.(sessionId, turnNo)) {
+    console.log(`segment ${turnNo}/${segments.length} skipped (already fed)`);
+    continue;
+  }
+  const text = segments[index];
+  const started = Date.now();
+  try {
+    const context = soul.extractionContext(20, { text });
+    const draft = await soul.extract(text, { llm: callModel, mode: 'auto', context });
+    const turnId = soul.recordTurnPair({ sessionId, turn: turnNo, userText: text, assistantText: '', at: started });
+    const result = soul.commitDrafts(draft, { turnId, turnIds: { 1: turnId }, now: started });
+    const pool = context.factCandidates;
+    const acts = result.actions;
+    totals.facts += result.facts.length;
+    totals.entities += result.entities.length;
+    totals.skipped += result.skipped.length;
+    if (acts) for (const kind of Object.keys(totals.actions)) totals.actions[kind] += acts[kind];
+    console.log(
+      `extract done: by=${draft.by} reason=${draft.reason ?? '-'} entities=${result.entities.length} facts=${result.facts.length}` +
+        ` gaps=${result.gaps.length} skipped=${result.skipped.length}` +
+        ` ms=${Date.now() - started} segment=${turnNo}/${segments.length}` +
+        (pool ? ` pool=${pool.chosen}(${pool.chars}ch e${pool.byTier.entity}/t${pool.byTier.thread}/s${pool.byTier.similar}/r${pool.byTier.recent}) poolDropped=${pool.droppedGroups.length}` : '') +
+        (acts ? ` action=add${acts.add}/sup${acts.supersede}/upd${acts.update}/noop${acts.noop}` : ''),
+    );
+    fed += 1;
+  } catch (error) {
+    failed.push(turnNo);
+    console.error(`segment ${turnNo}/${segments.length} FAILED: ${error.message}`);
+  }
+}
+
+console.log(
+  `\nsummary: fed=${fed} failed=${failed.length ? failed.join(',') : 0} facts=${totals.facts} entities=${totals.entities}` +
+    ` skipped=${totals.skipped} actions=add${totals.actions.add}/sup${totals.actions.supersede}/upd${totals.actions.update}/noop${totals.actions.noop}`,
+);
+store.close();
+if (failed.length) {
+  console.error(`re-run with --from ${Math.min(...failed)} to retry the failed segments`);
+  process.exit(1);
+}
