@@ -197,3 +197,47 @@ test('gate: a fact from my side carries its evidence (ADR 0035)', () => {
   assert.equal(slotOf(userSaid?.id ?? '', '依据'), undefined, '用户的话不需要额外依据');
   store.close();
 });
+
+test('gate: the model’s merge decision is counted as intent, not as outcome', () => {
+  const { s, store } = soul();
+  // A plain batch (no operations array) is the legacy shape: every fact is an add,
+  // and that has to be counted too or the floor path logs no actions at all.
+  const seed = s.commitDrafts({
+    entities: [{ name: '小林', type: 'person' }],
+    facts: [
+      { statement: '小林在 A 公司', source: 'told', confidence: 0.8, slots: [] },
+      { statement: '小林的工位在 3 楼', source: 'told', confidence: 0.7, slots: [] },
+    ],
+    gaps: [],
+    by: 'llm',
+  });
+  assert.deepEqual(seed.actions, { add: 2, supersede: 0, update: 0, noop: 0 }, '普通事实 = add');
+
+  const [first, second] = seed.facts;
+  const result = s.commitDrafts({
+    entities: [],
+    facts: [],
+    operations: [
+      { op: 'supersede', targetId: first.id, fact: { statement: '小林 2026-10-24 被裁员', source: 'told', confidence: 0.9, slots: [] } },
+      // A ghost id degrades to an add at the writer — the ask was still "merge", so
+      // the intent must survive here and the degradation must show up in skipped.
+      { op: 'supersede', targetId: 'fc_ghost', fact: { statement: '小林入职了新公司', source: 'told', confidence: 0.7, slots: [] } },
+      { op: 'update', targetId: second.id, fact: { statement: '小林的工位换到了 5 楼', source: 'told', confidence: 0.7, slots: [] } },
+      { op: 'noop', fact: { statement: '', source: 'told', confidence: 0, slots: [] } },
+      { op: 'add', fact: { statement: '用户今天很累', source: 'told', confidence: 0.6, slots: [] } },
+    ],
+    gaps: [],
+    by: 'llm',
+  });
+  assert.deepEqual(
+    result.actions,
+    { add: 1, supersede: 2, update: 1, noop: 1 },
+    '数的是模型要做什么，不是最后落成了什么',
+  );
+  assert.ok(
+    result.skipped.some((entry) => entry.reason.includes('unknown-supersede-target')),
+    '幽灵目标仍然进 skipped——意图与结果分开记',
+  );
+  assert.equal(result.facts.length, 4, '四条新行写入，noop 不写');
+  store.close();
+});

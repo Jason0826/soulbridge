@@ -266,14 +266,19 @@
       "date": "2026-11-11",
       "delta": 152,
       "reason": "判据 3 的第一步：<known-facts> 从「最新 12 条」改成按判断对象取。用户追问\"为什么要固定 limit\"——查下去 `limit: 12` 是 11-01 提交 a849418 里一个没有来历的字面量，而且同一件事有三个数在管（12 取数 / prompts.ts slice(0,20) 渲染 / 50 去重），后两个是死代码。新实现 `extractionFactCandidates`：实体（本文点名的，按组）→ 线索（上一轮所属）→ BM25 词面相近（相对阈值 0.35×最高分，避免任何共享二字组都进来）→ 最新 12 条只在前面都薄时兜底；停的规则是字符预算 2400（不是行数：库里事实 24..18205 字符，12 行等于 750..18000 字符，行数从来不是预算），截断**成组完整**（同一主体的旧事实要么全给要么全不给，半截会让\"这两条矛盾\"变成\"这里什么都没有\"），并把 chosen/chars/byTier/droppedGroups 回传进 trace。实测验收（真实库，只读）：问「发布那事怎么样了」→ 池子 32 条里 15 条讲发布/版本；旧契约最新 12 条里只有 1 条。5 个新测试 + 2 组变异各恰 1 红（关掉实体层→3 红；让组能被腰斩→恰红那条）。净 +152 行里大头是新方法本体与它的来历注释，注释留了因为\"为什么不是行数/为什么成组\"这两条下次一定会被重新问。"
+    },
+    {
+      "date": "2026-11-11",
+      "delta": 12,
+      "reason": "判据 3 观测：commitDrafts 返回 actions（模型合并意图计数 add/supersede/update/noop，写入前计、降级不丢），插件 extract done 加 action= 行 + trace actions（core +12：types +8 契约注释、index +4 计数；插件 +8）。观测设施按 0026 先例允许涨；意图与结果分开记（幽灵目标算 supersede 意图、降级进 skipped）。"
     }
   ],
-  "coreLines": 9490,
-  "pluginLines": 3904,
+  "coreLines": 9502,
+  "pluginLines": 3912,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 1956,
+    "index.ts": 1960,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 228,
@@ -303,6 +308,6 @@
     "store.ts": 188,
     "measure.ts": 45,
     "time.ts": 213,
-    "types.ts": 821
+    "types.ts": 829
   }
 }

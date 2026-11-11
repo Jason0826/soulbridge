@@ -841,6 +841,7 @@ export class Soul {
     const skipped: CommitResult['skipped'] = [];
     const droppedSlots: CommitResult['droppedSlots'] = [];
     const holderFallbacks: CommitResult['holderFallbacks'] = [];
+    const actions: CommitResult['actions'] = { add: 0, supersede: 0, update: 0, noop: 0 };
     const now = options.now ?? Date.now();
 
     // One entity per name, whatever its declared type: the same 核桃 appearing as
@@ -1014,6 +1015,9 @@ export class Soul {
         ? draft.operations
         : draft.facts.map((fact) => ({ op: 'add' as const, fact }));
     for (const operation of operations) {
+      // Intent, counted before any write can degrade it: "the model saw the pool and
+      // chose to merge" must survive even when the target id turns out missing.
+      actions[operation.op] += 1;
       if (operation.op === 'noop') continue;
       const written = writeFact(operation.fact);
       if (!written) continue;
@@ -1051,7 +1055,7 @@ export class Soul {
       );
     }
 
-    return { entities: [...entities.values()], facts, gaps, skipped, droppedSlots, holderFallbacks };
+    return { entities: [...entities.values()], facts, gaps, skipped, droppedSlots, holderFallbacks, actions };
   }
 
   /** Remember a person/thing/place; calling again just refreshes "last mentioned". */

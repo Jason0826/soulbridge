@@ -403,6 +403,14 @@ export interface CommitResult {
   droppedSlots: Array<{ fact: string; slot: string; value: string }>;
   /** Holders that were not known: the fact stays, in the world layer. */
   holderFallbacks: Array<{ fact: string; holder: string }>;
+  /**
+   * What the model asked to do with each operation, counted before the writer runs —
+   * intent, not outcome: a supersede whose target turns out missing still counts here
+   * (the degraded write is reported in `skipped`). `pool=` shows what the model could
+   * see; this shows what it did with it. Without both, a thin pool and a pool with
+   * nothing to merge produce the identical log line — the judgement-3 gap.
+   */
+  actions: Record<FactOpKind, number>;
 }
 
 export type SlotValue =
