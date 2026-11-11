@@ -61,12 +61,16 @@ for (const record of answers) {
     '<事实池（回答者当时可见的全部事实）>',
     pool,
     '</事实池>',
-    '判为四类之一：对（要点齐全且不矛盾）/ 错（与要点矛盾）/ 不知道（没答或明确说不知道）/ 编造（给出池里不存在的关键细节）。',
+    // 对 = 0015 §5 的冻结口径：关键事实与人名正确、且不冲突——答对一部分但没答错，
+    // 也算对；"要点齐全"是更严的口径，没有冻结过，不许裁判私加。
+    '判为四类之一：对（关键事实正确且不与标准答案矛盾——只答对一部分但没有答错也算对）/ 错（与标准答案矛盾或张冠李戴）/ 不知道（没答或明确说不知道）/ 编造（给出池里不存在的关键细节）。',
     '另判可追溯：回答的每个关键细节能否在事实池里找到依据（是/否）。',
     '输出恰好一行：verdict=对|错|不知道|编造 traceable=是|否 reason=一句话',
   ].join('\n');
   const raw = (await llm(prompt)).trim();
-  const verdict = (raw.match(/verdict=(对|错|不知道|编造)/) ?? [])[1] ?? '错';
+  // A parse failure must not read as a verdict (AGENTS 11): it shows up as its
+  // own value, counts as not-对, and is visible in the results table.
+  const verdict = (raw.match(/verdict=(对|错|不知道|编造)/) ?? [])[1] ?? '解析失败';
   const traceable = /traceable=是/.test(raw);
   verdicts.push({ id: record.id, verdict, traceable, raw, question: truth.question });
   console.log(`  ${record.id} ${verdict} traceable=${traceable ? '是' : '否'} :: ${raw.slice(0, 90)}`);
