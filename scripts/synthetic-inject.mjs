@@ -14,9 +14,9 @@
  * 目标写死为 <home>/soul.db（本脚本存在的意义就是开这个窗口），无参数可改道；
  * 源侧走 harness-db.mjs（拒绝生产库）——两个脚本的护栏互为镜像。
  */
-import { writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { resolveHarnessDb, soulbridgeHome } from './harness-db.mjs';
 
 const argv = process.argv.slice(2);
@@ -29,6 +29,7 @@ const srcPath = resolveHarnessDb(arg('db', null));
 const soulId = arg('soul', 'book-synth');
 const targetSoul = 'xiaoling';
 const idsPath = arg('ids', join(process.cwd(), '_scratch', 'synthetic-injected-ids.json'));
+mkdirSync(dirname(idsPath), { recursive: true }); // 目录不假设存在：写清单在 COMMIT 之后，ENOENT 会留下“已注入、无清单”的半截状态
 const prodPath = join(soulbridgeHome(), 'soul.db');
 
 if (existsSync(idsPath)) {
