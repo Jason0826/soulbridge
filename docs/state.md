@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-11 11:15**（发版中：core 0.0.124 / plugin 0.0.136 = 动作计数②，装机重启待验；上一批 0.0.123/0.0.135 已生效待 pool= 样本）
+最后核对：**2026-11-11 12:58**（core 0.0.124 / plugin 0.0.136 已生效——`03:34:04Z apply()`；pool=/action= 两条日志样本都等下次 segment flush）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -20,13 +20,13 @@
                ——债表 `docs/debt.md`：**八条线并行，每条都差最后一步**；18 个 health-check WARN
                里 6 组是"同一个值域多份副本"、4 条是"有代码没调用者"。
                **下一步（新会话从这里开始，按序）**：
-               ① **看 `pool=` 样本**：发版已完成（11-11 09:35:02 `apply() called (v0.0.135)`，
-                  verify-installed 6 PASS、CI 双绿、tarball 验过新符号），候选池要等**下次
-                  segment flush** 才在日志里出现 `pool=N(…ch e/t/s/r)`——查 `plugin.log`，
-                  确认 e/t/s/r 不是全 0（全 0 = 插件没传 text，四层退化成地板层）。
-               ② **让模型侧去重动作可观测**：`noop / supersede / update` 现在没有任何计数，
-                  "池子薄"和"真没重复"在日志里长得一样——这是判据 3 的下一块砖。
-               ③ 再看 42 条「插件发布状态」有没有收敛（今天只进来 15 条）。
+               ① **看两条日志样本**（都等下次 segment flush，查 `plugin.log` 的 `extract done:`）：
+                  `pool=N(…ch e/t/s/r)`——e/t/s/r 全 0 = 插件没传 text、四层退化成地板层；
+                  `action=addN/supN/updN/noopN`——模型对池子的合并意图（11-11 上线）。
+                  判定口径：**池大而 sup/noop 全 0 = 模型没在合并 → 先查提示词，别先改池子**。
+               ② 再看 42 条「插件发布状态」有没有收敛（今天只进来 15 条）。
+               （原②「动作计数可观测」已完成 11-11 11:2x：core 0.0.124 / 插件 0.0.136 同批发，
+                actions 按**意图**计、写入前计、降级不丢；依赖下限 >=0.0.124 强制同批发装。）
                **第一优先 = 判据 3「没记岔」，第一步已上线（11-11 发版，core 0.0.123 / 插件 0.0.135）**：`<known-facts>`
                不再是最新 12 条（`limit: 12` 是 11-01 一个没来历的字面量，且同一件事有三个数在管：
                取 12 / 渲染 `slice(0,20)` / 去重比 50，后两个是死代码）。改成按判断对象取：
@@ -284,20 +284,27 @@
 > 新会话只读状态会像换班工人；这 6 行是**叙事**，不是状态——换会话时整体替换，不累积。
 
 ```
-上一段   2026-11-11 09:21 – 10:20 会话（无压缩）：接手 → 候选池同批发版 → 装机重启
-做了     ① review 两笔业务提交（core 7d06471 四层候选池 / 插件 e8929db 传 text + pool 日志）
-         ② 基线：core 338/338、插件 156/156、tsc 0、health-check 0 FAIL/18 WARN/25 PASS
-         ③ 同批发版：bump（插件 lock 同提交）→ tag v0.0.123 / v0.0.135 → CI 双绿 →
-            npm 约 2 分钟可读 → tarball 验过新符号（EXTRACTION_FACT_BUDGET_CHARS / poolDropped）
-         ④ 装机：profile 两版本 + 排除项两条追加 → pnpm 装 +0.0.123/+0.0.135 → 6 PASS
-         ⑤ 重启：review 闸绿 → schtasks → 09:35:05 ready → 01:35:02Z apply() (v0.0.135)
-没做完   `pool=` 样本（等下次 segment flush）；模型侧去重动作仍不可观测；
-         42 条发布状态只收敛到 15；拆段与改名没开始；holder / type_name / lesson 三处仍等拍
-在热什么 **下一步 = 查 plugin.log 的 `pool=N(…ch e/t/s/r)`，e/t/s/r 全 0 = 插件没传 text**；
-         然后做去重动作计数；**别在抽取跑不起来时改命名**
+上一段   2026-11-11 09:21 – 11:34 会话（无压缩）：两批同批发版 + state.md 瘦身规则
+做了     ① 批一：review → core 0.0.123 / 插件 0.0.135（候选池按判断对象取 + pool= 日志），
+            09:35 生效，6 PASS、CI 双绿、tarball 验过新符号
+         ② 批二：动作计数② core 0.0.124 / 插件 0.0.136（actions 按意图计、写入前计、
+            降级不丢；依赖下限 >=0.0.124 强制同批发装），11:34:04Z apply() 生效
+         ③ state.md 瘦身三件套：archive-state.mjs（7 天归档、归档不删除、先上浮再移）
+            + health-check 超期 WARN + docs/README 规则 4；两个过期快照已归档
+         ④ health-check 中途抓到一次「文档落后于代码」FAIL，补文档转绿（按设计报红）
+验证     core 339/339（+1）、插件 157/157（+1，对发布产物跑）；变异两组各恰红
+         （删 core 计数→1 红、删插件 action 行→2 红）；棘轮 +12/+8 记 history；
+         health-check 0 FAIL / 18 WARN / 26 PASS（+1 = 瘦身检查）
+没做完   pool= 与 action= 样本都等下次 segment flush（本会话缓冲 ~8 轮，stale 要 10 轮）；
+         42 条发布状态只收敛到 15；拆段与改名没开始；holder / type_name / lesson 等拍
+在热什么 **下一步 = 查 plugin.log 的 extract done：pool=N(…ch e/t/s/r) + action=addN/supN/updN/noopN**；
+         判定口径：池大而 sup/noop 全 0 = 模型没在合并 → 先查提示词别先改池子；
+         **别在抽取跑不起来时改命名**
 ```
 
 > 日期条目只留最近 7 天，更早的在 [state-archive/2026-11.md](state-archive/2026-11.md)（规则见 docs/README）。
+
+**2026-11-11 11:34 动作计数②上线（core 0.0.124 / 插件 0.0.136，`03:34:04Z apply()`）**：**① 由来**——接手须知②「`noop / supersede / update` 没有任何计数」：候选池只说明模型**看得见**什么，看不出它拿候选**做了**什么，「池子薄」和「真没重复」在日志里长得一样。**② 设计**——`CommitResult.actions` 按**意图**计（写入前计：幽灵目标的 supersede 仍算 supersede 意图，降级结果留在 `skipped`，两本账分开）；行格式里 `无` 本来就解析成 noop（`extract.ts:665`），四类在生产路径全部可达。**③ 插件**——`extract done` 追加 ` action=addN/supN/updN/noopN`（排在 `pool=` 后），trace 加 `actions`；装着的老 core 没有该字段就不打印（与 `factPool` 同一契约）。**④ 验证**——core **339/339**（+1：意图≠结果，含幽灵目标与 noop 不写库）、插件 **157/157**（+1：`无`→noop1、写事实→add1，**对发布产物跑**）；变异两组各恰红（删 core 计数→1 红、删插件 action 行→2 红）；`tsc` 0；棘轮 core +12 / 插件 +8 已记 history（观测设施按 0026 先例）。**⑤ 发布顺序的坑（这次的教训）**——依赖下限抬到 `>=0.0.124` 后，lock 的 resolved 还停在 0.0.122，直接打 tag 会让 CI `npm ci` 拒绝（5efa2fa 同型）；顺序必须是 **先发 core（tag v0.0.124）→ npm 可读 → 插件 `npm install` 刷 lock → 对发布产物复跑 157/157 → 再打 v0.0.136**。**⑥ 装机重启**——profile 两版本 + 排除项 → pnpm +0.0.124/+0.0.136 → `verify-installed` **6 PASS**（装机产物含 `actions` 符号）→ 闸门绿 → schtasks → `11:34:09 ready` → `03:34:04Z apply() called (v0.0.136)`。**⑦ health-check 中途抓到一次 FAIL**——核对时间 11:15 早于插件代码 mtime 11:16，「文档落后于代码」按设计报红；补完文档转绿（**0 FAIL / 18 WARN / 26 PASS**，+1 是 state.md 瘦身检查）。**⑧ 观察点未到**——`pool=` 与 `action=` 都等下次 segment flush；本会话缓冲 ~8 轮，stale（≥10 轮且 >30 分钟）还差约 2 轮。
 
 **2026-11-11 10:20 判据 3 第一步发版装机（core 0.0.123 / 插件 0.0.135，09:35:02 生效）**：**① 按接手须知①走完整链**——review 两笔业务提交（7d06471 + e8929db，diff 逐行看过：core 四层取候选+预算记账、插件传 `text`+`pool=` 进日志）→ 改动前基线 core 338/338、插件 156/156、tsc 0、health-check **0 FAIL / 18 WARN / 25 PASS**（review 门 = WARN 3 笔，< FAIL 6 笔，不拦重启）→ bump（插件 `package.json` + lock **一起提交**，5efa2fa 教训）→ tag 双推 → **CI 双绿**（release + ci 各自跑过）→ npm 约 2 分钟内 `npm view` 可读。**② 验产物不验源码**——`npm view dist.tarball` 下包解包：core `index.js` 有 `EXTRACTION_FACT_BUDGET_CHARS`、插件 `index.js` 有 `poolDropped` ✓（CI 绿 ≠ 发的是自己这版，11-06 踩过）。**③ 装机**——profile `package.json` 两版本 + `pnpm-workspace.yaml` 排除项各追加（配置文件用 edit 工具，不过 PowerShell）→ `corepack prepare pnpm@11` → `pnpm install`（+0.0.135 / +0.0.123）→ `verify-installed <web>` **6 PASS**。**④ 重启**——`health-check --gate=review` 绿 → `schtasks /run /tn DshWebRestartOnce` → `09:33:03 waiting 90s` → `09:34:34 gate: ok` → `09:35:05 ready`（token 已换，`DSH-Web.url` 新链接）→ `01:35:02Z apply() called (v0.0.135)` + `bundle check: present (…\profiles\web)`。**⑤ 观察点未到**——`pool=` 只在 segment flush 时打印；判定口径：**e/t/s/r 全 0 = 插件没传 text、四层退化成地板层**（那就是发版没解决问题，按没修算）。**⑥ 本会话只做发版，一行业务代码没动**；state.md 瘦身规则（用户提出：163KB/737 行、日期条目只增不删、两个过期快照还在）待拍。
 
