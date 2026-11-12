@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-11 23:28**（core 0.0.124 / plugin **0.0.137 已生效**——`apply() called (v0.0.137)` @ 23:22:11、ready 23:22:14；soul_detail 修复现场复调转绿，全链路闭环——见 23:15 条目）
+最后核对：**2026-11-12 08:45**（core 0.0.124 / plugin 0.0.137 已生效；soul_detail 闭环 + **污染 5 行已清、锚词断言 CLEAN(0)**——见 11-12 08:45 条目）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -311,7 +311,7 @@
 > 新会话只读状态会像换班工人；这 6 行是**叙事**，不是状态——换会话时整体替换，不累积。
 
 ```
-上一段   2026-11-11 22:15 – 23:28 会话：接手须知下一步 = soul_detail 修复，全链路闭环
+上一段   2026-11-11 22:15 – 11-12 08:45 会话（跨夜续）：soul_detail 闭环 + 污染行清除
 做了     ① 对撞通过（用户确认开发会话已结束，两仓库干净同步）→ 先红两层：新单测 3 条
             （走 apply() 注册路径）+ 现场用旧插件对真实事实 fc_mwc8lttk_2h 复现同错
          ② 修 = 插件 omitUndefined 剔 undefined 键（core 不动，另两个工具扫过无同款）；
@@ -321,19 +321,24 @@
             verify-installed 6 PASS（core 0.0.124 / plugin 0.0.137）
          ④ 重启（23:20:06 waiting → 23:22:14 ready，先提交文档再触发，本轮未被杀）→
             apply() called (v0.0.137) @ 23:22:11 → 现场复调 fc_mwc8lttk_2h 转绿
+         ⑤ 污染 5 行清除（11-12 08:42 用户拍「清」）：备份 → 事务删 3 facts + 2 threads
+            + 1 个挂靠 turn 的 thread_id 置空 → 锚词断言 q-anchor-pollution = CLEAN(0)
 验证     修复前现场红（value is not lossless JSON）+ 修复后同一条返回原文；单测先红后绿 +
             变异恰红 + 产物/装机/运行三层双验；health-check 0 FAIL
-没做完   污染 4 行处置待拍（留 / 按 session 清）；贴长文修法未动（#1）；最大组修法待拍；
-            调召回 A/B 未做；辨别样本（池里真重复看 sup/add）继续盯 flush
-在热什么 soul_detail 已闭环、0.0.137 在跑；**别在对话里复述合成故事内容**
-            （曾造成 1 条事实污染，题面也别经我手）
+没做完   贴长文修法未动（#1）；最大组修法待拍；调召回 A/B 未做；
+            辨别样本（池里真重复看 sup/add）继续盯 flush
+在热什么 soul_detail 已闭环、0.0.137 在跑；污染行已清但 **turns 原始层 6 行带锚词
+            （真实对话，按 AGENTS 16 保留）——讨论污染行只引 id 不引内容**
+            （我 11-12 曾复述行内容，已进 turns 原文，见 08:45 条目⑤）
 ```
 
 > 日期条目只留最近 7 天，更早的在 [state-archive/2026-11.md](state-archive/2026-11.md)（规则见 docs/README）。
 
+**2026-11-12 08:45 污染行清除（用户拍「清」）→ 锚词断言转绿 CLEAN(0)**：**① 口径更正**——待拍记的是 4 行，实查是 **5 行**（facts=3 + threads=2；判定会话粘贴的实验回答后来又被抽出 2 条 `fc_mwc7u4l3_2b`/`fc_mwc7u4la_2c`，污染会繁殖，这是「清」比「留」重要的直接证据）。**② 前查两层**——离线：3 条事实被结论引用=0 / 被取代=0 / 作线索摘要=0，turn_pairs / memories / entities 锚词 0；事务内**全库外键扫描**：除「事实自有槽（随删）」与「1 个 turn 挂在污染线程下」无其他入站引用。**③ 执行**（`_scratch/clear-pollution.cjs`，同 cleanup 纪律：整行备份 → 事务内前查 → 依赖逆序删 → 断言复核，任一不符回滚）——备份 `_scratch/pollution-cleared-rows.json` → 删 slots 3 / facts 3 / threads 2、`tp_mwc60x11_9rn9.thread_id` 置空 → 残留 0，PASS。**④ 复核**——`q-anchor-pollution.mjs` → **`RESULT: CLEAN (污染 0)`**，同批锚词的存量断言恢复可过（合成实验可复跑）。**⑤ 保留的原始层（不碰）**——`turns` 有 **6 行**带锚词（实验问答原文、判定会话粘贴、本会话讨论行内容的回复），是真实对话记录，按 AGENTS 16 原文保留，断言③口径本就不含 turns；**教训：讨论污染行只引 id 不引内容**——我 11-12 上一条回复复述了行内容，已进 turns 原文，离开点抽取可能据此再生成 meta 事实。
+
 **2026-11-11 23:15 soul_detail 全局故障修复上线（插件 0.0.137，23:22 生效）**：**① 对撞**——用户确认开发会话已结束（上一段的"另一会话在开发"不再成立），两仓库工作树干净、与 origin 同步。**② 先红两层**——新单测 `test/soul-detail.test.mjs` 3 条（走 `apply()` 注册的生产路径，判据 = `deepStrictEqual(JSON.parse(JSON.stringify(out)), out)` 逐键相等）：触发面事实（有 epoch 无 text 无轮次）的输出挂着 `validFromText/validTo/userText/assistantText: undefined` 键，JSON 往返丢键对不上；**现场复现**：装着的旧插件（0.0.136）对真实事实 `fc_mwc8lttk_2h` 调 `soul_detail` → `value is not lossless JSON`，与实验会话同错。**③ 修**——插件新增 `omitUndefined()`：**缺键是合法 JSON，键上挂着 undefined 不是**（harness `pipeline.ts` 的 `snapshotJsonValue` 取不到 JSON 形式就整条拒）；只动 `soul_detail` 一个工具的返回，core 不动，另两个工具扫过无同款 undefined。**④ 变异**——剔除改原样返回 → 恰 2 红（触发面/好路径，失败路径本就干净）；恢复后 **160/160**（原 157 + 新 3）。**⑤ 发布链**——`fd1df5f` → main CI 绿（run 46）→ tag `v0.0.137` → npm 产物解包验 `omitUndefined` 在、version 0.0.137（验产物不验源码）。**⑥ 装机**——profile 两配置文件走 edit（package.json 0.0.137 + pnpm-workspace.yaml exclude 追加）→ pnpm install +1 → `verify-installed` **6 PASS / exit 0**（core 0.0.124 / plugin 0.0.137）。**⑦ 重启与复验已闭环（23:22）**——先提交文档再触发（本轮未被杀）：`schtasks` 23:20:06 waiting → 23:21:38 gate: ok → 23:22:14 ready（新 token）→ `apply() called (v0.0.137)` @ 23:22:11 → 现场复调 `fc_mwc8lttk_2h` **转绿**（同一条事实修复前 `value is not lossless JSON`、修复后返回原文）。
 
-**2026-11-11 22:15 读侧窗口跑完（方案 A）→ R 线 PASS + 收窗 ①②②b PASS / ③ FAIL 归因；soul_detail 根因**：**① 开窗事故与修复**——inject 从 soulbridge 目录跑，ids 清单默认 `cwd/_scratch` 且目录不存在，COMMIT 后 ENOENT = "56 行已入库、无清单"半截状态；处置 = 按源侧同过滤取 id 撤回（前查清单行全在 + 无外部行引用合成实体 → 删 17/7/3 恰好全撤）+ 根因修复（mkdir 前置到开事务之前，**`8457216`**）+ 绿跑（56 行、真基线 facts=1543/entities=184/turns=590、清单落 `_scratch/`）。**② 开窗**——第 0 步锚词断言 11 词全 0 PASS 后注入；实验会话首轮一次问 3 题，**实为 R1+R2+R3**（用户按 1/2/3 编号复制，R4 没问）。**③ 判分**——子代理只读真值表 §3.3 + `_scratch/window-answers.txt`（题面不进本会话）：映射 1=渡口+标记石→R1、2=村长→R2、3=尝新祭→R3；**R2 对**（孙砚秋、无相反陈述）、**R3 对**（秋分后第三天 + 乌糯双键全中）；R1 按 A 不判（**偏离申报：R1 被问到**）、R4 没问（R3/R4 合并线由 R3 承担）→ **冻结通过线 R2 必对 ✓ / R3/R4 ≥1 ✓ → PASS**；**G1 PASS**（首注入 `<about>`/`<about-now>` 块带合成实体，按块归因插件通道；同轨迹 `soul_recall` 主动召回 4 次全命中——送达 = 注入 + 主动召回双通道）。**④ 收窗**——cleanup PASS（清单 56 行归零 / xiaoling 1557/185/595 ≥ 基线 / ②b 无清单外行引用合成实体，清单销毁）；**断言③ FAIL（6 处）按 §7 停手申报 + 归因**：threads 3→2（实验会话题面进 host——问锚词问题必然留锚词 thread，host 中途还合并/关了 1 条）+ facts 1（`fc_mwc6t3kx_22`，源 turn = 本会话粘贴的轨迹、session-fc1810b5 = 本会话聊天被抽）；**窗口泄漏 = 0**（清单行全清；`q-anchor-pollution.mjs` 补"清单缺失 = 窗口空"语义供复用）。污染 4 行处置（留 / 按 session 清）待拍。**⑤ 过程混淆（申报）**——实验会话 `soul_detail` 连挂 4 次，模型仅凭 `soul_recall` 一句话条目作答（自述"够答"）；R2/R3 判分只看内容不受影响，"详情通道不可用"记为窗口环境事实。**⑥ soul_detail 全局故障根因**——本会话用无锚词旧事实复现同错后定位，三层链：`sqlite.ts:1937` NULL→undefined（valid_from_text）+ `index.ts:1655` 无 turn → `turn: undefined` → 插件 `index.js:3547-3555` 原样返回 undefined 键 → harness lossless JSON 校验拒（`value is not lossless JSON`）；触发面 = **无 valid_from_text 或无 turn 的事实**（date() 类放的日期大多只有 epoch → 必挂；有 text 形式的能过 → 时好时坏）；修法 = 返回时剔 undefined + 补"输出过 lossless 校验"测试（规则 26）；窗口期未动（实验冻结 + 用户另一会话在开发），收窗后可动手。
+**2026-11-11 22:15 读侧窗口跑完（方案 A）→ R 线 PASS + 收窗 ①②②b PASS / ③ FAIL 归因；soul_detail 根因**：**① 开窗事故与修复**——inject 从 soulbridge 目录跑，ids 清单默认 `cwd/_scratch` 且目录不存在，COMMIT 后 ENOENT = "56 行已入库、无清单"半截状态；处置 = 按源侧同过滤取 id 撤回（前查清单行全在 + 无外部行引用合成实体 → 删 17/7/3 恰好全撤）+ 根因修复（mkdir 前置到开事务之前，**`8457216`**）+ 绿跑（56 行、真基线 facts=1543/entities=184/turns=590、清单落 `_scratch/`）。**② 开窗**——第 0 步锚词断言 11 词全 0 PASS 后注入；实验会话首轮一次问 3 题，**实为 R1+R2+R3**（用户按 1/2/3 编号复制，R4 没问）。**③ 判分**——子代理只读真值表 §3.3 + `_scratch/window-answers.txt`（题面不进本会话）：映射 1=渡口+标记石→R1、2=村长→R2、3=尝新祭→R3；**R2 对**（孙砚秋、无相反陈述）、**R3 对**（秋分后第三天 + 乌糯双键全中）；R1 按 A 不判（**偏离申报：R1 被问到**）、R4 没问（R3/R4 合并线由 R3 承担）→ **冻结通过线 R2 必对 ✓ / R3/R4 ≥1 ✓ → PASS**；**G1 PASS**（首注入 `<about>`/`<about-now>` 块带合成实体，按块归因插件通道；同轨迹 `soul_recall` 主动召回 4 次全命中——送达 = 注入 + 主动召回双通道）。**④ 收窗**——cleanup PASS（清单 56 行归零 / xiaoling 1557/185/595 ≥ 基线 / ②b 无清单外行引用合成实体，清单销毁）；**断言③ FAIL（6 处）按 §7 停手申报 + 归因**：threads 3→2（实验会话题面进 host——问锚词问题必然留锚词 thread，host 中途还合并/关了 1 条）+ facts 1（`fc_mwc6t3kx_22`，源 turn = 本会话粘贴的轨迹、session-fc1810b5 = 本会话聊天被抽）；**窗口泄漏 = 0**（清单行全清；`q-anchor-pollution.mjs` 补"清单缺失 = 窗口空"语义供复用）。污染行处置已闭环：11-12 08:42 用户拍「清」，5 行按 id 删、断言 CLEAN(0)（见 11-12 08:45 条目）。**⑤ 过程混淆（申报）**——实验会话 `soul_detail` 连挂 4 次，模型仅凭 `soul_recall` 一句话条目作答（自述"够答"）；R2/R3 判分只看内容不受影响，"详情通道不可用"记为窗口环境事实。**⑥ soul_detail 全局故障根因**——本会话用无锚词旧事实复现同错后定位，三层链：`sqlite.ts:1937` NULL→undefined（valid_from_text）+ `index.ts:1655` 无 turn → `turn: undefined` → 插件 `index.js:3547-3555` 原样返回 undefined 键 → harness lossless JSON 校验拒（`value is not lossless JSON`）；触发面 = **无 valid_from_text 或无 turn 的事实**（date() 类放的日期大多只有 epoch → 必挂；有 text 形式的能过 → 时好时坏）；修法 = 返回时剔 undefined + 补"输出过 lossless 校验"测试（规则 26）；窗口期未动（实验冻结 + 用户另一会话在开发），收窗后可动手。
 
 **2026-11-11 21:05 单 soul 定案 → 测试库隔离上线 → 合成实验冻结 + 写侧 FAIL 归因**：**① 单 soul 是产品范围（用户 20:02 拍）**——"soul 本身我们也没准备做多个 soul"，已记长期记忆；多 soul 撞车不作为产品债。**② 但 19:36 生产被咬出同机制**——`plugin.log` `extract failed: UNIQUE constraint failed: entities.id`（trigger=compaction，抽的就是本会话）：失败前 31ms 同批插入宿主/插件/宣德炉成功，第 4 个实体撞已存在 id（最可能 = book-ahq 的阿Q），retry 6 分钟后自愈；机制在 `sqlite.ts:1107` 定案——INSERT 冲突目标是 `(soul_id,user_id,type,name)`，id 是全局主键，**跨 soul 同名 id 先撞、子句接不住**（SQLite 只对声明的约束做冲突处理）；同排查排除"harness 已污染生产"（xiaoling 引用的非本 soul 实体 = 0）。**③ 修法换半（架构判断：原 A「id 带 soul」守的是非需求）**——entities 有 soul_id 列而 id 不带 = schema 自相矛盾，但单 soul 下生产永不撞；根因是**测试数据住在生产库** → 物理隔离：清 book-* 存量（**253 事实/49 实体/25 轮/1 缺口/6 孤儿槽全归零**，xiaoling 1530→1531 只增不减，备份 `backups/soul-2026-11-11T12-25-41Z-pre-bookclean.db`）+ `scripts/harness-db.mjs` 单点声明路径与拒绝（basename=`soul.db` → exit 2，挡在开库前），feed/qa `--db` 默认 `harness.db`（**`8b6cde1`**）。三验：红测拒绝 exit 2、绿测 `--limit 1` 建库 3 事实、qa pool=3 只答 harness 候选；复查生产 book-% = 0。重开条件：可携带批重要求单文件多 soul 时再做 id 迁移。**④ 合成注入实验冻结（`7c1b1dd`，跑前）**——17:30 的"下轮设计题"落地：11 个锚词（禾香村/鸦背石/乌糯/尝新祭/孙砚秋/钱茂林/岑七/西岸/东岸/渡口/舆图）**先跑存量断言全库 0 命中**（facts/entities/threads.topic/turn_pairs.user·assistant/memories.content——全部注入与召回源）才写进真值表；读侧 4 题（R1 渡口+鸦背石、R2 现任村长**必对**，R3/R4 ≥1 对，G1 首注入含合成实体按块归因）、写侧 W1（`action=sup`≥1）/W2（东岸事实 `superseded_by` 非空且西岸新事实在）、**污染封死三协议**（A 故事细节与题面只落文件不进任何对话——否则被抽进 facts/turn_pairs 成假送达；B 全新会话首轮一次问完——首注入时刻无可召回问答对；C 贴首注入原文归因、获取方式申报）、清理三断言（id 清单归零 / xiaoling 只增不减 / 锚词回 0，任一失败停手不硬删）。**⑤ 窗口脚本（`856c8a9`）**——inject = 复制 harness **已验证行**进生产 xiaoling（不重演抽取防模型方差；**不复制 turn_pairs**——feed 原文进生产会被 `<related>` 召回，那测的是召回通道不是事实注入），cleanup 只按 id 清单删（id 是引用、名字是属性）。**⑥ 写侧跑完：W1/W2 FAIL（20:57）**——3 段 17 事实、`action=add17/sup0`，渡口东岸（`fc_mwc4ik4b_4`）与西岸（`fc_mwc4insl_d`）**两条并存、superseded_by 全空**；归因四层：**prompt 规则在**（"互相矛盾 → supersede"+「操作=取代 <id>」）、**池全给**（段 3 pool=12 = 全部既有事实）、**模型没写**（raw reply 事实行停在槽位、取代字段空——没判两条冲突）、**commit 没被触发**；次因候选：故事"勘测发现+河道变迁+改泊"给了时间线解读出口。**这把 42 条件写侧债从"等辨别样本"变成"受控样本 + 分层归因"**；按冻结 §4 记 FAIL，不重跑改判。**⑦ 读侧待拍**——§5 前置（写侧通过）没满足：**A** = 按子集跑 R2/R3/R4+G1（R1 记前置未满足不判，申报偏离）/ **B** = 照跑 4 题（R1 判定有解释空间，不推荐）/ **C** = 暂停，sup 机制拍板后跑全量。**⑧ 贴长文确认债 #1**（用户："贴啊，我有时会贴文章让你分析，取其精华去其糟粕"）——修法先例 = 信封（读书实验 19/25 → 25/25），待定义"何时一个 turn 算文档"。
 
