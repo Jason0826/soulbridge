@@ -109,6 +109,17 @@ test('extraction prompt: provenance rules name both sides', () => {
   assert.match(prompt, /完成声明/);
 });
 
+test('extraction prompt: pasted material is content even under a request verb', () => {
+  // 贴长文红测（_scratch/longpaste-red.mjs）：同一段贴文，"你看看"引导 + 不碰材料的
+  // 回复 → 模型答无（整条被判对话动作）；带这条例外 → 5-12 事实。反例闸（longpaste-neg）
+  // 压着不放宽：没有材料的纯请求仍必须是 无。
+  const prompt = renderExtractionPrompt({ text: 'x', now: NOW });
+  assert.match(prompt, /用户贴进来的材料（文章、原文、聊天记录）不是动作是内容/);
+  assert.match(prompt, /只回“好的”也算/);
+  // 例外只豁免材料，不豁免要求本身。
+  assert.match(prompt, /不写的只是“要求”那句话本身/);
+});
+
 test('extraction prompt: stays within a sane size', () => {
   const prompt = renderExtractionPrompt({ text: 'x'.repeat(200), now: NOW });
   // A guard against runaway growth, not a target. Raised from 4700 to 5000 when the role
@@ -116,7 +127,11 @@ test('extraction prompt: stays within a sane size', () => {
   // 轮次 key and the self-containment sentence (+226 chars, measured 5026); raised to 5450
   // when 0027 split the time into 有效从/有效到 with an example for each kind (+240 chars,
   // measured 5266); raised to 5600 when 0028 ③ taught the span range syntax (线索:
-  // 1-5 …) in schema and rules (+269 chars, measured 5529). The terms block is still the
-  // bulk; candidate text and whole threads are added on top at runtime.
-  assert.ok(prompt.length < 5600, `prompt grew to ${prompt.length} chars`);
+  // 1-5 …) in schema and rules (+269 chars, measured 5529); raised to 5700 for the
+  // 贴长文例外 (+115 chars, measured 5644): pasted material is content even when the
+  // message opens with 你看看 and even when my reply never touches it — without it the
+  // whole turn is judged a 对话动作 and the article is dropped (red probe: full/brief →
+  // 无, same turn → 5-12 facts with it; negative gate keeps material-less requests at 无).
+  // The terms block is still the bulk; candidate text and whole threads are added on top at runtime.
+  assert.ok(prompt.length < 5700, `prompt grew to ${prompt.length} chars`);
 });
