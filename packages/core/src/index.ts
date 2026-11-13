@@ -577,9 +577,12 @@ export class Soul {
    * so the candidates are the facts about the same thing, never simply the newest rows:
    * the entities this text names, the thread it continues, then what reads like it
    * (BM25 over character bigrams), and the newest rows only as a floor when those came
-   * back thin. The stop rule is a character budget, not a row count; truncation keeps a
-   * group whole, because half of one subject's facts turns "these two disagree" into
-   * "nothing here". See EXTRACTION_FACT_BUDGET_CHARS for why characters.
+   * back thin. The stop rule is a character budget, not a row count: a group that fits
+   * leaves whole (half of one subject's facts turns "these two disagree" into "nothing
+   * here"), and a group that does not fit hands over its most text-relevant facts
+   * instead of nothing — dropping it whole starves the biggest subject, which is the
+   * one dedup needs most. Only an empty pool forces an oversized fact through. See
+   * EXTRACTION_FACT_BUDGET_CHARS for why characters.
    */
   extractionFactCandidates(options: { turnNo?: number; sessionId?: string; text?: string } = {}): {
     facts: ExtractionContext['facts'];
@@ -591,8 +594,8 @@ export class Soul {
     const text = (options.text ?? '').trim();
     const groups: Array<{ key: string; tier: number; facts: Fact[] }> = [];
 
-    // Tier 0: one group per named entity, so truncation can drop a subject without
-    // splitting it.
+    // Tier 0: one group per named entity, so the budget spends on subjects — a group
+    // that fits stays whole; one that overflows is cut inside, by relevance to this text.
     if (text) {
       for (const entity of this.store.findEntities({ soulId: this.soulId, userId: this.userId, limit: 500 })) {
         const names = [entity.name, ...(entity.aliases ?? [])].filter((name) => name.trim().length >= 2);
@@ -657,25 +660,66 @@ export class Soul {
     const droppedGroups: Array<{ group: string; facts: number }> = [];
     const byTier = { entity: 0, thread: 0, similar: 0, recent: 0 };
     let chars = 0;
+    const queryTokens = text ? tokenize(text) : [];
     for (const group of groups.sort((left, right) => left.tier - right.tier)) {
       // Tiers overlap on purpose (one row can be both the entity's and the thread's);
       // the prompt must still see it once.
       const fresh = group.facts.filter((fact) => !taken.has(fact.id));
       if (fresh.length === 0) continue;
       const cost = fresh.reduce((sum, fact) => sum + fact.statement.length, 0);
-      // The first group is taken even when oversized: an empty candidate set is not
-      // "no duplicates", it is "the model was not allowed to look".
-      if (chosen.length > 0 && chars + cost > EXTRACTION_FACT_BUDGET_CHARS) {
-        droppedGroups.push({ group: group.key, facts: fresh.length });
+      const tier = group.tier === 0 ? 'entity' : group.tier === 1 ? 'thread' : group.tier === 2 ? 'similar' : 'recent';
+      if (chars + cost <= EXTRACTION_FACT_BUDGET_CHARS) {
+        for (const fact of fresh) {
+          chosen.push(fact);
+          taken.add(fact.id);
+        }
+        chars += cost;
+        byTier[tier] += fresh.length;
         continue;
       }
-      for (const fact of fresh) {
+      // Too big whole: hand over the facts that read most like this text until the
+      // budget runs out. Dropping the group whole (the old contract) starved exactly
+      // the biggest subject — the one dedup needs most (阿Q 180 facts / entity:用户
+      // 60 facts, both dropped whole in production). Within the slice, relevance to
+      // the incoming text decides: the pool answers "is this sentence already known?",
+      // so the facts that look like it are the comparison targets. Ties keep the
+      // store order (newest validity first).
+      const ranked =
+        queryTokens.length > 0
+          ? (() => {
+              const docs = fresh.map((fact) => tokenize(fact.statement));
+              const stats = buildCorpusStats(docs);
+              return fresh
+                .map((fact, at) => ({ fact, score: bm25(queryTokens, docs[at] as string[], stats) }))
+                .sort((left, right) => right.score - left.score)
+                .map((entry) => entry.fact);
+            })()
+          : fresh;
+      const slice: Fact[] = [];
+      let sliceChars = 0;
+      for (const fact of ranked) {
+        const len = fact.statement.length;
+        // Skip-and-continue, not break: a long fact must not leave budget on the
+        // table when a shorter one behind it still fits (rule 15 — spend the stop rule).
+        if (chars + sliceChars + len > EXTRACTION_FACT_BUDGET_CHARS) continue;
+        slice.push(fact);
+        sliceChars += len;
+      }
+      if (slice.length === 0 && chosen.length === 0) {
+        // The pool would be empty: an empty candidate set reads as "no duplicates"
+        // when it really means "the model was not allowed to look" (rule 20). One
+        // whole fact — even oversized — is the bounded exception (rule 17).
+        slice.push(ranked[0]);
+        sliceChars = ranked[0].statement.length;
+      }
+      for (const fact of slice) {
         chosen.push(fact);
         taken.add(fact.id);
       }
-      chars += cost;
-      const tier = group.tier === 0 ? 'entity' : group.tier === 1 ? 'thread' : group.tier === 2 ? 'similar' : 'recent';
-      byTier[tier] += fresh.length;
+      chars += sliceChars;
+      byTier[tier] += slice.length;
+      const dropped = fresh.length - slice.length;
+      if (dropped > 0) droppedGroups.push({ group: group.key, facts: dropped });
     }
 
     return {

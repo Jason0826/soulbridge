@@ -1,5 +1,5 @@
 {
-  "date": "2026-11-11",
+  "date": "2026-11-13",
   "note": "棘轮预算：数字是实测值，只能往下调，不能往上调。要加功能导致超限时，先删掉同等规模的东西，再跑 --update-budget。",
   "history": [
     {
@@ -281,14 +281,19 @@
       "date": "2026-11-11",
       "delta": 14,
       "reason": "soul_detail 全局故障修复（插件 0.0.137）：工具结果带 undefined 键过不了 harness 的 lossless JSON（触发面 = 无 valid_from_text 或无 turn 的事实，实验会话连挂 4 次，现场对 fc_mwc8lttk_2h 复现同错）。新增 omitUndefined 剔键 + 返回处接线（净 +14：7 行注释写清「缺键合法、undefined 不合法」、函数本体 3 行、返回处 3 行接线注释与改写）。bug 修复允许涨；3 条测试在 test/ 不计预算，变异恰 2 红、160/160。"
+    },
+    {
+      "date": "2026-11-13",
+      "delta": 44,
+      "reason": "最大组饿死修复：装不下的组按与来文的 BM25 相关性给切片，不再整组丢（生产 2 个整组饿死样本：entity:用户 60 条、thread 52 条被丢而 similar 单条吃掉剩余预算；阿Q 组 180 条/5812 字每池必丢——去重最需要的恰是主角组）。装得下的组仍整组（组完整是常态）；切掉的记进 droppedGroups（规则 18）；空池例外收窄成「单条超整个预算时整条给一条」（规则 20/17）。index.ts 净 +44（排序与切片本体 + 空池例外 + 三处注释改写）。bug 修复按先例允许涨；测试 known-facts-pool 重写 2 条 + 新增 2 条在 test/ 不计预算，变异三组各恰 1/2/1 红。"
     }
   ],
-  "coreLines": 9505,
+  "coreLines": 9549,
   "pluginLines": 3926,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 1960,
+    "index.ts": 2004,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 228,
