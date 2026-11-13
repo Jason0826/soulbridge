@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-13 16:10**（core 0.0.125 / plugin 0.0.137 在跑，11:48 生效——贴长文 v6 全链上线：npm 产物验 v6 措辞、装机 verify 6 PASS、apply()+bundle check 落 profile；见 11-13 11:41 条目与 audit/2026-11-12-review-longpaste-soul-detail.md；**16:10 最大组饿死修复源码级完成未发版**，见当日条目）
+最后核对：**2026-11-13 16:25**（仓库 core 0.0.126 待发 / 在跑 core 0.0.125 + plugin 0.0.137（11:48 生效）——贴长文 v6 全链上线：npm 产物验 v6 措辞、装机 verify 6 PASS、apply()+bundle check 落 profile；见 11-13 11:41 条目与 audit/2026-11-12-review-longpaste-soul-detail.md；**16:10 最大组饿死修复已提交 `9412eb4`，本条目对应 0.0.126 发版链启动**，见当日条目）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
