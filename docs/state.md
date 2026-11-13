@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-13 11:41**（发版中：core 0.0.125 / plugin 0.0.137 = 贴长文 v6，**已发版已装机**（verify 6 PASS），重启待触发——见 11-13 11:41 条目与 audit/2026-11-12-review-longpaste-soul-detail.md）
+最后核对：**2026-11-13 13:55**（core 0.0.125 / plugin 0.0.137 在跑，11:48 生效——贴长文 v6 全链上线：npm 产物验 v6 措辞、装机 verify 6 PASS、apply()+bundle check 落 profile；见 11-13 11:41 条目与 audit/2026-11-12-review-longpaste-soul-detail.md）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -44,11 +44,12 @@
                 3 条（先红两层：单测 + 现场对 `fc_mwc8lttk_2h` 复现同错；变异恰 2 红，
                 160/160）；**已闭环（23:22）**：`apply() called (v0.0.137)` + 现场复调
                 `fc_mwc8lttk_2h` 转绿（同一条事实修复前拒、修复后返回原文）。
-                ② 债重排（20:02 用户拍**单 soul 是产品范围**）：**贴长文 = #1 → v6 已发版装机
-                （11-13：core 0.0.125 tag→CI→release 绿、npm 产物解包验 v6 措辞在、
-                profile 装机 verify 6 PASS，重启待触发对撞后做；红测定形 = 请求动词杀红，
-                例外 +3 行；A9 review 抓到贴代码副作用 → 用户拍收窄 → v6 拆家：
-                例外句 = v2 原文、技术说明排除进 <terms>，全套闸两轮全绿，18:45 条目）；
+                ② 债重排（20:02 用户拍**单 soul 是产品范围**）：**贴长文 = #1 → v6 已全链上线
+                （11-13 11:48 生效：core 0.0.125 tag→CI→release 绿、npm 产物解包验 v6 措辞在、
+                profile 装机 verify 6 PASS、重启后 apply()+bundle check 落 profile；
+                红测定形 = 请求动词杀红，例外 +3 行；A9 review 抓到贴代码副作用 →
+                用户拍收窄 → v6 拆家：例外句 = v2 原文、技术说明排除进 <terms>，
+                全套闸两轮全绿，18:45 条目；观察点 = 下次贴文章的抽取结果）；
                 实体 id → 改判**测试库隔离，已上线**（`8b6cde1`，
                 拒绝检查红测过，不改 schema——重开条件：可携带批重要求单文件多 soul）；最大组 #3 待拍。
                 ③ 可选：调召回重跑 A/B（0015 §9 第 6 步）。
@@ -315,7 +316,7 @@
 > 新会话只读状态会像换班工人；这 6 行是**叙事**，不是状态——换会话时整体替换，不累积。
 
 ```
-上一段   2026-11-12 08:58 – 18:45 会话：贴长文修法（债 #1）v1→v6 + A9 review 补做
+上一段   2026-11-12 08:58 – 11-13 13:55 会话：贴长文（债 #1）v1→v6 + A9 review + 发版上线
 做了     ① 红测三轮定形（longpaste-red/iso 探针，生产 turns 路径 temp0 真模型）：
             杀红的是引导句请求动词（"你看看"→整条判对话动作→无），不是裸文本；
             残余红 = 贴文+不碰材料的回复（只回"好的"也 0）
@@ -325,23 +326,24 @@
             类型）→ 你拍收窄；措辞 v3（句尾双否定）/v4（越权正向限定，v2 对照组
             同后端 9→0/4→0 定罪）/v5（括号仍拖累弱回复）→ v6 拆家定稿：
             例外句退回 v2 原文一字不动，"技术说明不算事实"进 <terms> 事实不算清单
-         ④ v6 全套闸两轮全绿：四形状 5-11、弱回复组 10/7/5+5/7/9、范围闸
-            代码0/发布表1-4/事件文4、反例闸 0、变异恰 1 红、340/340、tsc 0
+         ④ 发版全链（11-13，对撞过）：bump d40ca79 → CI 绿 → tag v0.0.125 →
+            release 绿 → npm 产物解包验 v6 措辞在 → profile 装机 verify 6 PASS →
+            文档先提交 615341f → gate ok → 重启 11:48:12 ready、apply()+bundle
+            check 落 profile → 抽取正常——**债 #1 收口**
 验证     同后端 v2 对照组（stash 退回重跑）分离方差与措辞；单测抓到换行切断短语；
-            health-check 0 FAIL；时间戳 60s 窗口内提交
-没做完   **发版已走到装机（core 0.0.125，11-13 11:41 verify 6 PASS），只差重启**
-            （对撞已过：用户确认另一会话没在跑、可重启；重启前先提交本批文档 →
-            gate=review → schtasks → 验 apply(v0.0.125)）；最大组修法待拍；
-            调召回 A/B 未做；辨别样本继续盯 flush
-在热什么 贴长文 v6 已改码全测过**未发版**（18:45/11:00 条目）；A9 review 已补做落档
-            （audit/2026-11-12-review-longpaste-soul-detail.md，三笔全保持）；
+            npm 验产物不验源码；health-check 0 FAIL
+没做完   最大组修法待拍（阿Q 组 180 条/5812 字 > 2400 预算，主角组每池必丢，
+            三候选：最大组例外/组内按相关性截/预算分层）；调召回 A/B 未做；
+            辨别样本继续盯 flush（sup/noop 全 0 时先查库确认池里真有重复）
+在热什么 贴长文 v6 已上线生效（11-13 11:48，观察点 = 下次贴文章的抽取结果）；
+            A9 review 落档（audit/2026-11-12-review-longpaste-soul-detail.md）；
             soul_detail 0.0.137 在跑；turns 原始层 6 行带锚词（AGENTS 16 保留）
             ——讨论污染行只引 id 不引内容
 ```
 
 > 日期条目只留最近 7 天，更早的在 [state-archive/2026-11.md](state-archive/2026-11.md)（规则见 docs/README）。
 
-**2026-11-13 11:41 贴长文 v6 发版装机（core 0.0.125，重启待触发）**：**① 对撞**——用户确认另一开发会话没在跑、可以重启（11-13 上午拍）。**② bump**——`package.json` 0.0.124→0.0.125 + state.md 版本表同改（health-check 拿**第一处** `core x.y.z` 与 package.json 比对，不同改就 FAIL），`d40ca79`。**③ 本地基线**——typecheck 0、core **340/340**、health-check **0 FAIL / 18 WARN**（+1 是当时工作区未提交，提交即消；其余 17 条与 11-12 核对的一致，全老账）。**④ 发布链**——push main → CI 绿（run 43360013104）→ tag `v0.0.125` → release workflow 绿（build+test+smoke+publish）→ npm `view` 404 约 3 分钟后可读（复制延迟，历史踩过的口径）。**⑤ 验产物不验源码**——`npm pack` 解包：`version 0.0.125`、`prompts.generated.js` L7 例外句 = **v2 原文一字不差**（无 v4 正向限定、无 v5 括号）、L9 `<terms>` 事实不算清单带 **`技术说明（代码怎么运行、参数怎么切分）`**——发出去的正是 v6（第一次断言用 `-match` 撞中文引号字符全 False，换 `Select-String` 通配命中后读原文确认——**断言失败先查断言再查产物**，AGENTS 8）。**⑥ 装机**——profile 两配置走 **edit 工具**（`package.json` 0.0.125 + `pnpm-workspace.yaml` soulbridge 排除项追加 `|| 0.0.125`）→ `corepack prepare pnpm@11` + `corepack pnpm install`（`-0.0.124 +0.0.125`）→ `verify-installed D:\DSH\home\profiles\web` **6 PASS / exit 0**（core 0.0.125 / plugin 0.0.137）。**⑦ 没做**：重启（本条文档先提交再触发，`gate=review` → `schtasks /run /tn DshWebRestartOnce` → 验 `apply() called (v0.0.125)`）；插件仓不动（依赖 `>=0.0.124 <0.1.0` 已被 0.0.125 满足）。
+**2026-11-13 11:41 贴长文 v6 发版装机重启全链上线（core 0.0.125，11:48 生效）**：**① 对撞**——用户确认另一开发会话没在跑、可以重启（11-13 上午拍）。**② bump**——`package.json` 0.0.124→0.0.125 + state.md 版本表同改（health-check 拿**第一处** `core x.y.z` 与 package.json 比对，不同改就 FAIL），`d40ca79`。**③ 本地基线**——typecheck 0、core **340/340**、health-check **0 FAIL / 18 WARN**（+1 是当时工作区未提交，提交即消；其余 17 条与 11-12 核对的一致，全老账）。**④ 发布链**——push main → CI 绿（run 43360013104）→ tag `v0.0.125` → release workflow 绿（build+test+smoke+publish）→ npm `view` 404 约 3 分钟后可读（复制延迟，历史踩过的口径）。**⑤ 验产物不验源码**——`npm pack` 解包：`version 0.0.125`、`prompts.generated.js` L7 例外句 = **v2 原文一字不差**（无 v4 正向限定、无 v5 括号）、L9 `<terms>` 事实不算清单带 **`技术说明（代码怎么运行、参数怎么切分）`**——发出去的正是 v6（第一次断言用 `-match` 撞中文引号字符全 False，换 `Select-String` 通配命中后读原文确认——**断言失败先查断言再查产物**，AGENTS 8）。**⑥ 装机**——profile 两配置走 **edit 工具**（`package.json` 0.0.125 + `pnpm-workspace.yaml` soulbridge 排除项追加 `|| 0.0.125`）→ `corepack prepare pnpm@11` + `corepack pnpm install`（`-0.0.124 +0.0.125`）→ `verify-installed D:\DSH\home\profiles\web` **6 PASS / exit 0**（core 0.0.125 / plugin 0.0.137）。**⑦ 重启闭环（11:48 生效）**——文档先提交（`615341f`）→ `gate: ok` → schtasks → 旧进程 pid 21272 被杀 → `11:48:12 ready`（新 token）→ `apply() called (v0.0.137)` + `bundle check: present (profile=D:\DSH\home\profiles\web)` @ 03:48:09Z → 重启后抽取正常（`extract done facts=5` @ 05:52Z）。**core 0.0.125 生效链** = 装机产物 verify 6 PASS（重启前验）→ 进程杀旧起新从同 profile 加载（`apply()` 打印的是插件版本，core 版本以 verify-installed + profile 加载链为证）。**贴长文 v6 全链上线完成，债 #1 收口**。插件仓不动（依赖 `>=0.0.124 <0.1.0` 已被 0.0.125 满足）。
 
 **2026-11-12 18:45 A9 整体 review 补做（你问才做）→ 抓到例外第三边界副作用 → 收窄三版措辞，v6 拆家定稿**：**① 起因**——A9 闸门自报 **2 笔业务提交待看**（core `663a507` + 插件 `fd1df5f`）+ 时间戳 FAIL（11:00 落后 11:04 提交）；**health-check 跑绿 ≠ review 做了**，这是第四次被这条规则提醒（`fc_mw0g0qmy_26` 在册）。**② review 第一跑抓到真问题（原红测的盲区）**——新探针 `_scratch/review-scope.mjs` 测「有材料但材料性质不同」：贴代码抽出 1 条"parseLineDraft 函数按 | 切分"（模型自造 `代码片段` 类型，自己也知道越界）、贴发布表抽出 1 条；修复前这两种都是 0 → **例外把技术说明也放进来了**，四形状/反例闸都没覆盖这个边界——review 该抓的正是这种。**③ 用户拍收窄（只批"代码怎么运行不算事"）→ 措辞三版全是教训**：**v3** 句尾双否定（"…不算事，不写，…"也不写"）→ 引导句+弱回复形状集体转 0；**v4** 加正向限定"限人的状态与事件的变化"（**越权——这句没批**）→ **v2 对照组实验**（stash 退回 v2、同后端重跑）：`bare+ack` **9→0**、发布表 **4→0**——排除"6 小时后端漂移"假设、指认措辞本身；**v5** 括号版主形状绿但裸贴+弱回复仍 0。**④ v6 定稿：拆家**——"技术说明算不算事实"是**事实定义问题**，进 `<terms>` 事实的不算清单（规则 6：定义只有一处声明）；**例外句退回已全绿的 v2 原文一字不动**。全套闸跑两轮：四形状 **5-11 全绿**、iso2/brief-iso 弱回复组全绿（10/7/5、5/7/9）、范围闸 **代码 0 / 发布表 1-4 / 事件文 4**、反例闸全 0、**变异恰 1 红**；单测当场抓到一次换行切断短语（`参数怎么切分\n这类` 正则不匹配——断言的价值）；**340/340、tsc 0、尺寸 5664/5700**。**⑤ 方法论**——提示词改动的验证必须带**同后端对照组**（stash 退回上一版重跑），否则"方差 vs 措辞"分不开（模型 temp0 仍有 run-to-run 方差：同输入 0↔5 跳过）；行为敏感的例外句**别动句尾、别加正向限定**，定义类排除挪 `<terms>`。**⑥ 未做**：发版链未走（core **0.0.125** → 装机 → 重启，**重启前对撞**）；audit review **已落档**（[2026-11-12-review-longpaste-soul-detail.md](audit/2026-11-12-review-longpaste-soul-detail.md)，覆盖三笔业务提交，A9 计数清零）。
 
