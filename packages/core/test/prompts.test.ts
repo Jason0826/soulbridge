@@ -126,6 +126,23 @@ test('extraction prompt: pasted material is content even under a request verb', 
   assert.match(prompt, /不算：用户的提问、催促、同意、否定；寒暄；我对自己能力的说明；技术说明（代码怎么运行、参数怎么切分）/);
 });
 
+test('extraction prompt: purposes and attributions are writable', () => {
+  // quality ② 归因（state.md 11-16 07:25）：结论支持率 41.7% 的 7 个失败里 6 个是
+  // "结论超出证据字面"，两个实证过的写入侧缺口——StudyOnTV 段原文有「我想装电视上」
+  // （turn48）却 0 条事实（可写清单没有"目的"类，整句被当对话动作）；「拍板删切片」
+  // 记了但没带归属（哪次发版），结论想归到一起时无证据可引。行为探针
+  // _scratch/purpose-red.mjs：同段 old/new 提示词对照 + 反例闸（纯请求仍 0）。
+  const prompt = renderExtractionPrompt({ text: 'x', now: NOW });
+  assert.match(prompt, /只在这五种情况下写事实/);
+  assert.match(prompt, /一个目的：谁想达到什么/);
+  assert.match(prompt, /要求不写、目的照写/);
+  assert.match(prompt, /文本把决定或事件挂在哪个对象上/);
+  // 归属必须进陈述：renderVerificationPrompt 只渲染 id | statement，槽位对核对
+  // 不可见——冒烟探针里模型把归属写进槽位，verify 依然读不到（D 格假绿过一次）。
+  assert.match(prompt, /把归属写进陈述本身/);
+  assert.match(prompt, /别放进槽位/);
+});
+
 test('extraction prompt: stays within a sane size', () => {
   const prompt = renderExtractionPrompt({ text: 'x'.repeat(200), now: NOW });
   // A guard against runaway growth, not a target. Raised from 4700 to 5000 when the role
@@ -139,6 +156,10 @@ test('extraction prompt: stays within a sane size', () => {
   // touches it — without it the whole turn is judged a 对话动作 and the article is
   // dropped (red probe: full/brief → 无, same turn → 5-12 facts with it; negative gate
   // keeps material-less requests at 无; scope gate keeps code pastes at 无).
+  // Raised to 5900 for the purpose category + decision attribution (+186 chars,
+  // measured 5850): 「我想装电视上」was in the source and produced 0 facts because
+  // the writable list had no purpose class — the conclusions gate later dropped the
+  // purpose as unsupported evidence (support rate 41.7%, state.md 11-16 07:25).
   // The terms block is still the bulk; candidate text and whole threads are added on top at runtime.
-  assert.ok(prompt.length < 5700, `prompt grew to ${prompt.length} chars`);
+  assert.ok(prompt.length < 5900, `prompt grew to ${prompt.length} chars`);
 });
