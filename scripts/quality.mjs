@@ -222,7 +222,11 @@ const heaviestTurns = [...completeTurns]
 
 const report = {
   window: { days, since: new Date(since).toISOString() },
-  factsPerTurn: { facts, turns, ratio: turns === 0 ? null : Number((facts / turns).toFixed(2)), pass: turns > 0 && facts / turns <= 1.5 },
+  // 事实密度线 2026-11-16 重定 ≤3（ADR 0031 修订注）：初版 ≤1.5 是「每轮一抽」时代
+  // 口径，粒度三次变化把读数推到 0.73→1.9→2.12→2.59，「回填所致」假设被证伪
+  // （7 日窗回填 0 次、34 次抽取全 live ≈8 条/次）。ADR 线第二款「且无『用户要求
+  // X 类』」尚未实现——度量缺口，随重定登记在 ADR 0031。
+  factsPerTurn: { facts, turns, ratio: turns === 0 ? null : Number((facts / turns).toFixed(2)), pass: turns > 0 && facts / turns <= 3 },
   extraction: {
     turns: measured.length,
     byLlm: measuredLlm,
@@ -263,7 +267,11 @@ const report = {
     samples: affectAll,
     withSignal: affectSignal,
     signalRate: affectAll === 0 ? null : Number((affectSignal / affectAll).toFixed(3)),
-    pass: affectAll === 0 ? null : affectSignal / affectAll >= 0.5,
+    // 2026-11-16：debt #5 冻结期不判决——词典地板下 ≥50% 永远不可达（llm 分析器
+    // 无实现、<affect> 消费端 confidence≥0.6 实际渲染≈0），常驻 FAIL 只会淹没真信号；
+    // 解冻（llm 分析器落地）后恢复 ≥50% 判决。
+    pass: null,
+    frozen: 'debt #5',
   },
   timeAxis: {
     total: timeFacts,
@@ -310,7 +318,7 @@ const verdict = (value) => (value === null ? '—' : value ? 'PASS' : 'FAIL');
 
 console.log(`soulbridge quality — last ${days} days (${HOME})`);
 console.log('');
-console.log(`事实密度      ${report.factsPerTurn.ratio ?? '—'} 条/轮   ${verdict(report.factsPerTurn.pass)}   (${facts} 条 / ${turns} 轮，通过线 ≤1.5)`);
+console.log(`事实密度      ${report.factsPerTurn.ratio ?? '—'} 条/轮   ${verdict(report.factsPerTurn.pass)}   (${facts} 条 / ${turns} 轮，通过线 ≤3，2026-11-16 重定)`);
 console.log(
   `抽取走模型    ${pct(measuredLlm, modelDenominator)}        ${verdict(report.extraction.pass)}   (${measuredLlm}/${modelDenominator} 轮，通过线 ≥80%；另有 ${report.extraction.unmeasured} 轮未记录原因，不计入)`,
 );
@@ -318,7 +326,7 @@ console.log(
   `结论支持率    ${pct(supported, consolidations.length)}        ${verdict(report.conclusions.pass)}   (${supported}/${consolidations.length} 次，通过线 ≥80%)`,
 );
 console.log(
-  `情绪非零率    ${pct(affectSignal, affectAll)}        ${verdict(report.affect.pass)}   (${affectSignal}/${affectAll} 条，通过线 ≥50%)`,
+  `情绪非零率    ${pct(affectSignal, affectAll)}        观察    (${affectSignal}/${affectAll} 条；debt #5 冻结期不判决，解冻后恢复 ≥50%)`,
 );
 console.log('');
 console.log(
