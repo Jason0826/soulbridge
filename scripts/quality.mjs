@@ -99,7 +99,58 @@ const turnsPostGate = one(
   Math.max(since, GATE_AT),
 ).n;
 
-db.close();
+// --- S1 使用者判据（debt #9）：工程门禁之外的使用者视角 ---
+// 口径与"分子谁判"的唯一声明：docs/stages/s1-dsh-memory.md「可算口径（2026-11-17）」。
+// C1/C2/C3 的分子只能人判——本节只出候选与样本（空样本不是判决，pass 留 null）；
+// C4 机器可判。标记词是测量工具（同 0035 审计口径），不进运行时路由。
+const REPETITION_MARKERS = [/我说过/, /跟你讲/, /跟你说了/, /不是说/, /又说/, /再说一遍/, /怎么又/, /还记得/, /提过/, /重复/];
+const userTurnsWindow = all(
+  'SELECT user_text FROM turns WHERE user_text IS NOT NULL AND COALESCE(started_at, 0) >= ?',
+  since,
+);
+const repeatCandidates = userTurnsWindow.filter((row) =>
+  REPETITION_MARKERS.some((marker) => marker.test(row.user_text)),
+).length;
+// C3：只有 rule:* 是候选。structural:* 是已知噪声探测器（S1 收尾：3/28 ≈ 11% 精度），
+// 单列计数，保证它永远进不了分子、也不会无声消失。
+const c3Candidates = one(
+  "SELECT COUNT(*) AS n FROM corrections WHERE at >= ? AND rule LIKE 'rule:%'",
+  since,
+).n;
+const c3Noise = one(
+  "SELECT COUNT(*) AS n FROM corrections WHERE at >= ? AND rule LIKE 'structural:%'",
+  since,
+).n;
+const activeFacts = one("SELECT COUNT(*) AS n FROM facts WHERE status = 'active'").n;
+// C1b（C1 的系统侧代理，不是原义）：先验倾向里"首周之后又写了一遍"的条数占比。
+// 这个定义精确复现 2026-11-10 基线 27/112 = 24.1%，读数因此可比。
+// 跨周指标按天性全量计算，--days 不过滤它。只数 11-09 快照内的先验族：
+// 快照外 35 条新规则未分类、不入分母（rule-compression 的门负责报它们）。
+const weekKey = (ms) => {
+  const d = new Date(Number(ms));
+  const day = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - day + 3); // 本周四 = ISO 周键
+  return d.toISOString().slice(0, 10);
+};
+const activeRules = all("SELECT id, created_at FROM facts WHERE role = 'rule' AND status = 'active'");
+const c1b = { families: 0, total: 0, restated: 0, rate: null };
+try {
+  const families = JSON.parse(
+    readFileSync(new URL('data/rule-families-2026-11-09.json', import.meta.url), 'utf8'),
+  ).families.filter((family) => family.kind === 'prior');
+  const activeById = new Map(activeRules.map((row) => [row.id, row]));
+  for (const family of families) {
+    const rows = family.ids.map((id) => activeById.get(id)).filter(Boolean);
+    if (rows.length === 0) continue;
+    c1b.families += 1;
+    c1b.total += rows.length;
+    const firstWeek = [...new Set(rows.map((row) => weekKey(row.created_at)))].sort()[0];
+    c1b.restated += rows.filter((row) => weekKey(row.created_at) !== firstWeek).length;
+  }
+  c1b.rate = c1b.total === 0 ? null : Number((c1b.restated / c1b.total).toFixed(3));
+} catch {
+  /* 快照缺失 → rate 留 null 打印 —，不编数 */
+}
 
 // trace.jsonl is append-only and may contain partial writes; skip unparseable lines.
 const trace = [];
@@ -114,6 +165,49 @@ if (existsSync(traceFile)) {
     }
   }
 }
+
+// S1 C2/C4：inject 带 ids 是"可回溯抽查"的前提（S1 收尾建议第 1 条，已上线）；
+// tool-call 记录 S1 判定用过的 soul_* 工具。
+const injects = trace.filter((row) => row.event === 'inject');
+const injectsTraced = injects.filter((row) => Array.isArray(row.ids) && row.ids.length > 0).length;
+const soulToolCalls = trace.filter(
+  (row) => row.event === 'tool-call' && (row.name === 'soul_recall' || row.name === 'soul_detail'),
+);
+const soulToolHits = soulToolCalls.filter((row) => Number(row.hits) > 0 || row.hit === true).length;
+
+// C2 抽查样本：均匀抽 n 次注入，配该轮 assistant_text 供人判"回答是否主动带上记忆"。
+// 判决（≥8/10 达标）由人给出并记 state.md——脚本只出样本，不自评（S1 判据 2 的教训）。
+if (args.includes('--s1-sample')) {
+  const flagIndex = args.indexOf('--s1-sample');
+  const wanted = Number(args[flagIndex + 1]) > 0 ? Number(args[flagIndex + 1]) : 10;
+  const stride = Math.max(1, Math.floor(injects.length / wanted));
+  const picks = [];
+  for (let i = 0; i < injects.length && picks.length < wanted; i += stride) picks.push(injects[i]);
+  console.log(`S1 C2 抽查样本：窗口内 ${injects.length} 次注入，抽 ${picks.length} 次（步长 ${stride}）`);
+  console.log('判：该轮回答是否主动带上注入的记忆内容（≥8/10 达标）；结果记 state.md\n');
+  for (const inj of picks) {
+    const ts = Date.parse(inj.ts);
+    const row =
+      all(
+        'SELECT assistant_text FROM turns WHERE session_id = ? AND started_at <= ? AND (ended_at IS NULL OR ended_at >= ?) ORDER BY started_at DESC LIMIT 1',
+        inj.session,
+        ts,
+        ts,
+      )[0] ??
+      all(
+        'SELECT assistant_text FROM turns WHERE session_id = ? AND ABS(started_at - ?) <= 900000 ORDER BY ABS(started_at - ?) LIMIT 1',
+        inj.session,
+        ts,
+        ts,
+      )[0];
+    const text = String(row?.assistant_text ?? '（该轮未落库——进行中或已压缩）').replace(/\s+/g, ' ');
+    console.log(`${inj.ts}  turn=${inj.turn}  注入 ${inj.ids?.length ?? 0} 条`);
+    console.log(`  回答: ${text.slice(0, 160)}${text.length > 160 ? '…' : ''}\n`);
+  }
+  db.close();
+  process.exit(0);
+}
+db.close();
 
 const pct = (part, whole) => (whole === 0 ? '—' : `${((part / whole) * 100).toFixed(1)}%`);
 const per = (part, whole) => (whole === 0 ? '—' : (part / whole).toFixed(2));
@@ -273,6 +367,47 @@ const report = {
     pass: null,
     frozen: 'debt #5',
   },
+  // S1 使用者判据（debt #9）：C1/C2/C3 分子只能人判——pass 留 null 直到抽查/复核
+  // 落盘（空样本不是判决）；C4 机器可判。口径唯一声明在 stages/s1-dsh-memory.md。
+  s1: {
+    c1Repeat: {
+      candidates: repeatCandidates,
+      turns: userTurnsWindow.length,
+      judged: 0,
+      line: '≤1 次/周',
+      pass: null,
+    },
+    c1bCrossWeek: {
+      families: c1b.families,
+      restated: c1b.restated,
+      total: c1b.total,
+      rate: c1b.rate,
+      baseline: '27/112 = 24.1% (2026-11-10)',
+      line: null,
+      note: '0030 §0 拟 ≤10%，未拍 → 观察；全量计算，不随 --days',
+    },
+    c2Injection: {
+      injects: injects.length,
+      traced: injectsTraced,
+      sampleReviewed: 0,
+      line: '≥8/10',
+      pass: null,
+    },
+    c3Misremember: {
+      candidates: c3Candidates,
+      noiseExcluded: c3Noise,
+      reviewed: 0,
+      line: '≤1 次/周',
+      pass: null,
+    },
+    c4Verifiable: {
+      activeFacts,
+      toolCalls: soulToolCalls.length,
+      toolHits: soulToolHits,
+      line: '可用即可',
+      pass: activeFacts > 0,
+    },
+  },
   timeAxis: {
     total: timeFacts,
     nullFrom: timeNullFrom,
@@ -327,6 +462,25 @@ console.log(
 );
 console.log(
   `情绪非零率    ${pct(affectSignal, affectAll)}        观察    (${affectSignal}/${affectAll} 条；debt #5 冻结期不判决，解冻后恢复 ≥50%)`,
+);
+console.log('');
+console.log('--- 使用者判据（S1 四条 · debt #9；口径与谁判见 stages/s1-dsh-memory.md） ---');
+console.log(
+  `C1 重申候选      ${repeatCandidates} 条 / ${userTurnsWindow.length} 轮    人判 0 → 待验收（≤1 次/周；候选池低召回，不代替人判）`,
+);
+console.log(
+  `C1b 跨周重复率   ${pct(c1b.restated, c1b.total)}        观察（基线 27/112=24.1%·11-10；0030 §0 拟 ≤10% 未拍；全量不随 --days）`,
+);
+console.log(
+  `C2 注入可回溯    ${pct(injectsTraced, injects.length)}        抽查 0/10 → 待验收（≥8/10；` +
+    `node scripts/quality.mjs --s1-sample 出样本；${injectsTraced}/${injects.length} 带 ids）`,
+);
+console.log(
+  `C3 记岔候选      ${c3Candidates} 条         复核 0 → 待验收（≤1 次/周；structural 噪声 ${c3Noise} 不计）`,
+);
+console.log(
+  `C4 可查证        活跃事实 ${activeFacts} · soul_* 调用 ${soulToolCalls.length} 次(成功 ${soulToolHits})   ` +
+    `${verdict(activeFacts > 0)}（可用即可；调用数=使用度，没人用记 debt #9）`,
 );
 console.log('');
 console.log(
