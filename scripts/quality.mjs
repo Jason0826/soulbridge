@@ -10,6 +10,8 @@
  *   node scripts/quality.mjs                 # last 7 days
  *   node scripts/quality.mjs --days 30
  *   node scripts/quality.mjs --json
+ *   node scripts/quality.mjs --s1-sample [n] # C2 人判样本
+ *   node scripts/quality.mjs --c5-sample [n] # C5 人判样本（三类判定）
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -152,6 +154,50 @@ try {
   /* 快照缺失 → rate 留 null 打印 —，不编数 */
 }
 
+// C6a（ADR 0036 收编 0034 验收表）：每 10 条关闭线索出几条结论。
+// 分母按 0034 出生口径钉全量（0.2→≥5 当时就是全量算的），窗口值单列观察不判——
+// 线的分母必须跟线的出生时一致，否则读数不可比（debt §五：分母定义随数落盘）。
+const closedThreadsAll = one('SELECT COUNT(*) AS n FROM threads WHERE closed_at IS NOT NULL').n;
+const conclusionsAll = one("SELECT COUNT(*) AS n FROM facts WHERE type_name = '结论'").n;
+const c6aRate = closedThreadsAll === 0 ? null : Number(((conclusionsAll / closedThreadsAll) * 10).toFixed(2));
+const closedThreadsWindow = one(
+  'SELECT COUNT(*) AS n FROM threads WHERE COALESCE(closed_at, 0) >= ?',
+  since,
+).n;
+
+// C5 候选双源（ADR 0036 §2）：affect payload.hits ∪ user_text 命中词表。
+// 词表从 seed-lexicon.ts 的 SEED_LEXICON.entries 正则解析（term-audit 同款读法），
+// 不另抄一份；解析出 0 词 = 解析失败，显式报错而不是把「没候选」当真（规则 11）。
+const seedLexiconSrc = readFileSync(
+  new URL('../packages/core/src/affect/seed-lexicon.ts', import.meta.url),
+  'utf8',
+);
+const lexiconTerms = [
+  ...seedLexiconSrc.matchAll(/^\s*([\p{Script=Han}A-Za-z]+):\s*\{\s*category:/gmu),
+].map((match) => match[1]);
+if (lexiconTerms.length === 0) {
+  console.error('C5: seed-lexicon.ts 词条解析为 0——词表读法坏了，拒绝出候选');
+  process.exit(2);
+}
+// 源1：affect 命中（近窗，payload.hits 非空即候选；negated 也留给人判——否定了的情绪
+// 仍是「表达了情绪」，接没接住归人判三类，机器不预筛）。
+const affectHitRows = all(
+  'SELECT at, payload FROM affect_samples WHERE at >= ?',
+  since,
+).filter((row) => {
+  try {
+    const payload = JSON.parse(row.payload);
+    return Array.isArray(payload.hits) && payload.hits.length > 0;
+  } catch {
+    return false;
+  }
+});
+// 源2：user_text 命中词表（标记词补召回——词典地板下 90 条只有 2 条带 hits）。
+const c5MarkerRows = all(
+  'SELECT session_id, started_at, user_text FROM turns WHERE user_text IS NOT NULL AND COALESCE(started_at, 0) >= ?',
+  since,
+).filter((row) => lexiconTerms.some((term) => row.user_text.includes(term)));
+
 // trace.jsonl is append-only and may contain partial writes; skip unparseable lines.
 const trace = [];
 if (existsSync(traceFile)) {
@@ -170,6 +216,14 @@ if (existsSync(traceFile)) {
 // tool-call 记录 S1 判定用过的 soul_* 工具。
 const injects = trace.filter((row) => row.event === 'inject');
 const injectsTraced = injects.filter((row) => Array.isArray(row.ids) && row.ids.length > 0).length;
+// C6b（ADR 0036 §3）：注入里带结论 id 的次数——「存在但没被说出不算洞察」的前半段
+// （机器计数→观察值）；对话中主动引用归人判（--c5-sample 同款流程），先测基线。
+const conclusionIdSet = new Set(
+  all("SELECT id FROM facts WHERE type_name = '结论'").map((row) => row.id),
+);
+const injectsWithConclusion = injects.filter(
+  (row) => Array.isArray(row.ids) && row.ids.some((id) => conclusionIdSet.has(id)),
+).length;
 const soulToolCalls = trace.filter(
   (row) => row.event === 'tool-call' && (row.name === 'soul_recall' || row.name === 'soul_detail'),
 );
@@ -184,7 +238,7 @@ if (args.includes('--s1-sample')) {
   const picks = [];
   for (let i = 0; i < injects.length && picks.length < wanted; i += stride) picks.push(injects[i]);
   console.log(`S1 C2 抽查样本：窗口内 ${injects.length} 次注入，抽 ${picks.length} 次（步长 ${stride}）`);
-  console.log('判：该轮回答是否主动带上注入的记忆内容（≥8/10 达标）；结果记 state.md\n');
+  console.log('判：该轮回答是否主动带上注入的记忆内容；线=先测基线（原 ≥8/10 未测基线已改），结果记 state.md\n');
   for (const inj of picks) {
     const ts = Date.parse(inj.ts);
     const row =
@@ -203,6 +257,74 @@ if (args.includes('--s1-sample')) {
     const text = String(row?.assistant_text ?? '（该轮未落库——进行中或已压缩）').replace(/\s+/g, ' ');
     console.log(`${inj.ts}  turn=${inj.turn}  注入 ${inj.ids?.length ?? 0} 条`);
     console.log(`  回答: ${text.slice(0, 160)}${text.length > 160 ? '…' : ''}\n`);
+  }
+  db.close();
+  process.exit(0);
+}
+
+// C5 抽查样本（ADR 0036 决策 4 第二步）：双源候选均匀抽 n 个，配 user_text 与该轮
+// 回答供人判三类（接住 / 没接住 / 不适用——不适用不入分母）。判决记 state.md。
+if (args.includes('--c5-sample')) {
+  const flagIndex = args.indexOf('--c5-sample');
+  const wanted = Number(args[flagIndex + 1]) > 0 ? Number(args[flagIndex + 1]) : 10;
+  // 双源合并去重：同一轮既被词表命中又被 affect 记了 hits，算一个候选（记 src 双标）。
+  const byTurn = new Map();
+  for (const row of c5MarkerRows) {
+    byTurn.set(`${row.session_id}:${row.started_at}`, {
+      ts: row.started_at,
+      session: row.session_id,
+      userText: row.user_text,
+      src: 'lex',
+    });
+  }
+  for (const row of affectHitRows) {
+    // affect 没有 session/turn 外键——按时间就近配到轮次（±15 分钟，同 --s1-sample 兜底窗）。
+    const turn = all(
+      'SELECT session_id, started_at, user_text FROM turns WHERE ABS(started_at - ?) <= 900000 ORDER BY ABS(started_at - ?) LIMIT 1',
+      row.at,
+      row.at,
+    )[0];
+    const key = turn ? `${turn.session_id}:${turn.started_at}` : `affect:${row.at}`;
+    const existing = byTurn.get(key);
+    if (existing) existing.src = 'lex+affect';
+    else {
+      let hits = [];
+      try {
+        hits = JSON.parse(row.payload).hits ?? [];
+      } catch { /* 坏 payload 不毒害候选，src 仍标 affect */ }
+      byTurn.set(key, {
+        ts: row.at,
+        session: turn?.session_id ?? null,
+        userText: turn?.user_text ?? '（affect 命中未能配到轮次——±15min 内无落库轮次）',
+        src: `affect(${hits.map((h) => h.term).join('/')})`,
+      });
+    }
+  }
+  const candidates = [...byTurn.values()].sort((a, b) => a.ts - b.ts);
+  if (candidates.length === 0) {
+    console.log('S1 C5 抽查样本：窗口内双源候选 0 个——空样本不是判决，先攒候选（词表源 + affect 源）');
+    db.close();
+    process.exit(0);
+  }
+  const stride = Math.max(1, Math.floor(candidates.length / wanted));
+  const picks = [];
+  for (let i = 0; i < candidates.length && picks.length < wanted; i += stride) picks.push(candidates[i]);
+  console.log(`S1 C5 抽查样本：窗口内 ${candidates.length} 个候选（词表 ${c5MarkerRows.length} + affect ${affectHitRows.length}，同轮已合并），抽 ${picks.length} 个（步长 ${stride}）`);
+  console.log('判三类：接住=回应涉及情绪本身（承认/共情/顺着处境说）；没接住=直接办事/转移/无视；不适用=候选假阳性不入分母。结果记 state.md\n');
+  for (const cand of picks) {
+    const turnRow = cand.session
+      ? all(
+          'SELECT assistant_text FROM turns WHERE session_id = ? AND ABS(started_at - ?) <= 900000 ORDER BY ABS(started_at - ?) LIMIT 1',
+          cand.session,
+          cand.ts,
+          cand.ts,
+        )[0]
+      : undefined;
+    const text = String(turnRow?.assistant_text ?? '（该轮未落库——进行中或已压缩）').replace(/\s+/g, ' ');
+    const when = new Date(cand.ts).toISOString();
+    console.log(`${when}  src=${cand.src}`);
+    console.log(`  用户: ${String(cand.userText).replace(/\s+/g, ' ').slice(0, 200)}`);
+    console.log(`  回答: ${text.slice(0, 400)}${text.length > 400 ? '…' : ''}\n`);
   }
   db.close();
   process.exit(0);
@@ -390,7 +512,7 @@ const report = {
       injects: injects.length,
       traced: injectsTraced,
       sampleReviewed: 0,
-      line: '≥8/10',
+      line: '先测基线（原 ≥8/10 未测基线，2026-11-18 改定；首判 4/10 见 state.md 10:55 条目）',
       pass: null,
     },
     c3Misremember: {
@@ -406,6 +528,29 @@ const report = {
       toolHits: soulToolHits,
       line: '可用即可',
       pass: activeFacts > 0,
+    },
+    // C5/C6 随 ADR 0036 Accepted 接线（2026-11-18）。C5 分子人判 → pass 留 null；
+    // C6a 机器判（全量口径，0034 出生）；C6b 计数机器、主动引用人判。
+    c5Tone: {
+      lexiconCandidates: c5MarkerRows.length,
+      affectCandidates: affectHitRows.length,
+      lexiconTerms: lexiconTerms.length,
+      judged: 0,
+      line: '先测 10 样本基线',
+      pass: null,
+    },
+    c6Insight: {
+      closedThreads: closedThreadsAll,
+      conclusions: conclusionsAll,
+      ratePer10: c6aRate,
+      closedThreadsWindow,
+      conclusionsWindow: conclusions,
+      line: '≥5/10（0034 收编，全量口径）',
+      pass: c6aRate === null ? null : c6aRate >= 5,
+      injectsWithConclusion,
+      injects: injects.length,
+      c6bLine: '注入带结论计数=观察值；主动引用人判先测基线',
+      c6bPass: null,
     },
   },
   timeAxis: {
@@ -464,7 +609,7 @@ console.log(
   `情绪非零率    ${pct(affectSignal, affectAll)}        观察    (${affectSignal}/${affectAll} 条；debt #5 冻结期不判决，解冻后恢复 ≥50%)`,
 );
 console.log('');
-console.log('--- 使用者判据（S1 四条 · debt #9；口径与谁判见 stages/s1-dsh-memory.md） ---');
+console.log('--- 使用者判据（S1 六条 · debt #9；口径与谁判见 stages/s1-dsh-memory.md） ---');
 console.log(
   `C1 重申候选      ${repeatCandidates} 条 / ${userTurnsWindow.length} 轮    人判 0 → 待验收（≤1 次/周；候选池低召回，不代替人判）`,
 );
@@ -472,7 +617,7 @@ console.log(
   `C1b 跨周重复率   ${pct(c1b.restated, c1b.total)}        观察（基线 27/112=24.1%·11-10；0030 §0 拟 ≤10% 未拍；全量不随 --days）`,
 );
 console.log(
-  `C2 注入可回溯    ${pct(injectsTraced, injects.length)}        抽查 0/10 → 待验收（≥8/10；` +
+  `C2 注入可回溯    ${pct(injectsTraced, injects.length)}        先测基线（首判 4/10·11-18 已落 state.md；` +
     `node scripts/quality.mjs --s1-sample 出样本；${injectsTraced}/${injects.length} 带 ids）`,
 );
 console.log(
@@ -481,6 +626,19 @@ console.log(
 console.log(
   `C4 可查证        活跃事实 ${activeFacts} · soul_* 调用 ${soulToolCalls.length} 次(成功 ${soulToolHits})   ` +
     `${verdict(activeFacts > 0)}（可用即可；调用数=使用度，没人用记 debt #9）`,
+);
+console.log(
+  `C5 语气候选      词表 ${c5MarkerRows.length} + affect ${affectHitRows.length} 个候选（${lexiconTerms.length} 词条解析）   ` +
+    `先测基线（--c5-sample 出样本，人判三类；分子 pass 留 null）`,
+);
+console.log(
+  `C6a 归纳产出率   ${c6aRate ?? '—'} 条/10 关闭   ${verdict(report.s1.c6Insight.pass)} ` +
+    `(全量 ${conclusionsAll} 结论 / ${closedThreadsAll} 关闭，线 ≥5/10·0034 收编；` +
+    `窗口观察 ${conclusions}/${closedThreadsWindow} 不判)`,
+);
+console.log(
+  `C6b 注入带结论   ${injectsWithConclusion}/${injects.length} 次注入带结论 id   观察（` +
+    `${report.s1.c6Insight.c6bLine}）`,
 );
 console.log('');
 console.log(

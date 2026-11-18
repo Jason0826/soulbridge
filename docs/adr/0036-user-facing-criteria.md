@@ -1,7 +1,8 @@
 # ADR 0036：使用者判据层——工程绿灯回答不了"伴答得对不对"
 
-- 状态：Proposed（写完先对一遍，Accepted 同批接线）
+- 状态：**Accepted（2026-11-18 用户对完）**，同批接线 C6a → C5 → C6b（决策 4）
 - 日期：2026-11-18
+- Accepted 同批修订三处：① C2 的线 ≥8/10 未测基线（首判 4/10 暴露——6 个 miss 全是与记忆无关的任务轮次），**改「先测基线」**，与 C5 同款（0030 §9）；② C6a 分母按 0034 出生口径钉**全量**（0.2→≥5 都是全量算的），窗口值单列观察不判——原口径表「窗口」写法与本 ADR 验收表 ≈1.03 矛盾，以出生口径为准；③ C5 词表出处修正为 `packages/core/src/affect/seed-lexicon.ts`（`lexicon.ts` 只有类型与校验，词条在 seed）。
 - 关联：[debt #9](../debt.md)（本 ADR 是它的 B 步）· [stages/s1-dsh-memory.md 可算口径](../stages/s1-dsh-memory.md)（**口径唯一处**：C1–C4 已落地，C5/C6 行随本 ADR 进表）· [ADR 0031](0031-model-dependency-acceptance.md)（工程三线，本文不动）· [ADR 0034](0034-attribution-defaults-to-continue.md)（"每 10 关闭 ≥5 结论"的出处）· [briefs/0030 §9](../briefs/0030-situated-disposition.md)（先测基线的教训）· [quality.md 4.1](../quality.md)（设计四问）
 - 由来：11-16 用户问"从使用者角度，你觉得这个项目足够好吗" → 归因**判据体系缺一层** → 立 debt #9 → 用户拍「顺序来」A → B → A 落地（`413bf56`，11-17：C1–C4 口径 + quality.mjs S1 行 + `--s1-sample`）→ 本 ADR = B。第五、六条选题 11-18 拍定：**语气 + 主动洞察**（使用者痛感排序前两名，此前无任何红线归属）。
 
@@ -43,7 +44,7 @@ S1 的四条效果判据本来就是使用者判据，但 10-31 收尾证明：�
 
 口径行在 [s1-dsh-memory.md](../stages/s1-dsh-memory.md) C5 行（唯一定义处），本 ADR 只定三件取舍：
 
-- **候选双源**：`affect_samples.payload.hits` ∪ `user_text` 命中情绪标记词——词表从 `packages/core/src/affect/lexicon.ts` 解析（term-audit 同款读法），**不另抄一份**。词典候选稀疏（近 7 天 90 条里只有 2 条带 hits），所以标记词补召回。
+- **候选双源**：`affect_samples.payload.hits` ∪ `user_text` 命中情绪标记词——词表从 `packages/core/src/affect/seed-lexicon.ts` 的 `SEED_LEXICON.entries` 解析（term-audit 同款正则读法，**不另抄一份**；`lexicon.ts` 只有类型与校验）。词典候选稀疏（近 7 天 90 条里只有 2 条带 hits），所以标记词补召回。
 - **三类判定**（人判按此）：接住 = 回应涉及情绪本身（承认 / 共情 / 顺着处境说）；没接住 = 直接办事 / 转移 / 无视；不适用 = 候选假阳性，**不入分母**。
 - **不依赖 debt #5 解冻**：词典地板影响的只是机器侧候选召回，人读得出情绪——C5 可以先跑，情绪解冻仍按 debt #5 独立推进。
 
