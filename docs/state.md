@@ -354,6 +354,10 @@
             C1b 线 ≤10% 未拍；C1/C3 窗口 0 候选；辨别样本下次 flush；修后超预算
             样本 sim 对账（_scratch/observe-sim.mjs）；C6b 主动人判未跑
 在热什么 C2 的 4/10 怎么读（等你判）；C5/C6 基线攒样中——判决落 state.md 才算完
+旁支     AinanPlayer 排障已收口（11-18 13:50，非本项目）→ 完整结论
+         `repos/_scratch/ainanplayer-diagnosis.md`（仓库外，与 soulbridge/_scratch 无关；
+         根因 csp_ 靠名字碰内置表 · moyu 6/111 aowu 0/82 已删 · 官方 issue#14 明确不修 ·
+         默认站固定 Wogg）
 ```
 
 > 日期条目只留最近 7 天，更早的在 [state-archive/2026-11.md](state-archive/2026-11.md)（规则见 docs/README）。
