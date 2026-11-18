@@ -68,6 +68,7 @@
 | 模型环节怎么验收 | [adr/0031](adr/0031-model-dependency-acceptance.md) |
 | 线索归属默认策略 | [adr/0034](adr/0034-attribution-defaults-to-continue.md) |
 | 各阶段读哪几方原文 | [adr/0035](adr/0035-stage-input-contract.md) |
+| **使用者判据层：S1 六条、分子谁判（工程绿灯 ≠ 使用者满意）** | [adr/0036](adr/0036-user-facing-criteria.md) |
 | **记忆分两层、时间与精度** | [adr/0032](adr/0032-two-layers-of-memory.md) |
 | **规则 / 画像 / 记忆三层，锚点退场** | [adr/0033](adr/0033-rules-profile-memory.md) |
 | 存什么、怎么衰减 | [briefs/0019](briefs/0019-memory-selection.md) |
