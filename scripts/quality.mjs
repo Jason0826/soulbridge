@@ -241,21 +241,27 @@ if (args.includes('--s1-sample')) {
   console.log('判：该轮回答是否主动带上注入的记忆内容；线=先测基线（原 ≥8/10 未测基线已改），结果记 state.md\n');
   for (const inj of picks) {
     const ts = Date.parse(inj.ts);
-    const row =
-      all(
-        'SELECT assistant_text FROM turns WHERE session_id = ? AND started_at <= ? AND (ended_at IS NULL OR ended_at >= ?) ORDER BY started_at DESC LIMIT 1',
-        inj.session,
-        ts,
-        ts,
-      )[0] ??
-      all(
-        'SELECT assistant_text FROM turns WHERE session_id = ? AND ABS(started_at - ?) <= 900000 ORDER BY ABS(started_at - ?) LIMIT 1',
-        inj.session,
-        ts,
-        ts,
-      )[0];
-    const text = String(row?.assistant_text ?? '（该轮未落库——进行中或已压缩）').replace(/\s+/g, ' ');
+    // 配对口径（2026-11-18 trace 审计后修）：注入在 pre-step 触发、先于该轮开轮
+    // （实测 9/10 样本 started_at 落在 inject 后 31ms–2.3s）。旧查询假设注入落在轮内
+    // （started_at ≤ ts ≤ ended_at），但 turns.ended_at 全库 668/668 == started_at
+    // （写入后从不更新），第一段永远不中；兜底按 |started_at−ts| 就近会配到**注入前
+    // 已结束**的轮（11-11 14:01 样本：答案比注入早 38 秒写完，「带上」物理不可能）。
+    // 现改为取 inject 后（容 5s）最早开轮、15 分钟内；配不上显式标「无配对轮」，
+    // 同时保证「答案晚于注入」这一时序前提成立。
+    const row = all(
+      'SELECT turn_no, assistant_text, started_at FROM turns WHERE session_id = ? AND started_at >= ? AND started_at - ? <= 900000 ORDER BY started_at LIMIT 1',
+      inj.session,
+      ts - 5000,
+      ts,
+    )[0];
     console.log(`${inj.ts}  turn=${inj.turn}  注入 ${inj.ids?.length ?? 0} 条`);
+    if (!row) {
+      console.log('  ⚠ 无配对轮（inject 后 15 分钟内该会话没有新开轮）——本样本不可判\n');
+      continue;
+    }
+    const gap = Math.round((row.started_at - ts) / 1000);
+    const text = String(row.assistant_text ?? '（该轮未落库——进行中或已压缩）').replace(/\s+/g, ' ');
+    console.log(`  配对 turn_no=${row.turn_no}（inject 后 ${gap}s 开轮）`);
     console.log(`  回答: ${text.slice(0, 160)}${text.length > 160 ? '…' : ''}\n`);
   }
   db.close();
@@ -512,7 +518,7 @@ const report = {
       injects: injects.length,
       traced: injectsTraced,
       sampleReviewed: 0,
-      line: '先测基线（原 ≥8/10 未测基线，2026-11-18 改定；首判 4/10 见 state.md 10:55 条目）',
+      line: '先测基线（原 ≥8/10 未测基线，2026-11-18 改定；trace 终判 4 带/5 失/1 配对失效，见 state.md 17:00 条目）',
       pass: null,
     },
     c3Misremember: {
@@ -617,7 +623,7 @@ console.log(
   `C1b 跨周重复率   ${pct(c1b.restated, c1b.total)}        观察（基线 27/112=24.1%·11-10；0030 §0 拟 ≤10% 未拍；全量不随 --days）`,
 );
 console.log(
-  `C2 注入可回溯    ${pct(injectsTraced, injects.length)}        先测基线（首判 4/10·11-18 已落 state.md；` +
+  `C2 注入可回溯    ${pct(injectsTraced, injects.length)}        先测基线（trace 终判 4带/5失/1失效·11-18；` +
     `node scripts/quality.mjs --s1-sample 出样本；${injectsTraced}/${injects.length} 带 ids）`,
 );
 console.log(
