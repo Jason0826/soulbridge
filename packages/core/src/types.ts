@@ -411,6 +411,11 @@ export interface CommitResult {
    * nothing to merge produce the identical log line — the judgement-3 gap.
    */
   actions: Record<FactOpKind, number>;
+  /**
+   * Active facts retired because a written fact declared the same 属性 (发现 A).
+   * Separate from `actions`: actions count the *model's* intent, this is the gate's.
+   */
+  attributeRetired: string[];
 }
 
 export type SlotValue =
@@ -530,6 +535,8 @@ export interface FactQuery {
   role?: FactRole;
   /** Only facts whose holder is this (world / self / entity id). */
   holder?: string;
+  /** Only facts carrying this slot with this exact text value (the 属性 gate's key). */
+  slot?: { slot: string; value: string };
   /** Sort by event time. Default desc (newest first); asc gives the earliest. */
   order?: 'asc' | 'desc';
   limit?: number;

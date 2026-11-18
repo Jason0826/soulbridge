@@ -1,5 +1,5 @@
 {
-  "date": "2026-11-13",
+  "date": "2026-11-18",
   "note": "棘轮预算：数字是实测值，只能往下调，不能往上调。要加功能导致超限时，先删掉同等规模的东西，再跑 --update-budget。",
   "history": [
     {
@@ -286,26 +286,31 @@
       "date": "2026-11-13",
       "delta": 44,
       "reason": "最大组饿死修复：装不下的组按与来文的 BM25 相关性给切片，不再整组丢（生产 2 个整组饿死样本：entity:用户 60 条、thread 52 条被丢而 similar 单条吃掉剩余预算；阿Q 组 180 条/5812 字每池必丢——去重最需要的恰是主角组）。装得下的组仍整组（组完整是常态）；切掉的记进 droppedGroups（规则 18）；空池例外收窄成「单条超整个预算时整条给一条」（规则 20/17）。index.ts 净 +44（排序与切片本体 + 空池例外 + 三处注释改写）。bug 修复按先例允许涨；测试 known-facts-pool 重写 2 条 + 新增 2 条在 test/ 不计预算，变异三组各恰 1/2/1 红。"
+    },
+    {
+      "date": "2026-11-18",
+      "delta": 30,
+      "reason": "发现 A 属性闸（同槽位状态链不互撤修复）：事实行槽位可写 属性=<名字> 声明「当前值」，commitDrafts 写入后同 holder 同属性的 active 旧值自动 supersede——池未呈上时模型无从命名 target，看得见也常没判成矛盾（生产 4 组实例：ActiveSiteKey 三值并存、ADR 0036 Proposed/Accepted 并存、core 版本双活、cardTimeoutMs 双版本）。净 +30：domains ATTRIBUTE_SLOT 单一声明 +6、index 写入闸 +10、types FactQuery.slot/attributeRetired +7、sqlite 属性文本过滤 +5、extract 尾段合并防属性静默丢 +2；注释保留因为「为什么只在写入侧收、为什么不依赖模型」下次必被重问。机制修复按 0026/0027 先例记一次；6 条测试在 test/ 不计预算，红→绿→变异恰 3 红。"
     }
   ],
-  "coreLines": 9549,
+  "coreLines": 9579,
   "pluginLines": 3926,
   "files": {
     "analyze.ts": 255,
     "directives.ts": 46,
-    "index.ts": 2004,
+    "index.ts": 2014,
     "lexicon.ts": 97,
     "port.ts": 14,
     "rules.ts": 228,
     "seed-lexicon.ts": 145,
     "dimensions.ts": 38,
-    "domains.ts": 78,
+    "domains.ts": 84,
     "labels.ts": 43,
     "status.ts": 69,
     "consolidate.ts": 373,
     "context.ts": 164,
     "dimension-text.ts": 31,
-    "extract.ts": 799,
+    "extract.ts": 801,
     "inject-text.ts": 27,
     "portable.ts": 115,
     "profile-prompt.ts": 119,
@@ -315,7 +320,7 @@
     "retrieval.ts": 121,
     "roles.ts": 28,
     "scoring.ts": 170,
-    "sqlite.ts": 2026,
+    "sqlite.ts": 2031,
     "config.ts": 96,
     "merge.ts": 41,
     "steering.ts": 103,
@@ -323,6 +328,6 @@
     "store.ts": 188,
     "measure.ts": 45,
     "time.ts": 213,
-    "types.ts": 829
+    "types.ts": 836
   }
 }

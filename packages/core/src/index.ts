@@ -113,7 +113,7 @@ import type {
 import { buildPortableBundle } from './portable.ts';
 import type { SoulStore } from './store.ts';
 import { FACT_STATUS, MEMORY_STATUS, WINDOW_PRECISIONS } from './config/status.ts';
-import { HOLDER_WORDS } from './config/domains.ts';
+import { ATTRIBUTE_SLOT, HOLDER_WORDS } from './config/domains.ts';
 import { isActive, isRetracted, roleOf } from './roles.ts';
 import type { AffectAnalyzer } from './affect/port.ts';
 import { parseTrigger } from './rules.ts';
@@ -876,6 +876,7 @@ export class Soul {
     const droppedSlots: CommitResult['droppedSlots'] = [];
     const holderFallbacks: CommitResult['holderFallbacks'] = [];
     const actions: CommitResult['actions'] = { add: 0, supersede: 0, update: 0, noop: 0 };
+    const attributeRetired: string[] = [];
     const now = options.now ?? Date.now();
 
     // One entity per name, whatever its declared type: the same 核桃 appearing as
@@ -1033,6 +1034,25 @@ export class Soul {
         slots,
       });
       facts.push(written);
+      // 发现 A（同槽位状态链不互撤）：声明「属性=」= 该属性此刻的值，同 holder 的 active
+      // 旧值按声明定义已被取代——池未呈上时模型无从命名 target，只有写入侧收得住；
+      // 只对 active 新事实开火（候选不退休现值），路径与 操作=取代 相同。
+      const attribute = slots.find((slot) => slot.slot === ATTRIBUTE_SLOT)?.value;
+      if (written.status === FACT_STATUS.active && attribute && attribute.kind === 'text') {
+        const stale = this.store.facts({
+          soulId: this.soulId,
+          userId: this.userId,
+          holder,
+          status: FACT_STATUS.active,
+          slot: { slot: ATTRIBUTE_SLOT, value: attribute.value },
+          limit: 50,
+        });
+        for (const old of stale) {
+          if (old.id === written.id) continue;
+          this.store.supersedeFact(old.id, written.id);
+          attributeRetired.push(old.id);
+        }
+      }
       // A missing time is a property of the fact (`validFromPrecision: unknown`), not an
       // open question. Turning every undated fact into a gap produced 223 open gaps in two
       // days, of which 78% were '日期不明：…' — they can never be closed, and they bury the
@@ -1089,7 +1109,7 @@ export class Soul {
       );
     }
 
-    return { entities: [...entities.values()], facts, gaps, skipped, droppedSlots, holderFallbacks, actions };
+    return { entities: [...entities.values()], facts, gaps, skipped, droppedSlots, holderFallbacks, actions, attributeRetired };
   }
 
   /** Remember a person/thing/place; calling again just refreshes "last mentioned". */

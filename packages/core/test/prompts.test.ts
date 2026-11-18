@@ -160,6 +160,9 @@ test('extraction prompt: stays within a sane size', () => {
   // measured 5850): 「我想装电视上」was in the source and produced 0 facts because
   // the writable list had no purpose class — the conclusions gate later dropped the
   // purpose as unsupported evidence (support rate 41.7%, state.md 11-16 07:25).
+  // Raised to 6500 for the 属性 contract (+~545 chars, measured 6436): 发现 A 同槽位
+  // 状态链不互撤——模型必须知道何时写 属性= 才能让写入闸撤掉旧值（terms 定义 +
+  // rules 操作 + 一个示例行），砍掉任何一段模型都会漏写，闸就静默不触发。
   // The terms block is still the bulk; candidate text and whole threads are added on top at runtime.
-  assert.ok(prompt.length < 5900, `prompt grew to ${prompt.length} chars`);
+  assert.ok(prompt.length < 6500, `prompt grew to ${prompt.length} chars`);
 });

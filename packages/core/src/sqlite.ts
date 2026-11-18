@@ -1239,6 +1239,11 @@ export function openSqlite(file: string): SoulStore {
         where.push('EXISTS (SELECT 1 FROM fact_slots s WHERE s.fact_id = f.id AND s.entity_id = ?)');
         args.push(query.entityId);
       }
+      if (query.slot) {
+        // Text match only: a numeric-looking value has no declared meaning (syntax ≠ semantics).
+        where.push('EXISTS (SELECT 1 FROM fact_slots s WHERE s.fact_id = f.id AND s.slot = ? AND s.value_text = ?)');
+        args.push(query.slot.slot, query.slot.value);
+      }
       if (query.since !== undefined) {
         where.push('f.valid_from >= ?');
         args.push(query.since);

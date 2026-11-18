@@ -4,7 +4,7 @@
 > 每一行都有出处：设计在哪、代码在哪、数字怎么来的。
 > 权威性：代码 > 本表 > 我的口头总结。发现不一致时，以代码为准并改本表。
 
-最后核对：**2026-11-18 18:50**（core 0.0.128 / plugin 0.0.137 在跑；**修后超预算 sim 对账 25 PASS/0 FAIL/1 SKIP + 辨别样本到货终判**（sup 11/11 对、漏网 29 对三类、发现 A 同槽位状态链不互撤）——见 18:50 条目；**C2 trace 终审 4带/5失/1配对失效**（原判两处翻案：#2 翻进=跨会话 tp 记忆、#4 翻出=配对错位）+ --s1-sample 配对缺陷已修（ended_at 恒等是根因）见 17:00 条目；ADR 0036 Accepted + 接线（C6a 1.18/10 FAIL · C5 候选 · C6b 0/91）见 11:40 条目；三观察点 10:55 已判读）
+最后核对：**2026-11-18 20:05**（core 0.0.128 / plugin 0.0.137 在跑；**发现 A 修复：属性闸上线（同槽位状态链写入侧互撤）+ 存量 8 对矛盾手工退休 + ADR 0037 Proposed**（349/349 · tsc 0 · quality 0 · health-check 0 FAIL，棘轮记账 +30）——见 20:05 条目；**修后超预算 sim 对账 25 PASS/0 FAIL/1 SKIP + 辨别样本到货终判**（sup 11/11 对、漏网 29 对三类、发现 A 同槽位状态链不互撤）——见 18:50 条目；**C2 trace 终审 4带/5失/1配对失效**（原判两处翻案：#2 翻进=跨会话 tp 记忆、#4 翻出=配对错位）+ --s1-sample 配对缺陷已修（ended_at 恒等是根因）见 17:00 条目；ADR 0036 Accepted + 接线（C6a 1.18/10 FAIL · C5 候选 · C6b 0/91）见 11:40 条目；三观察点 10:55 已判读）
 
 > 文档有效性见 [README.md](README.md)。本文只记"设计与实现的对照"。
 > 流程规范：[process.md](process.md)（十步，每步有判定方式）。
@@ -23,9 +23,11 @@
                接线完成**（C6a 1.18/10 FAIL · C5 候选 2+2 · C6b 0/91——11:40 条目）；
                ② ~~C2 十样本亲判~~ **已由 trace 终审：4带/5失/1配对失效**
                （17:00 条目）；③ ~~辨别样本 + 超预算 sim 对账~~ **双双收口**
-               （18:50 条目：25 PASS/0 FAIL、sup 11/11 对、发现 A 状态链不互撤）。
+               （18:50 条目：25 PASS/0 FAIL、sup 11/11 对、发现 A 状态链不互撤）；
+               ④ ~~发现 A~~ **已修**（20:05 条目：属性闸 + 存量 8 对退休 +
+               ADR 0037 Proposed 待接受；**装机生效 = 发布→装机→重启，待拍**）。
                剩：C5 基线攒 10 样本（现 2 个）；C1/C3 窗口 0 候选；C1b 线 ≤10% 未拍；
-               C6b 主动人判未跑。当前进度以「会话交接」6 行为准。
+               C6b 主动人判未跑；发现 B（jaccard 格式句精度）未立债待拍。当前进度以「会话交接」6 行为准。
                ——以下为 11-11 起的推进记录（历史，多已收口，勿当现任务）：
                ① **两条日志样本已判读（11-11 13:11:54 flush，turn 351）**：
                   `pool=16(727ch e0/t0/s16/r0) poolDropped=0 action=add13/sup0/upd0/noop0`
@@ -357,11 +359,17 @@
             （observe-sim 新增 post 模式，生产三输入 = unit 末轮文本/head/ts−ms）+
             **辨别样本到货终判**（sup 11/11 对、漏网 29 对三类、发现 A 同槽位状态链
             不互撤——ActiveSiteKey 三值/ADR 新旧状态并存 active）
-验证     health-check 0 FAIL/19 WARN/25 PASS；quality --c5-sample exit 0；
-            Accepted 同批修三处（C2 线 / C6a 全量分母 / 词表出处 seed-lexicon.ts）
+         ⑧ 20:05 发现 A 修复：**属性闸**（槽位 `属性=` 声明当前值 + commitDrafts 写入
+            侧互撤 + 解析器尾段合并防静默丢）+ **存量 8 对矛盾退休**（显式 id 对 +
+            断言修复，链上只剩当前值）+ **ADR 0037 Proposed 待接受**；349/349、
+            棘轮记账 +30、提示词上限 5900→6500 有账；**装机生效待拍**
+验证     health-check 0 FAIL（棘轮 9579 已记账）；npm test 349/349；tsc 0；
+            quality exit 0；Accepted 同批修三处（C2 线 / C6a 全量分母 / 词表出处 seed-lexicon.ts）
 没做完   C5 基线攒 10 样本（现 2）；C1b 线 ≤10% 未拍；C1/C3 窗口 0 候选；
-            C6b 主动人判未跑；发现 A/B（状态链不互撤、jaccard 格式句精度）未立债待拍
-在热什么 C5/C6 基线攒样中——判决落 state.md 才算完；观察点 ①②③ 全收口（18:50）
+            C6b 主动人判未跑；发现 B（jaccard 格式句精度）未立债待拍；
+            属性闸待装机（发布 core → 插件依赖 → profile 装机 → 重启，ADR 0037 待接受）
+在热什么 C5/C6 基线攒样中——判决落 state.md 才算完；观察点 ①②③ 全收口（18:50）；
+            发现 A 已修待装机（20:05）
 旁支     AinanPlayer 排障已收口（11-18 13:50，非本项目）→ 完整结论
          `repos/_scratch/ainanplayer-diagnosis.md`（仓库外，与 soulbridge/_scratch 无关；
          根因 csp_ 靠名字碰内置表 · moyu 6/111 aowu 0/82 已删 · 官方 issue#14 明确不修 ·
@@ -369,6 +377,8 @@
 ```
 
 > 日期条目只留最近 7 天，更早的在 [state-archive/2026-11.md](state-archive/2026-11.md)（规则见 docs/README）。
+
+**2026-11-18 20:05 发现 A 修复：属性闸上线（同槽位状态链写入侧互撤）+ 存量 8 对矛盾手工退休 + ADR 0037 Proposed**：**① 由来**——用户 19:21 拍「修」（接 18:50 发现 A：同一属性改新值旧值不撤，4 组实例在库可查）。**② 机制（ADR 0037 Proposed 待接受）**——事实行槽位可写 `属性=<名字>` 声明「该属性此刻的值」；`commitDrafts` 写入闸：同 soul/user/holder、同属性、还 active 的旧事实全部 `supersedeFact`——**模型声明键、代码执行互斥**（规则 31）；池未呈上时模型无从命名 target、看得见也常没判成矛盾（18:50 审计 38 对里 16 对不在池 + 8 对在池漏判），只有写入侧收得住。四条防误撤边界：只对 active 新事实开火（candidate 不退休现值）· 属性值 text 精确匹配不猜语义 · 退休记 `CommitResult.attributeRetired` 与 `actions`（模型意图）分开 · 同 holder 作用域（我的认知不撤你的）。**解析器加固**：事实行尾非键值段原来只取第一段、后续**静默丢弃**——`属性=` 排第二段闸就永远不触发且无日志（规则 11/18），改为全部并入槽位文本。**提示词三处**（terms 定义+判据「X 现在是____」读得通才写 / rules 操作指令 / 示例一行），体积上限 5900→6500（+545 字符，prompts.test.ts 按既有先例记账：砍掉任何一段模型都会漏写）。**③ 验证（红→绿→变异）**——`supersede.test.ts` 6 条：先红 5 → 闸落地全绿 → 变异（关闸）恰 3 红；全量 **349/349**、`tsc --noEmit` 0、`quality.mjs` exit 0、health-check **0 FAIL**；棘轮按先例记账（**先削自己注释 13 行**再记 +30 进 budget.json history：domains +6 / index +10 / types +7 / sqlite +5 / extract +2）。**④ 存量修复 8 对**（`_scratch/repair-chains.mjs`：显式 id 对 + 语句前缀断言 + 每条 after 断言，全部通过才动手；原始行全保留 retracted+指向后继）——ActiveSiteKey Douban/nodejs_wogg→**Wogg**、moyu 前端不显示→**玩偶站已出内容**、aowu 不可运行→**订阅已移除**、ADR Proposed×2→**Accepted**、core 0.0.26→**0.0.128**、cardTimeoutMs 重述→**后写版**；修复后各链 active 余量 = 只剩当前值（`repair-verify.mjs` 对照）。38 对全量复核**不撤**的：不同事件/互补事实（提交记录链、Issue #14 两条表态、FreeBox/dex 边缘对）——它们同时为真，撤了反而错。**⑤ 遗留**——机制**未装机**（npm 发布 core → 插件依赖 → profile 装机 → 重启，**决策点**；提示词生效前新事实仍可能不带属性）；发现 B（jaccard 格式句精度）未动待拍；「属性=」写错名字会误撤是已知边界（attributeRetired 可查）。
 
 **2026-11-18 18:50 两个被动观察点收口：修后超预算 sim 对账 25 PASS 全过 + 辨别样本到货终判（sup 11/11 对、漏网 29 对分三类、同槽位状态链不互撤记为发现）**：**① 由来**——接手须知③ 余下两项：辨别样本下次 flush 继续盯 + 修后超预算样本 sim 对账（`_scratch/observe-sim.mjs`），本轮双双到货收口。**② sim 对账（observe-sim v3 新增 `post` 模式）**——11-15 21:00+08 起全部 **26 个 extract 逐个重建 factPool 对账：25 PASS / 0 FAIL / 1 SKIP**（SKIP = 02:03:30 失败重试那次没走到 seal，同 turn 27s 后重试 PASS）。生产三输入钉死后才敢对：`text` = **unit 末轮** userText（`runExtraction(last.row.userText, head.turnId, head.turnNo)`——不是 head 的文本）、`turnNo`/`session` = segment head、context 时刻 = **事件 ts − ms**（ms 在 commit 后才算，天然排除本抽取新写的事实）；unit 边界从 `segment-state.json` 的 `sealed[].turnIds` 拿（extract→5s 内 seal→|at−sealTs|≤2s 且 turns/session 一致）。**含 4 个超预算样本全 PASS**（03:49 2798ch / 07:33 2610ch / 08:09 3521ch / 08:33 4530ch——均 >2400 = 首组超预算例外按设计取整组；丢弃组 **59 个的样本** 08:33 也逐项一致），dropped 仍是 similar 层单条组、无整组饿死——**0.0.127 排序正确性观察点就此判 PASS**（丢哪个组与装机产物逐项可复现）。顺带给三个 as-of 查询加了撤回状态修正（`activeAt`：现在 retracted 但后继落库时刻 > 对账时刻 = 当时还活着），S1/S2 旧对账回归仍 PASS。**③ 辨别样本到货（sup 首次非零）并终判**——11-15 后 sup 动作 11 对（extract 侧 5 次 flush 7 对 + consolidate 侧 4 对），逐对看原话 **11/11 全对**：状态推进型（版本号、ADR 状态、C2 判决 4/10→4/9、ActiveSiteKey woWogg→nodejs_wogg、moyu 站点出内容、aowu 移除、亲判→交棒）与精简重述型（教训缩句 ×3）都是该 sup 的。**④ 漏网 29 对（新事实 vs 落库时刻 active 池，j≥0.30 且不在 sup 对里）三类终判**（`_scratch/dup-final.mjs`，池归属用 post-chosen 落盘）——**① 在池且当时 active = 真漏判 8 对**，其中**实质该撤 4 对**：ActiveSiteKey 三值并存（Douban 05:18 / nodejs_wogg 05:31 / Wogg 05:36 **全部 active 至今**，只撤了中间的 woWogg）、moyu 站点状态推进、aowu 无 JVM→已移除、FreeBox/dex 相邻事实（1 对边缘）；**格式巧合 4 对不撤是对的**（同日不同提交号 ×3、不同对象 ×1——jaccard 大串相似度对「提交 xx 已推送」这类格式句精度低）。**② 不在池 = 池未呈上 16 对（非 dedupe 判错）**——含真矛盾：**ADR「仍 Proposed」与「已 Accepted」两条至今并存 active**、core 版本 0.0.26 与 0.0.128 并存、cardTimeoutMs 双版本并存——模型压根没看见旧行；**③ 当时已撤/不可判 5 对**（含 2 对其实走的是 consolidate sup 通道被我方筛选漏标，语义上也该撤）。**⑤ 判读与发现**——dedupe 判决本身 0 错（它见着的全判对）；问题两层：**发现 A = 同槽位状态链不互撤**（同一属性的新值没把旧值撤掉，Value 类事实「在 X 时为 Y」天生互斥，靠 jaccard + 模型临场判断兜不住——4 组实例在库可查）；**发现 B = jaccard 0.30 网对格式句精度低**（29 对里约半数是不同事件撞格式，真重复靠人眼；池归属判定必须带 chosen 落盘，否则分不清「该撤没撤」和「压根没看见」）。**⑥ 下一步**——①②③ 观察点全收口；剩 C5 攒样（现 2/10）、C1b 线 ≤10% 未拍、C6b 主动人判、C1/C3 窗口 0 候选。发现 A/B 不改代码（0036 范围外），需要时立债。
 

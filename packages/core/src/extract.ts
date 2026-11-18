@@ -740,7 +740,9 @@ export function parseLineDraft(raw: string): Record<string, unknown> | null {
           } else slotText = keyed[2].trim();
           continue;
         }
-        if (part && slotText === undefined) slotText = part;
+        // Every unkeyed tail part is slot text, not just the first: a silently dropped
+        // second `属性=` would disarm the 发现 A gate with no log line (rule 11/18).
+        if (part) slotText = slotText === undefined ? part : `${slotText}; ${part}`;
       }
 
       const slots: Record<string, unknown>[] = [];

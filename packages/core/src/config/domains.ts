@@ -28,6 +28,12 @@ export const HOLDER_WORDS = ['world', 'self'] as const;
 export const SLOT_ENTITY_MARKER = '@';
 
 /**
+ * Slot naming *which property* a fact states the current value of (发现 A 同槽位状态链
+ * 不互撤)：同 holder 同属性的 active 旧值由 commit 闸退休——模型声明键，代码执行互斥。
+ */
+export const ATTRIBUTE_SLOT = '属性';
+
+/**
  * What a fact is *for* — chosen by the model from a closed set.
  *
  * `type_name` stays free text ("裁员", "BOM 教训"); this field is the structural answer to

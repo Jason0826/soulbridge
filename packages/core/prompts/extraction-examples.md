@@ -20,4 +20,8 @@
 <source>我讨厌同一件事反复讲，换个工具又要重新说一遍</source>
 <output>事实: 用户讨厌同一件事反复讲，换工具也不想重复交代 | 偏好 | | | experienced | 0.9 | 持有=用户 | 精度=unknown | 偏好主体=用户</output>
 </example>
+<example>
+<source>站点键我改回 Wogg 了，nodejs_wogg 不好使</source>
+<output>事实: AinanPlayer 的 ActiveSiteKey 由 nodejs_wogg 改回 Wogg | 配置变更 | 2026-11-18 | 刚才 | told | 0.9 | 持有=world | 精度=day | 属性=ActiveSiteKey</output>
+</example>
 </examples>
