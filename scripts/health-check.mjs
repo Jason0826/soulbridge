@@ -431,7 +431,9 @@ if (existsSync(join(ROOT, 'docs/audit'))) {
 // "改动必须同步更新文档"以前只是口头约定。判据：state.md 自带「最后核对」时间戳，
 // 代码自带最后提交时间；代码更新则文档落后。
 // 只看改行为的路径（packages/ 与插件 index.js）——文档自己的提交不能把文档比旧。
-const PLUGIN_REPO = 'D:/git-workspace/repos/dsh-plugin-soulbridge';
+// 仓库 2026-11-24 从 D: 迁到 E:，这份副本留在 D 上是要删的：指过去查不到就静默跳过插件侧，
+// 等于这条门禁对插件失效（还是无声的）。路径跟着仓库走。
+const PLUGIN_REPO = 'E:/git-workspace/repos/dsh-plugin-soulbridge';
 function lastCodeCommit(repo, paths) {
   const out = spawnSync('git', ['log', '-1', '--format=%cI', '--', paths], { cwd: repo, encoding: 'utf8' });
   return out.status === 0 ? out.stdout.trim() : '';
