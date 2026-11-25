@@ -77,10 +77,10 @@
       "id": "queue-file-names",
       "what": "队列文件名 pending-extract / classify / profile / threads",
       "literal": "pending-extract",
-      "declaredIn": "D:/git-workspace/repos/dsh-plugin-soulbridge/index.js",
+      "declaredIn": "plugin:index.js",
       "allowed": [],
       "mode": "warn",
-      "why": "每个队列文件名只在插件里出现一次；如果哪天出现第二次，说明有人绕过了 readQueueFile。"
+      "why": "每个队列文件名只在插件里出现一次；如果哪天出现第二次，说明有人绕过了 readQueueFile。`declaredIn` 的 `plugin:` 前缀表示「这个声明点在插件的 index.js 里」，不用盘符——盘符会随仓库搬家失效，曾经写成 D:/... 导致搬家后静默扫回 core。"
     }
   ]
 }

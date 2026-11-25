@@ -8,12 +8,16 @@
  * 用法：node --experimental-strip-types scripts/verify-boundary.mjs <db-path>
  */
 import { DatabaseSync } from 'node:sqlite';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 const core = new URL('../packages/core/src/', import.meta.url).href;
 const { tokenize, bm25, buildCorpusStats } = await import(`${core}scoring.ts`);
 const { openSqlite } = await import(`${core}sqlite.ts`);
 
-const DB_PATH = process.argv[2] ?? 'C:/Users/DELL/.soulbridge/soul.db';
+// 默认库路径从用户目录推，不写死盘符：写在代码里的绝对路径编码的是"这台机器现在长这样"，
+// 换机器/搬家之后要么炸，要么（更糟）安静地用着旧副本。
+const DB_PATH = process.argv[2] ?? join(homedir(), '.soulbridge', 'soul.db');
 if (process.argv[2]) openSqlite(DB_PATH).close(); // migrate a copy, never the live file
 const db = new DatabaseSync(DB_PATH);
 

@@ -13,7 +13,6 @@ export function readApiKey() {
   if (process.env.BOOK_LLM_KEY) return { key: process.env.BOOK_LLM_KEY, from: 'env BOOK_LLM_KEY' };
   const candidates = [
     process.env.DSH_CREDENTIALS,
-    'D:/DSH/home/.credentials.yaml',
     join(homedir(), '.dsh', 'home', '.credentials.yaml'),
     join(homedir(), '.soulbridge', '.credentials.yaml'),
   ].filter(Boolean);

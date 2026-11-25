@@ -21,6 +21,15 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const results = [];
 const add = (level, area, message, detail) => results.push({ level, area, message, detail });
 
+// 插件仓库是兄弟目录。路径从 ROOT 往上推，不写死盘符。
+// 为什么：2026-11-24 仓库从 D: 迁到 E: 之后，写死的 D: 指向的不是"不存在的路径"，而是
+// **还没删的旧副本**——它一直在，于是查得到、算得出，一次都没报错，门禁安静地用着错的地方。
+// 等到旧副本被删那天，行数与提交数会一起变成 0，而 0 永远不超预算、永远不欠 review，
+// 两条门禁同时变成恒绿。这种失效不吵不闹，只能靠"根本不该有绝对路径"来防。
+// 环境变量留给插件不在兄弟目录的情况（不是兜底，是明说的另一种布局）。
+const PLUGIN_REPO = process.env.SOULBRIDGE_PLUGIN_REPO ?? resolve(ROOT, '..', 'dsh-plugin-soulbridge');
+const PLUGIN_ENTRY = join(PLUGIN_REPO, 'index.js');
+
 // ---------- 1. 规模（棘轮预算） ----------
 // 原来的 3200 行 / 单文件 300 行是拍脑袋定的，早就被自己的设计打破——问题不在
 // 数字太小，在于"绝对上限"这种形式：它只能靠重新拍一个更大的数字来续命。
@@ -48,8 +57,11 @@ function walk(dir, ext) {
 const srcDir = join(ROOT, 'packages/core/src');
 const srcFiles = walk(srcDir, '.ts');
 const srcLines = srcFiles.reduce((n, f) => n + readFileSync(f, 'utf8').split('\n').length, 0);
-const PLUGIN_ENTRY = 'D:/git-workspace/repos/dsh-plugin-soulbridge/index.js';
 const pluginLines = existsSync(PLUGIN_ENTRY) ? readFileSync(PLUGIN_ENTRY, 'utf8').split('\n').length : 0;
+// 找不到插件入口时必须出声：pluginLines 会变 0，而 0 不超预算 → 预算棘轮等于没有。
+if (!existsSync(PLUGIN_ENTRY)) {
+  add('FAIL', '规模', `插件入口没找到：${PLUGIN_ENTRY}`, '插件行数会算成 0（0 永远不超预算，预算等于失效）；用 SOULBRIDGE_PLUGIN_REPO 指到插件仓库');
+}
 
 // history 是账的理由：--update-budget 只改数字，不许把"为什么涨"冲掉。
 const previousBudget = existsSync(BUDGET_PATH) ? JSON.parse(readFileSync(BUDGET_PATH, 'utf8')) : null;
@@ -372,7 +384,15 @@ if (existsSync(join(ROOT, 'scripts/install-hooks.mjs'))) {
     encoding: 'utf8',
   });
   if (hooks.status !== 0) {
-    add('WARN', '钩子', 'pre-commit 未安装（新克隆默认没有）：跑 node scripts/install-hooks.mjs', (hooks.stderr || '').trim().split('\n')[0]);
+    const configured = (spawnSync('git', ['config', '--get', 'core.hooksPath'], { cwd: ROOT, encoding: 'utf8' }).stdout || '').trim();
+    const isAbsolute = /^[A-Za-z]:[\\/]/.test(configured);
+    if (isAbsolute && !existsSync(configured)) {
+      // 指向不存在的目录 = 搬家遗留。它一直"看起来装过"，实际上钩子一次都没跑——
+      // 和插件路径是同一种病：不是没配置，是配置指着一个已经不在了的地方。
+      add('FAIL', '钩子', `core.hooksPath 指向不存在的目录：${configured}`, '跑 node scripts/install-hooks.mjs 重新指到本仓库（搬家遗留，不是新克隆没装）');
+    } else {
+      add('WARN', '钩子', 'pre-commit 未安装（新克隆默认没有）：跑 node scripts/install-hooks.mjs', (hooks.stderr || '').trim().split('\n')[0]);
+    }
   } else {
     add('PASS', '钩子', 'pre-commit 已安装（提交时扫替换/编码痕迹）');
   }
@@ -417,8 +437,8 @@ if (existsSync(join(ROOT, 'docs/audit'))) {
       return out.status === 0 ? Number(out.stdout.trim() || 0) : 0;
     };
     const coreCommits = countCommits(ROOT, ['packages']);
-    const pluginPath = 'D:/git-workspace/repos/dsh-plugin-soulbridge';
-    const pluginCommits = existsSync(pluginPath) ? countCommits(pluginPath, ['index.js']) : 0;
+    // 插件侧找不到时不能静默按 0 算：0 个待 review 等于"跟得上"，门禁会自己放行自己。
+    const pluginCommits = existsSync(PLUGIN_ENTRY) ? countCommits(PLUGIN_REPO, ['index.js']) : 0;
     const pending = coreCommits + pluginCommits;
     const label = `自 ${audits[0].name} 之后有 ${pending} 个业务提交未整体 review`;
     if (pending >= REVIEW_COMMIT_FAIL) add('FAIL', 'review', label, '先写一份 audit review 再继续加功能');
@@ -431,9 +451,9 @@ if (existsSync(join(ROOT, 'docs/audit'))) {
 // "改动必须同步更新文档"以前只是口头约定。判据：state.md 自带「最后核对」时间戳，
 // 代码自带最后提交时间；代码更新则文档落后。
 // 只看改行为的路径（packages/ 与插件 index.js）——文档自己的提交不能把文档比旧。
-// 仓库 2026-11-24 从 D: 迁到 E:，这份副本留在 D 上是要删的：指过去查不到就静默跳过插件侧，
-// 等于这条门禁对插件失效（还是无声的）。路径跟着仓库走。
-const PLUGIN_REPO = 'E:/git-workspace/repos/dsh-plugin-soulbridge';
+// 插件仓库的路径在文件头按 ROOT 推出来（PLUGIN_REPO / PLUGIN_ENTRY）。
+// 不在这里再写一份：同一件事有两个常量，改一个忘一个是迟早的事——那正是 11-24 搬家之后
+// 三条路径各自写死、各自失效的由来。
 function lastCodeCommit(repo, paths) {
   const out = spawnSync('git', ['log', '-1', '--format=%cI', '--', paths], { cwd: repo, encoding: 'utf8' });
   return out.status === 0 ? out.stdout.trim() : '';
@@ -642,8 +662,14 @@ if (!existsSync(DECLARATIONS_PATH)) {
   let clean = 0;
   for (const entry of declarations.entries ?? []) {
     const declaredIn = entry.declaredIn;
-    const allowed = new Set([declaredIn, ...(entry.allowed ?? [])]);
-    const scan = declaredIn.startsWith('D:') ? [PLUGIN_ENTRY] : srcFiles;
+    const isPlugin = declaredIn.startsWith('plugin:');
+    // 声明点自己不算副本。这里必须按**解析出来的绝对路径**认自己，不能靠 declaredIn 字符串
+    // 和文件路径恰好相等——那只是旧写法（写的是盘符全路径）留下的巧合，一换写法就多报一条。
+    const declaredFile = isPlugin ? PLUGIN_ENTRY : join(ROOT, declaredIn);
+    const allowed = new Set([declaredIn, declaredFile, ...(entry.allowed ?? [])]);
+    // 声明点在哪个仓库，用前缀写明（`plugin:` = 插件的 index.js），不拿盘符当标记：
+    // 盘符随仓库搬家而变，`startsWith('D:')` 一搬家就静默扫回 core，插件侧的声明从此没人查。
+    const scan = isPlugin ? [PLUGIN_ENTRY] : srcFiles;
     const copies = scan
       .map((file) => relative(ROOT, file).replace(/\\/g, '/') && file)
       .filter((file) => existsSync(file))
@@ -860,6 +886,49 @@ if (damage.length > 0) {
   );
 } else {
   add('PASS', '体检', '这次改动的行没有替换/编码损坏的痕迹');
+}
+
+// ---------- 12. 写死的绝对路径 ----------
+// 搬仓库 / 换机器之后，写死的盘符路径只有两种结局：
+//   ① 指向不存在的路径 —— 会当场炸，自己会喊；
+//   ② 指向一个还没删的旧副本 —— 一切正常，永远不喊，直到旧副本被删那天静默失效。
+// ② 真的发生过（插件行数预算、整体 review 计数都指着旧副本的 D:，删了就双双恒绿）。
+// 所以判据不是"指向的位置存不存在"——那恰好抓不到 ②：今天 ② 是存在的、是绿的。
+// 判据是**代码里不该出现绝对路径**：它编码的是"这台机器此刻长这样"，而代码要跟着仓库走。
+// 扫可执行脚本，不扫 .md（文档里的路径是记录，不是配置）；注释行跳过。
+// 确实必须指向仓库外时，在那一行写 path-check:external 并说明为什么——0 处使用时它是压力阀，不是后门。
+const pathScanFiles = [];
+for (const dir of [join(ROOT, 'scripts'), join(ROOT, 'packages')]) {
+  if (!existsSync(dir)) continue;
+  for (const ext of ['.mjs', '.ps1', '.cmd', '.sh']) {
+    pathScanFiles.push(...walk(dir, ext).filter((f) => !/node_modules|_scratch/.test(f)));
+  }
+}
+const DRIVE_LITERAL = /['"`]([A-Za-z]:[\\/][^'"`\r\n]*)['"`]/g;
+const hardcodedPaths = [];
+for (const file of pathScanFiles) {
+  const rel = file.replace(/\\/g, '/').replace(`${ROOT.replace(/\\/g, '/')}/`, '');
+  readFileSync(file, 'utf8')
+    .split('\n')
+    .forEach((line, index) => {
+      const trimmed = line.trim();
+      if (/^(\/\/|\*|#|rem\s)/i.test(trimmed)) return;
+      if (line.includes('path-check:external')) return;
+      for (const match of line.matchAll(DRIVE_LITERAL)) {
+        // 存在与否只写进细节，不进判据：存在的那几处才最危险（安静地用着旧副本）。
+        hardcodedPaths.push(`${rel}:${index + 1} → ${match[1]} ${existsSync(match[1]) ? '[存在]' : '[不存在]'}`);
+      }
+    });
+}
+if (hardcodedPaths.length === 0) {
+  add('PASS', '路径', `可执行脚本里没有写死的绝对路径（${pathScanFiles.length} 个文件）`);
+} else {
+  add(
+    'FAIL',
+    '路径',
+    `${hardcodedPaths.length} 处写死的绝对路径 —— 改成从 ROOT / homedir 推出来，或标 path-check:external`,
+    `${hardcodedPaths.slice(0, 6).join(' | ')}${hardcodedPaths.length > 6 ? ` | …还有 ${hardcodedPaths.length - 6} 处` : ''}（标 [存在] 的最危险：它安静地用着旧副本）`,
+  );
 }
 
 // ---------- 输出 ----------
