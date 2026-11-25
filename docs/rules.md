@@ -68,6 +68,7 @@
 | T2 | 改完必须看 diff；替换类操作后逐行核对 | 本文件（教训） | 人工 + §11 |
 | T3 | core 新增文件后，插件仓库要 `pnpm install --force`（快照不会自动同步） | 记忆 · 本文件 | 插件测试能加载 |
 | T4 | 部署后验证的是**装上去的副本**，不是源码 | [runbook.md](runbook.md) | `verify-installed.mjs` |
+| T5 | Dev profile 四个键写在 `AGENTS.md`（quick-test / merge-gate / high-risk / do-not-edit），值必须真：命令能跑、路径存在 | AGENTS.md §Dev profile | health-check §13 |
 
 ## 七、文档
 

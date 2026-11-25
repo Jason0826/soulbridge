@@ -931,6 +931,49 @@ if (hardcodedPaths.length === 0) {
   );
 }
 
+// ---------- 13. Dev profile：agent 该跑什么、别动什么 ----------
+// AGENTS.md 的 `## Dev profile` 是给 agent 读的四行约定。它烂掉的方式不是写错，是**过时**：
+// 脚本改名、目录搬走、命令换成 npm script，profile 还是"看起来像那么回事"。
+// 这和 §12 是同一类病（安静的旧事实），只是对象从代码换成文档。
+// 所以这里不核对措辞，只核对两件能证伪的事：四个键都在且有值，行内提到的仓库路径与脚本真实存在。
+// 不核对"命令跑得通"——merge-gate 里就有 health-check 自己，跑一次会递归。
+const DEV_KEYS = ['quick-test', 'merge-gate', 'high-risk', 'do-not-edit'];
+const agentsText = existsSync(agentsPath) ? readFileSync(agentsPath, 'utf8') : '';
+const devStart = agentsText.indexOf('\n## Dev profile');
+if (devStart < 0) {
+  add('FAIL', 'dev-profile', 'AGENTS.md 缺 `## Dev profile` 段 —— agent 只能靠猜测试命令和高危文件');
+} else {
+  const devRest = agentsText.slice(devStart + 1);
+  const devEnd = devRest.indexOf('\n## ', 1);
+  const devBlock = devEnd < 0 ? devRest : devRest.slice(0, devEnd);
+  const missingKeys = DEV_KEYS.filter((key) => !new RegExp(`^- ${key}:\\s*\\S`, 'm').test(devBlock));
+  // 行内反引号里的仓库路径：去掉尾部 glob / 斜杠后判断存在；`~` 开头指向本机外部，不在这里判。
+  const spans = [...devBlock.matchAll(/`([^`\n]+)`/g)].map((m) => m[1]);
+  const broken = [];
+  let checkedPaths = 0;
+  for (const span of spans) {
+    for (const token of span.split(/[\s;,+]+/)) {
+      if (!token.includes('/') || token.startsWith('~') || token.startsWith('http')) continue;
+      const probe = token.replace(/\/?\*\*?$/, '').replace(/\/$/, '');
+      if (!probe) continue;
+      checkedPaths += 1;
+      if (!existsSync(resolve(ROOT, probe))) broken.push(token);
+    }
+  }
+  if (missingKeys.length > 0) {
+    add('FAIL', 'dev-profile', `Dev profile 缺键或值为空：${missingKeys.join(', ')}`);
+  } else if (broken.length > 0) {
+    add(
+      'FAIL',
+      'dev-profile',
+      `Dev profile 指向了不存在的路径/脚本：${[...new Set(broken)].join(', ')}`,
+      '改脚本名或搬目录时，同一次改动里改 AGENTS.md 的 Dev profile（否则它就是一张过期的地图）',
+    );
+  } else {
+    add('PASS', 'dev-profile', `Dev profile 四个键齐全，${checkedPaths} 处仓库路径/脚本都在（旧路径会在这里变红）`);
+  }
+}
+
 // ---------- 输出 ----------
 const order = { FAIL: 0, WARN: 1, PASS: 2 };
 const icon = { FAIL: '✗', WARN: '!', PASS: '✓' };

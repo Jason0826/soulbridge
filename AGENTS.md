@@ -1,9 +1,20 @@
 # AGENTS.md
 
 > 本文件是本仓库的 steering file：任何 agent 在这个仓库工作时先读它。
-> 内容来自跨项目模板 [docs/steering-project-principles.md](docs/steering-project-principles.md)（同一套 43 条）；
+> 内容来自跨项目模板 [docs/steering-project-principles.md](docs/steering-project-principles.md)，编号与模板逐条一致（条数以 `health-check` 的比对结果为准，这里不抄数字）；
 > 本仓库特有的规则与检查见 [docs/rules.md](docs/rules.md)。
 > **两份文件必须同时改**——`health-check` 会比对两边的规则编号，缺一条就 FAIL。
+
+## Dev profile
+
+> 机器可读的四件事：新 agent 进仓库先读这一节，不用猜测试命令、不用问人。
+> 这里只放**仓库约定**；个人偏好（先派哪个子 agent、喜欢哪种汇报）放本机，不进仓库。
+> 值必须是真的：`health-check` §13 核对四个键都在，并核对行内提到的路径与脚本真实存在——脚本改名、目录搬走后不同步，就会 FAIL，不会安静地指向一个已经不存在的东西。
+
+- quick-test: `npm test` + `node scripts/sync-prompts.mjs --check` —— 每次提交前跑，约 8 秒（core 321 个测试）；替换事故另由提交钩子 `scripts/check-diff-artifacts.mjs` 拦。
+- merge-gate: `node scripts/health-check.mjs`（必须 0 FAIL，约 19 秒，含全量测试与声明/文档/路径门禁）+ `npm run build`（提示词同步检查 + tsc）+ 插件仓 `npm test`（约 4 秒）。部署后另跑 `node scripts/verify-installed.mjs`，六项 PASS 才算装对。
+- high-risk: 改这些先单独说明影响面，并按全量 merge-gate 验：`packages/core/src/sqlite.ts`（表结构与迁移，写坏就是数据）· `packages/core/prompts/`（提示词，改一个字就换模型行为，改完必须 `node scripts/sync-prompts.mjs`）· `scripts/health-check.mjs` 与 `scripts/githooks/`（判据本身，见规则 45）· `docs/declarations.json`（值域单一声明）· `../dsh-plugin-soulbridge/index.js`（每轮注入与抽取调度）。
+- do-not-edit: 生成物与副本，改了会被覆盖或只是自欺：`packages/core/src/prompts.generated.ts`（由 `sync-prompts.mjs` 生成）· `dist/`（构建产物）· `scripts/budget.json`（由 `health-check.mjs --update-budget` 生成）· `docs/state-archive/`（历史，只追加不改写）· `~/.dsh/profiles/*/node_modules/soulbridge`（装上去的副本，不是源码）。
 
 ## 动手之前
 
