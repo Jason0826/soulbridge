@@ -974,6 +974,26 @@ if (devStart < 0) {
   }
 }
 
+// ---------- 14. 跨仓库 steering 副本 ----------
+// 模板和副本住在不同仓库，§4.6.2 只比得了本仓库这一对；跨仓库没有哪条 hook 能同时看见两边，
+// 于是「模板加了第 51 条、副本还停在 50」会安静地漂。副本在 AGENTS.md 里声明自己跟随哪个模板
+// （`<!-- steering-sync: … -->`），这里按声明去比编号。没声明的仓库跳过——dsh-src、webhtv 各有
+// 自己一套规则，硬比只会制造假警报。本机没有同级仓库时也算过：那是环境差异，不是仓库状态。
+const syncScript = join(ROOT, 'scripts', 'check-steering-sync.mjs');
+if (!existsSync(syncScript)) {
+  add('WARN', 'steering', '缺 scripts/check-steering-sync.mjs —— 跨仓库副本无法核对');
+} else {
+  const syncOut = spawnSync(process.execPath, [syncScript], { cwd: ROOT, encoding: 'utf8' });
+  const syncLines = (syncOut.stdout ?? '').trim().split('\n').filter(Boolean);
+  const syncSummary = (syncLines.at(-1) ?? '').replace(/^合计：/, '');
+  if (syncOut.status === 0) {
+    add('PASS', 'steering', `跨仓库副本与模板同步（${syncSummary}）`);
+  } else {
+    const syncDetail = syncLines.filter((line) => line.startsWith('✗')).join('; ');
+    add('FAIL', 'steering', `跨仓库副本与模板分叉：${syncSummary}`, syncDetail);
+  }
+}
+
 // ---------- 输出 ----------
 const order = { FAIL: 0, WARN: 1, PASS: 2 };
 const icon = { FAIL: '✗', WARN: '!', PASS: '✓' };
